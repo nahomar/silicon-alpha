@@ -1,0 +1,24 @@
+# TradeFM Budget — single consumer GPU / A100 spot target.
+#
+# Param count recipe (approx):
+#   d_model=512  n_heads=8  n_layers=8  vocab=2048  ctx=1024
+#   → ~40M params  (SwiGLU hidden=1366, tied embedding)
+#
+# Trains in <48h on an RTX 4090 per Chinchilla-optimal tokens (~800M tokens).
+# Stack runs with:
+#   - Numba JIT on CPU feature pipelines (odte.accel.numba_kernels)
+#   - Liger-Kernel on CUDA (cfg.use_liger) — 20% speedup, -60% mem
+#   - No custom CUDA (Phase 3 skipped)
+
+d_model: 512
+n_heads: 8
+n_layers: 8
+vocab: 2048
+ctx_len: 1024
+dropout: 0.1
+fp8: false              # RTX 4090 lacks FP8; bf16 only
+rotary: true
+use_flash_attn: false   # flash-attn on 4090 is brittle; use eager SDPA
+lr: 5.0e-4
+weight_decay: 0.1
+warmup_steps: 500

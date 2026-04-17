@@ -1,0 +1,22 @@
+requests>=2.31.0
+httpx>=0.27.0
+feedparser>=6.0.11
+praw>=7.7.1
+snscrape>=0.7.0.20230622
+yfinance>=0.2.40
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+vaderSentiment>=3.3.2
+python-dotenv>=1.0.1
+beautifulsoup4>=4.12.3
+lxml>=5.0.0
+matplotlib>=3.8.0
+statsmodels>=0.14.0
+
+# odte (Phase 0)
+cvxpy>=1.5
+zstandard>=0.22
+# databento>=0.40        # paid OPRA feed; uncomment when licensed
+# transformer-engine     # Hopper FP8 (H100 only)
+# flash-attn             # FlashAttention-3 (Hopper only)

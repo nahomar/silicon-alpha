@@ -1,0 +1,23 @@
+# TradeFM 40M — Phase 1 cloud config (1x A100 target).
+#
+# Param count recipe (approx, pre-embedding):
+#   d_model=768  n_heads=12  n_layers=12  vocab=4096  ctx=2048
+#   attn_qkv   = 3 * d^2 per layer          ≈ 3 * 768^2   * 12 ≈ 21.2M
+#   attn_out   = d^2     per layer          ≈ 768^2       * 12 ≈  7.1M
+#   ffn SwiGLU = 3 * d * 4d/ 1.5 = 2·d·hidden per layer (hidden≈2048)
+#                                            ≈ 2 * 768 * 2048 * 12 ≈ 37.7M
+#   Total excluding embedding  ≈ 66M  (tied emb subtracts ≈ 3.1M)
+# Tune d_model / n_layers to land at 40M if exact param count matters.
+
+d_model: 768
+n_heads: 12
+n_layers: 12
+vocab: 4096
+ctx_len: 2048
+dropout: 0.1
+fp8: false
+rotary: true
+use_flash_attn: false    # flip to true on H100
+lr: 6.0e-4
+weight_decay: 0.1
+warmup_steps: 2000

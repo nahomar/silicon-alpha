@@ -1,0 +1,12 @@
+d_model: 128
+n_heads: 4
+n_layers: 2
+vocab: 64
+ctx_len: 128
+dropout: 0.1
+fp8: false
+rotary: true
+use_flash_attn: false
+lr: 6.0e-4
+weight_decay: 0.1
+warmup_steps: 10

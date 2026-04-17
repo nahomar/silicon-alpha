@@ -1,0 +1,31 @@
+version: 1
+
+# Defaults if the specific symbol/regime/bucket isn't found.
+defaults:
+  k_gross: 0.05
+  k_delta: 0.15
+  k_vega: 1.2
+  k_gamma: 0.001
+  floor_dollars: 500.0
+  tod_mult_power_hour: 1.2
+  tod_mult_last_30: 1.5
+
+symbols:
+  SPX:
+    0dte:
+      k_gamma: 0.0025            # 2.5× default — 0DTE gamma is extreme
+      calm:    { k_vega: 0.8 }
+      normal:  {}
+      elevated: { k_gross: 0.08, k_vega: 1.5 }
+      crisis:   { k_gross: 0.12, k_delta: 0.25, k_vega: 2.5, k_gamma: 0.005 }
+    short:   # 1-7 DTE
+      k_gamma: 0.0015
+    medium:  # 8-30 DTE
+      k_gamma: 0.0008
+    long:    # 31+ DTE
+      k_gamma: 0.0004
+
+  NDX:
+    0dte:
+      k_gamma: 0.003             # NDX gamma slightly higher per-unit-spot
+      elevated: { k_gross: 0.09, k_vega: 1.6 }

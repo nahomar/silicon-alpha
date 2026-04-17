@@ -1,0 +1,62 @@
+# Monday 4/20/2026 intraday margin table — CRISIS regime pre-set.
+#
+# Why this exists: Monday open after a weekend of potential news shock is
+# the single highest-stress regime for 0DTE. The "tod_mult_last_30" factor
+# kicks in during the 3:30-4:00 PM ET window where gamma pins dominate.
+# We pre-load the crisis multipliers so the QP executor never approves a
+# weight vector that would be rejected at the broker during a 5-sigma move.
+#
+# Override by pulling your actual broker's published schedule in
+# deploy/monday_go_live.sh (BROKER_MARGIN_URL=...). This template is only
+# a fail-safe for when the real feed is missing at 9:28 AM.
+
+version: 1
+
+defaults:
+  k_gross: 0.08                   # 8% of gross notional
+  k_delta: 0.22                   # 22% of delta-dollar exposure
+  k_vega: 1.8                     # 1.8 per vega-dollar unit
+  k_gamma: 0.0025                 # 0.25% of gamma-dollars — already elevated
+  floor_dollars: 2500.0           # minimum required equity (Monday floor)
+  tod_mult_power_hour: 1.5        # 14:30 ET onward
+  tod_mult_last_30: 2.5           # 15:30-16:00 ET — gamma explosion zone
+
+symbols:
+  SPX:
+    0dte:
+      # Baseline SPX 0DTE gamma coefficient is 2.5× the defaults.
+      k_gamma: 0.005
+      # IV regime overrides
+      calm:    { k_vega: 1.2 }
+      normal:  { k_vega: 1.8 }
+      elevated:
+        k_gross: 0.12
+        k_delta: 0.30
+        k_vega: 2.5
+        k_gamma: 0.008
+      crisis:
+        # Monday-after-weekend-shock: 5× base k_gamma
+        k_gross: 0.20
+        k_delta: 0.40
+        k_vega: 3.5
+        k_gamma: 0.0125            # 5× of 0.0025 defaults
+        floor_dollars: 10000.0
+      # Gamma explosion power hour — multiplies EVERY coefficient by 2.5
+      tod_mult_last_30: 2.5
+    short:       # 1-7 DTE
+      k_gamma: 0.0025
+    medium:
+      k_gamma: 0.0012
+    long:
+      k_gamma: 0.0006
+
+  NDX:
+    0dte:
+      k_gamma: 0.006              # NDX per-spot gamma slightly higher
+      crisis:
+        k_gross: 0.22
+        k_delta: 0.42
+        k_vega: 3.8
+        k_gamma: 0.015
+        floor_dollars: 15000.0
+      tod_mult_last_30: 2.8

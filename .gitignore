@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build artifacts (CUDA extensions are built on target host)
+build/
+dist/
+*.egg-info/
+*.egg
+odte_kernels_cu*.so
+odte/kernels/*.o
+odte/kernels/*.cubin
+
+# Secrets — NEVER commit
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+configs/broker_margin_live.yml   # live table contains broker-specific coefs
+
+# Data — too big for git, handled by GCS / S3
+reports/
+synthetic/
+checkpoints/
+data/cboe/
+data/opra/
+data/fake_datashop/
+
+# Notebook outputs (cells are in source; outputs are per-run)
+.ipynb_checkpoints/
+
+# Claude / editor state
+.claude/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs / tmp
+*.log
+/tmp/
+mmlive.*.log
+
+# OS
+Thumbs.db

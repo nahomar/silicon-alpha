@@ -1,0 +1,23 @@
+# TradeFM 524M — Phase 2 full-size config (8× H100 SXM target).
+#
+# Approx params:  2 · d² · n_layers + 2 · d · hidden · n_layers + vocab·d
+#   d=2048 h=16 l=24 ctx=4096 vocab=4096 → ≈ 520M params
+#
+# Production training uses:
+#   - FP8 via transformer_engine (cfg.fp8=true)
+#   - FlashAttention-3 via flash_attn (cfg.use_flash_attn=true)
+#   - FSDP sharding (see odte/train/distributed.py — Phase 2 deliverable)
+#   - 100B-token token budget on OPRA + equity L3
+
+d_model: 2048
+n_heads: 16
+n_layers: 24
+vocab: 4096
+ctx_len: 4096
+dropout: 0.0
+fp8: true
+rotary: true
+use_flash_attn: true
+lr: 3.0e-4
+weight_decay: 0.1
+warmup_steps: 8000
