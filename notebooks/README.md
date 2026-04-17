@@ -41,9 +41,22 @@ Google Drive/MyDrive/tradefm_ckpts/
 ## Workflow
 
 ### 0. One-time prep
-1. Upload `market-pattern-bot` to a GitHub repo you own.
-2. Edit `REPO_URL` in cell 3 of each notebook.
+
+Repo is already at **`https://github.com/nahomar/market-pattern-bot`** (private).
+Colab needs a PAT to clone it. Set it up once:
+
+1. GitHub → *Settings → Developer settings → Personal access tokens → Tokens (classic)
+   → Generate new token (classic)*. Scope = `repo`. Expiry 30d is fine.
+2. In Colab → left-side **🔑 key icon** → *+ Add new secret*:
+   - Name: **`GITHUB_TOKEN`**
+   - Value: the PAT
+   - Toggle *Notebook access* ON
 3. In Colab: *Runtime → Change runtime type → A100*.
+
+The notebooks' cell 3 reads the secret via `google.colab.userdata`, clones with
+the token embedded in the URL, then immediately scrubs the token from
+`.git/config` so it never lands in Drive. If you ever leak the token, revoke
+it in GitHub settings and generate a new one.
 
 ### 1. Run Notebook 0
 - Pass gate (≤ 2 % Greek error) before proceeding.
