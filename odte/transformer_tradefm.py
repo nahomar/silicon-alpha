@@ -197,8 +197,15 @@ class TradeFM(nn.Module):
         B, T = tokens.shape
         x = self.tok_emb(tokens)
         freqs = self.freqs_cis[:T]
+        ckpt = getattr(self.cfg, "grad_checkpointing", False) and self.training
         for blk in self.blocks:
-            x = blk(x, freqs)
+            if ckpt:
+                # Recompute activations on backward → ~60% less act memory
+                # at the cost of a second forward through each block.
+                x = torch.utils.checkpoint.checkpoint(
+                    blk, x, freqs, use_reentrant=False)
+            else:
+                x = blk(x, freqs)
         x = self.norm(x)
         return self.head(x)
 

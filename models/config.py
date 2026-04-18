@@ -76,6 +76,7 @@ class TradeFMConfig:
     fp8: bool = False                  # set True on H100 with transformer-engine
     rotary: bool = True
     use_flash_attn: bool = False       # set True when flash_attn available
+    grad_checkpointing: bool = False   # trade ~20% compute for ~60% activation mem
     # Training
     lr: float = 3e-4
     weight_decay: float = 0.01

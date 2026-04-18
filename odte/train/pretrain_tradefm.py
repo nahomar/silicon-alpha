@@ -174,6 +174,17 @@ def pretrain(args: TrainArgs) -> dict:
     run_loss: List[float] = []
     loader_iter = iter(loader)
 
+    # bf16 autocast on CUDA halves activation memory vs fp32 and is lossless
+    # for transformer training at this scale. FP8 (transformer_engine) takes
+    # precedence when available via wrap_fp8_autocast.
+    use_bf16 = (args.device == "cuda" and torch.cuda.is_available()
+                and not getattr(cfg, "fp8", False))
+
+    def _autocast_ctx():
+        if use_bf16:
+            return torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+        return wrap_fp8_autocast()
+
     while step < args.steps:
         opt.zero_grad(set_to_none=True)
         loss_accum = 0.0
@@ -183,7 +194,7 @@ def pretrain(args: TrainArgs) -> dict:
             except StopIteration:
                 loader_iter = iter(loader)
                 batch = next(loader_iter).to(args.device)
-            with wrap_fp8_autocast():
+            with _autocast_ctx():
                 loss = model.loss(batch) / args.grad_accum
             loss.backward()
             loss_accum += float(loss.item()) * args.grad_accum
