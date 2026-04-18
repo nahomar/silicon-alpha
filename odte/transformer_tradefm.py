@@ -88,7 +88,9 @@ class CausalAttention(nn.Module):
         self.wo = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
 
     def _eager(self, xq, xk, xv) -> torch.Tensor:
-        # xq/xk/xv: (B, T, H, Dh) → attention with causal mask
+        # xq/xk/xv: (B, T, H, Dh) → attention with causal mask.
+        # Materializes an (B,H,T,T) score tensor — OOMs on long ctx. Kept as
+        # the last-resort path; prefer _sdpa or _flash.
         B, T, H, Dh = xq.shape
         xq = xq.transpose(1, 2)                   # (B, H, T, Dh)
         xk = xk.transpose(1, 2)
@@ -98,6 +100,20 @@ class CausalAttention(nn.Module):
         scores = scores + mask
         attn = F.softmax(scores, dim=-1)
         out = attn @ xv                           # (B, H, T, Dh)
+        return out.transpose(1, 2).contiguous().view(B, T, H * Dh)
+
+    def _sdpa(self, xq, xk, xv) -> torch.Tensor:
+        """PyTorch 2.x built-in scaled_dot_product_attention.
+
+        Picks mem-efficient or flash-1 backend automatically on CUDA, cuts
+        peak memory ~3-6× vs _eager at long ctx, no extra pip deps. This is
+        the right default for A100 / H100 when flash-attn-3 isn't installed.
+        """
+        B, T, H, Dh = xq.shape
+        q = xq.transpose(1, 2)                    # (B, H, T, Dh)
+        k = xk.transpose(1, 2)
+        v = xv.transpose(1, 2)
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         return out.transpose(1, 2).contiguous().view(B, T, H * Dh)
 
     def _flash(self, xq, xk, xv) -> torch.Tensor:
@@ -118,6 +134,9 @@ class CausalAttention(nn.Module):
             and x.is_cuda and x.dtype in (torch.float16, torch.bfloat16)
         if use_flash:
             out = self._flash(q, k, v)
+        elif x.is_cuda:
+            # On any CUDA device, SDPA is always better than eager.
+            out = self._sdpa(q, k, v)
         else:
             out = self._eager(q, k, v)
         return self.wo(out)
