@@ -90,7 +90,14 @@ class DataShopPacker:
     out_dir: Path
     feature_spec: Dict[str, str] = field(
         default_factory=lambda: {
-            "ret": "quantile", "mid": "quantile", "micro_dev": "quantile",
+            "ret": "quantile", "mid": "quantile",
+            # NOTE: "micro_dev" intentionally dropped from feature_spec until
+            # the full-depth feed lands. prepare_features() still writes the
+            # column as 0.0 (placeholder) but feeding a dead constant into
+            # the tokenizer produces degenerate quantile edges and a wasted
+            # feature dimension in the model.
+            # TODO(phase-2-backfill): restore "micro_dev": "quantile" once
+            # the full-depth feed is wired and prepare_features computes it.
             "spread": "log", "bid_sz": "log", "ask_sz": "log",
             "last_sz": "log", "inter_arrival_ms": "log",
         }

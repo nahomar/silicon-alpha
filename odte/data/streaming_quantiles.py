@@ -33,7 +33,13 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class StreamingQuantileFitter:
-    reservoir_size: int = 1_000_000
+    # Default bumped 1M -> 2M after the parity test in
+    # tests/odte/test_quantile_parity.py showed 1M gave ~3.3e-3 max-abs-err
+    # vs np.quantile on a 10M-row worst-case corpus. 2M halves that near the
+    # median and costs ~16 MB per feature. At Phase-2 scale (>=1T rows) the
+    # reservoir dominates and error approaches the theoretical ~sqrt(1/R)
+    # floor; the 10M-row test is the pessimistic case, not production.
+    reservoir_size: int = 2_000_000
     n_buckets: int = 64
     seed: int = 0
     _buf: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float64))

@@ -203,26 +203,58 @@ class CheckpointManager:
     # load
     # ------------------------------------------------------------------
     def latest_step(self) -> Optional[int]:
-        """Largest step whose meta.json is present AND world_size matches."""
+        """Largest step whose meta.json is present AND world_size matches.
+
+        Returns None only when there are NO ckpts at all (legitimate cold
+        start). If ckpts exist but none match the current world_size, raises
+        RuntimeError — prevents the silent "restart from step 0" failure
+        mode where a node crash mid-run would otherwise wipe hours of
+        training without warning.
+        """
         entries = self._store.list(self.prefix)
         metas = [e for e in entries if e.endswith("meta.json")]
         candidates: list[tuple[int, str]] = []
+        wrong_ws: list[tuple[int, int]] = []  # (step, saved_world_size)
         for m in metas:
             try:
                 with tempfile.NamedTemporaryFile(suffix=".json") as f:
                     self._store.get(m, Path(f.name))
                     payload = json.loads(Path(f.name).read_text())
-                if int(payload.get("world_size", -1)) != self.world_size:
+                saved_ws = int(payload.get("world_size", -1))
+                if saved_ws != self.world_size:
+                    wrong_ws.append((int(payload.get("step", -1)), saved_ws))
                     continue
                 candidates.append((int(payload["step"]), m))
             except Exception as e:
                 log.warning("skip %s: %s", m, e)
         if not candidates:
+            if wrong_ws:
+                wrong_ws.sort()
+                latest_step, saved_ws = wrong_ws[-1]
+                raise RuntimeError(
+                    f"CheckpointManager: found {len(wrong_ws)} ckpt(s) saved "
+                    f"with world_size={saved_ws}, but current world_size="
+                    f"{self.world_size}. LOCAL_STATE_DICT ckpts can only "
+                    f"resume on matching node count (latest is step "
+                    f"{latest_step}). To resume on a different node count, "
+                    f"re-save that ckpt as FULL_STATE_DICT and reshard — "
+                    f"silently restarting from step 0 would waste hours of "
+                    f"training. TODO(phase-2-resharding)."
+                )
             return None
         return max(candidates, key=lambda x: x[0])[0]
 
     def load(self, model: torch.nn.Module, optimizer: Optional[torch.optim.Optimizer],
-             step: Optional[int] = None) -> Dict[str, Any]:
+             step: Optional[int] = None, current_cfg: Optional[Dict[str, Any]] = None,
+             allow_cfg_drift: bool = False) -> Dict[str, Any]:
+        """Resume from a ckpt.
+
+        If current_cfg is provided, its sha256 hash is compared against the
+        hash stored in meta.json at save time. Mismatch raises RuntimeError
+        unless allow_cfg_drift=True — prevents the silent "wrong config
+        resumed" failure mode where a changed layer count or vocab size
+        would load into a model-shape mismatch far later in the step.
+        """
         step = step if step is not None else self.latest_step()
         if step is None:
             log.info("[rank %d] no ckpt found under %s/%s", self.rank, self.store_url, self.prefix)
@@ -234,6 +266,23 @@ class CheckpointManager:
             meta_path = td_p / "meta.json"
             self._store.get(f"{step_dir}/meta.json", meta_path)
             meta = json.loads(meta_path.read_text())
+            # Config-hash gate
+            if current_cfg is not None:
+                saved_hash = meta.get("cfg_hash")
+                current_hash = _cfg_hash(current_cfg)
+                if saved_hash is not None and saved_hash != current_hash:
+                    msg = (f"CheckpointManager: cfg_hash mismatch on resume. "
+                           f"saved={saved_hash}  current={current_hash}  "
+                           f"step={meta.get('step')}. This ckpt was trained "
+                           f"with a different config; resuming will either "
+                           f"shape-error or silently corrupt training.")
+                    if not allow_cfg_drift:
+                        raise RuntimeError(msg + " Pass allow_cfg_drift=True to override.")
+                    log.warning(msg + " allow_cfg_drift=True — proceeding anyway.")
+            elif self.rank == 0:
+                log.warning("CheckpointManager.load() called without current_cfg; "
+                            "cfg_hash check skipped. Pass current_cfg=asdict(cfg) "
+                            "to enforce.")
             # rank shard
             rank_path = td_p / f"rank_{self.rank}.pt"
             self._store.get(f"{step_dir}/rank_{self.rank}.pt", rank_path)

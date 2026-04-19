@@ -50,19 +50,42 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class ShardedTokenDataset(ShardTokenDataset):
-    """Same as parent but only yields to its rank via world-size stride."""
+    """Rank-partitioned over shards: each rank reads only its assigned shards.
+
+    Previous implementation had every rank read every shard and filter by
+    sample index mod world_size. That's correct but wastes N-fold S3 egress
+    and adds a cross-rank correlation risk when two ranks happen to align on
+    the same packed window.
+
+    This implementation:
+      1. Shuffles the shard *order* using `seed` (consistent across ranks)
+         so all ranks agree on the global shard ordering.
+      2. Assigns each rank a disjoint slice of shards at positions
+         {rank, rank+W, rank+2W, ...} of the shuffled list.
+      3. The parent class then shuffles rows *within* each shard using
+         `seed + rank`, giving each rank an independent within-shard order.
+
+    Per-epoch each rank sees disjoint data; together all ranks cover the
+    corpus. I/O is balanced at O(N/W) shards per rank instead of O(N).
+    """
 
     def __init__(self, shard_paths, ctx_len, rank: int, world_size: int,
                  shuffle_buffer: int = 64, seed: int = 0):
-        super().__init__(shard_paths, ctx_len, shuffle_buffer=shuffle_buffer,
+        all_shards = sorted(Path(p) for p in shard_paths)
+        # Shared-seed shuffle so every rank agrees on the global shard order.
+        perm_rng = np.random.default_rng(seed)
+        order = np.arange(len(all_shards))
+        perm_rng.shuffle(order)
+        my_shards = [all_shards[order[i]]
+                     for i in range(rank, len(order), world_size)]
+        # Parent uses seed+rank for per-rank within-shard row shuffle.
+        super().__init__(my_shards, ctx_len, shuffle_buffer=shuffle_buffer,
                          seed=seed + rank)
         self.rank = rank
         self.world_size = world_size
 
     def __iter__(self):
-        for i, sample in enumerate(super().__iter__()):
-            if i % self.world_size == self.rank:
-                yield sample
+        yield from super().__iter__()
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +226,10 @@ def train(args) -> dict:
     # Checkpoint manager (stores one shard per rank)
     ckpt = CheckpointManager(store_url=args.ckpt_store,
                              prefix=args.ckpt_prefix, rank=rank, world_size=world)
-    meta = ckpt.load(model, opt) if args.resume else {"step": 0, "best_loss": float("inf")}
+    # Pass current_cfg so CheckpointManager enforces cfg_hash parity and
+    # refuses to resume a ckpt that was saved with a different config.
+    meta = (ckpt.load(model, opt, current_cfg=asdict(cfg))
+            if args.resume else {"step": 0, "best_loss": float("inf")})
     start_step = int(meta["step"]); best_loss = float(meta["best_loss"])
 
     # Data
