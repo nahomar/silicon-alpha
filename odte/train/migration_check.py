@@ -36,20 +36,27 @@ class MigrationDecision:
 
 
 def _strictly_decreasing(vals: List[float], tail: int = 5,
-                          min_slope_per_step: float = 1e-4) -> bool:
-    """Return True iff the last `tail` points form a strictly-decreasing
-    series AND the slope (per step) is at least `min_slope_per_step`
-    (in absolute loss units).
+                          min_rel_slope: float = 1e-3) -> bool:
+    """Strictly decreasing monotone + RELATIVE slope ≥ min_rel_slope of
+    the tail mean per step.
+
+    Relative slope prevents false negatives when the run has converged
+    near the noise floor (e.g. loss=0.0005). Previous absolute threshold
+    (1e-4 per step) rejected any run where remaining drop/step < 1e-4.
     """
     if len(vals) < tail + 1:
         return False
     tail_vals = vals[-tail:]
     if any(b >= a for a, b in zip(tail_vals, tail_vals[1:])):
         return False
-    # simple slope test
     x = np.arange(len(tail_vals), dtype=np.float64)
     slope, _ = np.polyfit(x, tail_vals, 1)
-    return slope < -min_slope_per_step
+    slope = float(slope)
+    mean_val = float(np.mean(tail_vals))
+    if mean_val <= 0:
+        return bool(slope < 0)
+    rel_slope = -slope / mean_val
+    return bool(rel_slope >= min_rel_slope)
 
 
 def decide(train_loss_history: List[float],
@@ -82,6 +89,12 @@ def decide(train_loss_history: List[float],
         if directional_hit_rate < require_dir_acc:
             reasons.append(f"dir-acc {directional_hit_rate*100:.1f}% "
                            f"< {require_dir_acc*100:.0f}% required")
+        # Overfit sentinel — dir-acc > 99% on synth is memorization, not
+        # edge. 524M on real L3 data realistically caps ~54-58%.
+        if directional_hit_rate >= 0.99:
+            reasons.append(f"dir-acc {directional_hit_rate*100:.1f}% — "
+                           "too perfect, model is memorizing. Check for "
+                           "train/test shard leak or trivial synth data.")
 
     # 4. DML Greek error
     if dml_greek_err_max_pct is not None:
