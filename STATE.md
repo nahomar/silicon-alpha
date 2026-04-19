@@ -126,3 +126,82 @@ All scripts `set -euo pipefail` and read required env vars.
 3. **Check the RunPod pod.** Ask the user to visit https://www.runpod.io/console/pods and confirm pod `i7wndt4y3bjpsq` is either terminated or intentionally still running. If terminated, remind them to rotate the RunPod API key.
 
 Only after those three should a fresh session propose next moves (Phase 2 launch, synth iteration, or pod teardown).
+
+## Conversation digest (decisions + rationale)
+
+Dense reference of the "why" behind choices that don't survive in commit messages. Do not restate content above.
+
+### Path chosen vs alternatives
+
+| Decision | Chosen | Rejected | Rationale |
+|---|---|---|---|
+| Engine tier | Budget Alpha + HRT-scale in parallel | HRT-only | Budget path (`odte_budget.py`, `BUDGET.md`) gives a working signal on Mac while HRT path trains; de-risks total dependency on a $50k cluster run. |
+| Phase-1 validator | Colab Pro+ A100 | RunPod A100, GCE A100 | Colab = flat $49.99/mo, zero provisioning, already authenticated; RunPod had a stuck pod and API-key leak risk; GCE overkill for a 40M validation. |
+| Phase-2 cluster | GCP A3 Mega (24× H100) | RunPod H100 multi-node, Lambda | HRT-precedent on GCP + TCPX NCCL; H100 availability more predictable; `a3-megagpu-8g` quota path is well-trodden. |
+| Colab GPU | A100 80GB (40GB fallback wired) | H100 | H100 unavailable on Pro+ tier at launch; 40M params fits comfortably on A100 with bf16 + grad-ckpt. |
+| Repo visibility | Private + Colab Secret | Public repo | PAT-in-URL clone scrubbed post-clone; keeps broker/margin configs and kernel IP out of public search. |
+| Attention impl | `torch.nn.functional.scaled_dot_product_attention` | flash-attn-3 | SDPA ships with torch, no build step, no CUDA version drift on Colab; flash-attn-3 kept behind `cfg.use_flash_attn=true` for H100 Phase 2. |
+| 40M fit on A100 40GB | grad-ckpt + bf16 + batch=1 + grad_accum=16 | fp32, larger batch | Stacked to survive the 40GB fallback path; batch=2 only works on 80GB. |
+
+### Bug fixes with root causes
+
+| Symptom | Root cause | Fix commit |
+|---|---|---|
+| Dataloader stuck on Colab | Shards read directly from Google Drive (high-latency FUSE) | 33fbe83 — shard_rows=8000 + local `/content` staging |
+| Dir-acc hitting 100% | Single-shard synth → eval shard == train shard → memorization | c2955fb — 12 sessions × 3 regimes × 21 strikes × {C,P} |
+| Migration gate false NO-GO on flat val loss | Absolute 1e-4 slope threshold too strict at noise floor | c2955fb — relative slope ≥ 1e-3 of tail mean in `_strictly_decreasing` |
+| Overfit masquerading as success | Gate had no upper bound on dir-acc | c2955fb — overfit sentinel blocks migration when dir-acc ≥ 0.99 |
+| OOM on 40GB runtime, fine on 80GB | Single config for both VRAM sizes | 33fbe83 + d7a7e64 — runtime auto-detect branch in cell 5 |
+| Colab Secret read timing out | "Notebook access toggle OFF" in Secrets UI | 5659db7 — `getpass` fallback after userdata.get() raises |
+| 40M OOM'd in fp32 | No activation checkpointing, fp32 default | 4d8f750 — `TradeFMConfig.grad_checkpointing` flag + `torch.utils.checkpoint` in `TradeFM.forward` |
+| Private-repo OAuth loop in Colab | Interactive auth unreliable in headless Run-all | 28b58b5 — `colab_bootstrap.ipynb` escape hatch |
+
+### Instrumentation decisions
+
+- **`[diag]` prints in cell 5** (d7a7e64): print `git rev-parse HEAD`, `nvidia-smi` tier, and resolved config before the `pretrain_tradefm` call fires. A 45-60 min train on the wrong commit wastes a Colab session; diag line makes the cost visible at t=0.
+- **`log_every=50`, `ckpt_every=500`**: log cadence fast enough to catch divergence in ~30s; checkpoint cadence slow enough that Drive I/O doesn't stall the loop (Drive write ≈ 1-2s per ckpt at 40M fp32).
+- **Synth shape `12 × 3 × 21 × 2 = 1512 series`**: deliberately chosen above the 40M model's effective memorization capacity at ctx=1024; prevents the 100% dir-acc artifact that pre-c2955fb produced.
+- **Cell 7 writes `reports/migration_decision.md`**: decision is a file, not just stdout, so the GCP Phase-2 launcher can grep it.
+
+### Pending decisions (user-blocking)
+
+| # | Decision | Blocker | Action |
+|---|---|---|---|
+| 1 | Terminate RunPod pod `i7wndt4y3bjpsq` | Billing at $2.99/hr; status unverified | Visit https://www.runpod.io/console/pods or `runpodctl stop/remove pod i7wndt4y3bjpsq`. Bounded exposure ≤ $6 (≤ 2 hrs). |
+| 2 | Rotate RunPod API key | Key pasted in chat; RunPod auto-scans may have revoked | Settings → regenerate at https://www.runpod.io/console/user/settings |
+| 3 | If cell 7 → GO | Waiting on training run | Launch `infra/gcp/phase2_a3mega.sh` with `GCP_PROJECT`, `GCP_BUCKET`, `REPO_URL`; confirm `a3-megagpu-8g` quota first. |
+| 4 | If cell 7 → NO-GO | Same | Iterate: (a) Hawkes-informed flow in `odte/synth_options.py`; (b) config bump (ctx, layers) in `configs/tradefm_40m.yml`; (c) add real microstructure replay. |
+
+### Cost accounting
+
+| Bucket | Spend / rate | Notes |
+|---|---|---|
+| RunPod pod `i7wndt4y3bjpsq` | ≤ $6 (≤ 2 hrs × $2.99/hr) | Upper-bounded by assumption; confirm via console |
+| Colab Pro+ | $49.99/mo flat | Amortized across Phase 0 + Phase 1 + all iterations |
+| Phase 2 (projected) | $40-50k / run | 3× A3 Mega × 24× H100 × ~130 GPU-hours for 524M |
+| Phase 0/1 local | $0 | Apple Silicon Mac |
+
+### "Where to look" quick-reference
+
+| Concept | Primary file(s) |
+|---|---|
+| Tokenizer | `/Users/nahom/market-pattern-bot/odte/data/datashop_pack.py`, `/Users/nahom/market-pattern-bot/odte/tokenizer.py` |
+| Transformer | `/Users/nahom/market-pattern-bot/odte/transformer_tradefm.py` |
+| DML pricer | `/Users/nahom/market-pattern-bot/odte/dml_pricer.py`, `/Users/nahom/market-pattern-bot/odte/train/train_dml.py` |
+| Migration gate | `/Users/nahom/market-pattern-bot/odte/train/migration_check.py` |
+| Phase 5 exec | `/Users/nahom/market-pattern-bot/odte/exec/*.py` |
+| Colab notebooks | `/Users/nahom/market-pattern-bot/notebooks/colab_phase0_dml.ipynb`, `/Users/nahom/market-pattern-bot/notebooks/colab_phase1_tradefm.ipynb` |
+| GCP provisioning | `/Users/nahom/market-pattern-bot/infra/gcp/*.sh`, `/Users/nahom/market-pattern-bot/infra/gcp/README.md` |
+| Monday deploy | `/Users/nahom/market-pattern-bot/deploy/DEPLOYMENT_CHECKLIST.md`, `/Users/nahom/market-pattern-bot/deploy/monday_go_live.sh` |
+| Budget path | `/Users/nahom/market-pattern-bot/BUDGET.md`, `/Users/nahom/market-pattern-bot/odte_budget.py` |
+| Synth data | `/Users/nahom/market-pattern-bot/odte/synth_options.py` |
+| 40M config | `/Users/nahom/market-pattern-bot/configs/tradefm_40m.yml` |
+| 524M config | `/Users/nahom/market-pattern-bot/configs/tradefm_524m.yml` |
+
+### If training succeeds, do exactly this next
+
+1. Read `reports/migration_decision.md`; confirm verdict `GO` and dir-acc in [0.53, 0.99).
+2. Verify GCP `a3-megagpu-8g` quota is approved in target project (Quotas console).
+3. Export `GCP_PROJECT`, `GCP_BUCKET`, `REPO_URL` (`github.com/nahomar/market-pattern-bot`).
+4. Run `./infra/gcp/phase2_a3mega.sh` from `/Users/nahom/market-pattern-bot/`.
+5. Then `./infra/gcp/launch_torchrun_524m.sh` from inside the provisioned head node.
