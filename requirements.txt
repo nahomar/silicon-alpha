@@ -17,6 +17,7 @@ statsmodels>=0.14.0
 # odte (Phase 0)
 cvxpy>=1.5
 zstandard>=0.22
-databento>=0.40         # OPRA feed — uncommented for Phase 2 (Databento chosen over DataShop)
+# databento>=0.40       # pay-per-GB OPRA; kept as fallback, not active
+boto3>=1.34              # Polygon flat-files S3 client (Phase 2 data source)
 # transformer-engine     # Hopper FP8 (H100 only)
 # flash-attn             # FlashAttention-3 (Hopper only)
