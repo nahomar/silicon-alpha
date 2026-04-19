@@ -1,0 +1,348 @@
+"""Databento OPRA -> sharded tokenized parquet.
+
+Thin adapter that pulls Databento MBP-1 (market-by-price top-of-book)
+tick data for SPX/SPXW options, translates the column schema to match
+odte.data.datashop_pack.prepare_features(), and hands off to the existing
+DataShopPacker pipeline (tokenizer fit + shard writer).
+
+Why MBP-1 specifically:
+  - Single stream contains both BBO updates AND trades (distinguished by
+    `action == 'T'`), so we get the quote + trade feature set
+    prepare_features() expects with one subscription.
+  - Bandwidth / cost lands in the sweet spot for Phase 2 pretrain vs full
+    MBO (market-by-order / L3). Upgrade to MBO only at Phase 4 if the
+    transformer proves it needs book-depth state.
+
+Why SPX/SPXW parent symbology:
+  - SPX = traditional monthly-expiry index options; SPXW = weekly/daily
+    (including 0DTE). "Parent" symbology expands to every child contract
+    (all strikes + expirations) under the root without forcing us to
+    enumerate.
+  - Databento bills per instrument-day of coverage, so parent symbology
+    is the same price as listing every child — no penalty.
+
+Cost shape (verify current pricing at databento.com/pricing):
+  - Historical MBP-1 is billed per GB of compressed DBN output.
+  - Typical: ~1-5 GB/day across SPX+SPXW at current volumes.
+  - 3 years SPX+SPXW MBP-1 tick is usually $400-1500 depending on
+    vol regime (2022-2023 was noisy, 2024+ is 0DTE-heavy).
+
+Usage:
+    # one-shot, fetches + packs
+    python -m odte.data.databento_pack \
+        --start 2024-01-01 --end 2024-02-01 \
+        --raw-dir data/databento_raw \
+        --out-dir reports/odte_shards_real \
+        --symbols SPX SPXW
+
+    # smoke test first — 1 day, tiny spend, validates the full path
+    python -m odte.data.databento_pack --smoke
+
+Environment:
+    DATABENTO_API_KEY must be set. The client reads it automatically.
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List, Optional
+
+import numpy as np
+import pandas as pd
+
+from .datashop_pack import DataShopPacker, prepare_features
+
+log = logging.getLogger(__name__)
+
+# Databento dataset + schema constants. Keep names explicit so the
+# symbolic dependency on the databento client stays visible.
+DATASET_OPRA = "OPRA.PILLAR"
+SCHEMA_MBP1 = "mbp-1"
+STYPE_PARENT = "parent"   # SPX.OPT resolves to every SPX option contract
+
+
+# ---------------------------------------------------------------------------
+# Schema translation: Databento MBP-1 -> datashop_pack prepare_features()
+# ---------------------------------------------------------------------------
+
+_RENAME_MAP = {
+    # Databento MBP-1 field -> CBOE-style name prepare_features() expects
+    "ts_event":    "quote_datetime",
+    "bid_px_00":   "bid",
+    "ask_px_00":   "ask",
+    "bid_sz_00":   "bid_size",
+    "ask_sz_00":   "ask_size",
+}
+
+
+def databento_to_datashop_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Translate a Databento MBP-1 DataFrame to datashop_pack schema.
+
+    MBP-1 rows carry top-of-book BBO at `ts_event`. Rows where `action`
+    is 'T' are trade executions; their `size` field populates
+    `trade_volume`. Non-trade rows get `trade_volume = 0`.
+
+    Prices are ints scaled by 1e-9 in DBN fixed-point; databento's
+    .to_df() handles the scaling if passed the right flag, but we
+    defensively rescale if the values look unscaled.
+    """
+    # Project/rename columns that survive the adapter. Some Databento
+    # versions emit ts_event as an int64 ns timestamp; others already
+    # pandas datetime64. Both are handled by prepare_features().
+    df = df.rename(columns={k: v for k, v in _RENAME_MAP.items() if k in df.columns})
+
+    # Defensive: if prices look like DBN fixed-point (very large ints),
+    # rescale by 1e-9. Databento docs: fixed-point scale factor = 1e-9.
+    for col in ("bid", "ask"):
+        if col in df.columns and df[col].dtype.kind in ("i", "u"):
+            max_val = df[col].max()
+            if max_val > 1e6:  # no real option BBO is > $1M; this is fixed-point
+                df[col] = df[col].astype("float64") * 1e-9
+
+    # trade_volume: present only on action='T' rows. prepare_features()
+    # reads this as the `trade_volume` column.
+    if "action" in df.columns and "size" in df.columns:
+        is_trade = df["action"].astype(str).str.upper() == "T"
+        df["trade_volume"] = np.where(is_trade, df["size"].astype(float), 0.0)
+    else:
+        df["trade_volume"] = 0.0
+
+    # Required shape check before returning — if any of these is missing,
+    # prepare_features() will blow up with a less-clear KeyError.
+    required = {"quote_datetime", "bid", "ask", "bid_size", "ask_size", "trade_volume"}
+    missing = required - set(df.columns)
+    if missing:
+        raise RuntimeError(
+            f"databento->datashop schema translation missing columns: {missing}. "
+            f"Got columns: {sorted(df.columns)}. Check Databento schema "
+            f"version (this adapter assumes MBP-1)."
+        )
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Downloader
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DatabentoFetcher:
+    api_key: Optional[str] = None  # None -> reads DATABENTO_API_KEY env
+    raw_dir: Path = Path("data/databento_raw")
+    dataset: str = DATASET_OPRA
+    schema: str = SCHEMA_MBP1
+    stype_in: str = STYPE_PARENT
+
+    def __post_init__(self):
+        self.raw_dir = Path(self.raw_dir)
+        self.raw_dir.mkdir(parents=True, exist_ok=True)
+        self.api_key = self.api_key or os.getenv("DATABENTO_API_KEY")
+        if not self.api_key:
+            raise RuntimeError(
+                "No Databento API key. Set DATABENTO_API_KEY env var or "
+                "pass api_key=... explicitly."
+            )
+
+    def _client(self):
+        # Lazy import: keeps the CBOE/DataShop code path importable
+        # even without databento installed.
+        try:
+            import databento as db
+        except ImportError as e:
+            raise RuntimeError("pip install databento>=0.40") from e
+        return db.Historical(key=self.api_key)
+
+    def cost_estimate(self, start: str, end: str,
+                      symbols: List[str]) -> dict:
+        """Dry-run metadata call to get size + cost before downloading."""
+        client = self._client()
+        # get_cost() returns billable units (USD) under current pricing.
+        cost = client.metadata.get_cost(
+            dataset=self.dataset, schema=self.schema,
+            start=start, end=end,
+            symbols=[f"{s}.OPT" for s in symbols],
+            stype_in=self.stype_in,
+        )
+        size = client.metadata.get_billable_size(
+            dataset=self.dataset, schema=self.schema,
+            start=start, end=end,
+            symbols=[f"{s}.OPT" for s in symbols],
+            stype_in=self.stype_in,
+        )
+        return {"cost_usd": float(cost), "bytes": int(size),
+                "gb": round(int(size) / 1e9, 2)}
+
+    def fetch_range(self, start: str, end: str,
+                    symbols: List[str]) -> Path:
+        """Download one time range to a single .dbn.zst file."""
+        client = self._client()
+        safe = f"{symbols[0]}_{start}_{end}".replace(":", "").replace("-", "")
+        out = self.raw_dir / f"{safe}.dbn.zst"
+        if out.exists():
+            log.info("cache hit: %s", out)
+            return out
+        log.info("fetching databento %s %s [%s..%s] symbols=%s -> %s",
+                 self.dataset, self.schema, start, end, symbols, out)
+        client.timeseries.get_range(
+            dataset=self.dataset, schema=self.schema,
+            start=start, end=end,
+            symbols=[f"{s}.OPT" for s in symbols],
+            stype_in=self.stype_in,
+            path=str(out),
+        )
+        return out
+
+
+# ---------------------------------------------------------------------------
+# .dbn.zst -> pandas (chunked)
+# ---------------------------------------------------------------------------
+
+def iter_dbn_chunks(path: Path, chunk_rows: int = 500_000
+                    ) -> Iterable[pd.DataFrame]:
+    """Stream a .dbn.zst file into pandas chunks, pre-translated to
+    datashop_pack schema. Reused by DataShopPacker.pack() / fit_tokenizer()
+    via the usual iter_csv_chunks() interface."""
+    try:
+        import databento as db
+    except ImportError as e:
+        raise RuntimeError("pip install databento>=0.40") from e
+    store = db.DBNStore.from_file(str(path))
+    # .to_df() will load the whole file; for the scale of a single
+    # month at OPRA MBP-1 it's usually fine (~1-3 GB uncompressed).
+    # If the file is too large, split by day at fetch time instead of
+    # chunking here — databento doesn't support mid-file seeks well.
+    df = store.to_df()
+    df = databento_to_datashop_schema(df)
+    # Then yield in chunks for prepare_features()'s streaming contract.
+    for i in range(0, len(df), chunk_rows):
+        yield df.iloc[i:i + chunk_rows].copy()
+
+
+# ---------------------------------------------------------------------------
+# High-level: fetch + pack
+# ---------------------------------------------------------------------------
+
+def pack_databento(start: str, end: str, symbols: List[str],
+                   raw_dir: Path, out_dir: Path,
+                   n_buckets: int = 64,
+                   shard_rows: int = 1_000_000,
+                   api_key: Optional[str] = None,
+                   skip_cost_check: bool = False,
+                   max_spend_usd: float = 50.0) -> list[Path]:
+    """End-to-end: cost-check, fetch, fit tokenizer, pack to shards.
+
+    Refuses to download if the estimated cost exceeds `max_spend_usd`
+    unless skip_cost_check=True. Keeps accidental $5k downloads from
+    happening via typo'd date ranges.
+    """
+    fetcher = DatabentoFetcher(api_key=api_key, raw_dir=raw_dir)
+    est = fetcher.cost_estimate(start, end, symbols)
+    log.info("databento cost estimate: $%.2f for %.2f GB",
+             est["cost_usd"], est["gb"])
+    if not skip_cost_check and est["cost_usd"] > max_spend_usd:
+        raise RuntimeError(
+            f"estimated cost ${est['cost_usd']:.2f} exceeds max_spend "
+            f"${max_spend_usd:.2f}. Raise max_spend_usd or pass "
+            f"skip_cost_check=True to override."
+        )
+    # Download
+    dbn_path = fetcher.fetch_range(start, end, symbols)
+    # Pack via existing DataShopPacker — it doesn't care whether the
+    # chunks came from CSV or DBN as long as schema matches.
+    packer = DataShopPacker(out_dir=Path(out_dir),
+                            n_buckets=n_buckets, shard_rows=shard_rows)
+    # fit_tokenizer() expects an iterable of (any-path) and uses
+    # iter_csv_chunks internally. We bypass that by pre-feeding chunks.
+    def _chunks():
+        for ch in iter_dbn_chunks(dbn_path):
+            yield prepare_features(ch)
+    # Pre-populate the streaming fit via the shared helper.
+    from .streaming_quantiles import fit_hybrid_from_chunks
+    from odte.tokenizer import HybridBinTokenizer
+    edges = fit_hybrid_from_chunks(_chunks(), packer.feature_spec,
+                                   n_buckets=n_buckets,
+                                   checkpoint=Path(out_dir) / "_fit_ckpt")
+    tok = HybridBinTokenizer(n_buckets=n_buckets,
+                             feature_spec=packer.feature_spec)
+    tok.edges = edges
+    tok.save(Path(out_dir) / "tokenizer.json")
+    packer.tokenizer = tok
+    # Now pack. We re-read the DBN (the chunk iterator above was consumed
+    # by the fit). For a single month this is fine; for multi-month runs,
+    # either cache the DataFrame in RAM or stream fit+pack jointly in a
+    # future version.
+    buffer: list[dict] = []
+    shard_idx = 0
+    shard_paths: list[Path] = []
+    for ch in iter_dbn_chunks(dbn_path):
+        feats = prepare_features(ch)
+        toks = tok.tokenize_batch(feats, feature_order=list(packer.feature_spec))
+        for i, row in feats.reset_index(drop=True).iterrows():
+            buffer.append({
+                "ts": int(row["ts_ms"]),
+                "underlying": str(symbols[0]),  # parent sym; precise mapping later
+                "expiry": "",  # MBP-1 doesn't carry expiry by default; join via instrument_id
+                "day": pd.Timestamp(row["quote_datetime"]).strftime("%Y-%m-%d"),
+                "tokens": toks[i].tolist(),
+            })
+            if len(buffer) >= packer.shard_rows:
+                shard_paths.append(packer._flush_shard(buffer, shard_idx))
+                shard_idx += 1
+                buffer = []
+    if buffer:
+        shard_paths.append(packer._flush_shard(buffer, shard_idx))
+    log.info("databento pack done: %d shards in %s", len(shard_paths), out_dir)
+    return shard_paths
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--start", default=None, help="ISO date e.g. 2024-01-01")
+    ap.add_argument("--end", default=None, help="ISO date, exclusive")
+    ap.add_argument("--symbols", nargs="+", default=["SPX", "SPXW"])
+    ap.add_argument("--raw-dir", default="data/databento_raw")
+    ap.add_argument("--out-dir", default="reports/odte_shards_real")
+    ap.add_argument("--n-buckets", type=int, default=64)
+    ap.add_argument("--max-spend-usd", type=float, default=50.0)
+    ap.add_argument("--skip-cost-check", action="store_true")
+    ap.add_argument("--smoke", action="store_true",
+                    help="fetch 1 day of SPX only, validates end-to-end path")
+    ap.add_argument("--cost-only", action="store_true",
+                    help="print cost estimate and exit (no download)")
+    a = ap.parse_args()
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    if a.smoke:
+        a.start = a.start or "2024-01-03"   # 1 trading day of 2024
+        a.end = a.end or "2024-01-04"
+        a.symbols = ["SPX"]
+        a.max_spend_usd = 10.0
+        log.info("SMOKE MODE: start=%s end=%s symbols=%s spend_cap=$%.2f",
+                 a.start, a.end, a.symbols, a.max_spend_usd)
+
+    if not (a.start and a.end):
+        ap.error("--start and --end are required (unless --smoke)")
+
+    fetcher = DatabentoFetcher(raw_dir=Path(a.raw_dir))
+    est = fetcher.cost_estimate(a.start, a.end, a.symbols)
+    print(f"cost_estimate: ${est['cost_usd']:.2f}  size: {est['gb']:.2f} GB")
+
+    if a.cost_only:
+        return
+
+    pack_databento(start=a.start, end=a.end, symbols=a.symbols,
+                   raw_dir=Path(a.raw_dir), out_dir=Path(a.out_dir),
+                   n_buckets=a.n_buckets,
+                   max_spend_usd=a.max_spend_usd,
+                   skip_cost_check=a.skip_cost_check)
+
+
+if __name__ == "__main__":
+    _cli()
