@@ -55,12 +55,20 @@ import pandas as pd
 
 from .datashop_pack import DataShopPacker, prepare_features
 
+# Auto-load .env from project root if present. Quietly no-ops if
+# python-dotenv isn't installed or no .env exists.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 log = logging.getLogger(__name__)
 
 # Databento dataset + schema constants. Keep names explicit so the
 # symbolic dependency on the databento client stays visible.
 DATASET_OPRA = "OPRA.PILLAR"
-SCHEMA_MBP1 = "mbp-1"
+SCHEMA_MBP1 = "cmbp-1"   # OPRA.PILLAR is SIP-consolidated; use cmbp-1 not mbp-1
 STYPE_PARENT = "parent"   # SPX.OPT resolves to every SPX option contract
 
 
@@ -199,25 +207,26 @@ class DatabentoFetcher:
 # .dbn.zst -> pandas (chunked)
 # ---------------------------------------------------------------------------
 
-def iter_dbn_chunks(path: Path, chunk_rows: int = 500_000
+def iter_dbn_chunks(path: Path, chunk_rows: int = 200_000
                     ) -> Iterable[pd.DataFrame]:
-    """Stream a .dbn.zst file into pandas chunks, pre-translated to
-    datashop_pack schema. Reused by DataShopPacker.pack() / fit_tokenizer()
-    via the usual iter_csv_chunks() interface."""
+    """Stream a .dbn.zst file into pandas chunks without ever loading
+    the whole file into RAM.
+
+    Critical for 1-day+ OPRA cmbp-1 pulls: a single day of SPX+SPXW is
+    ~1B rows / 100+ GB decompressed, which does NOT fit in Mac memory.
+    We use DBNStore.to_df(count=N) which returns a DataFrameIterator
+    that yields batches of N rows at ~52 MB each, constant memory.
+    """
     try:
-        import databento as db
+        import databento as db  # noqa: F401
     except ImportError as e:
         raise RuntimeError("pip install databento>=0.40") from e
+    import databento as db
     store = db.DBNStore.from_file(str(path))
-    # .to_df() will load the whole file; for the scale of a single
-    # month at OPRA MBP-1 it's usually fine (~1-3 GB uncompressed).
-    # If the file is too large, split by day at fetch time instead of
-    # chunking here — databento doesn't support mid-file seeks well.
-    df = store.to_df()
-    df = databento_to_datashop_schema(df)
-    # Then yield in chunks for prepare_features()'s streaming contract.
-    for i in range(0, len(df), chunk_rows):
-        yield df.iloc[i:i + chunk_rows].copy()
+    for batch in store.to_df(count=chunk_rows):
+        # Schema translation happens per-batch so we never materialize
+        # the full-file DataFrame in memory.
+        yield databento_to_datashop_schema(batch)
 
 
 # ---------------------------------------------------------------------------
