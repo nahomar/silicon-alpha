@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -184,14 +185,19 @@ class DatabentoFetcher:
 
     def fetch_range(self, start: str, end: str,
                     symbols: List[str]) -> Path:
-        """Download one time range to a single .dbn.zst file."""
+        """Download one time range via streaming get_range (only for <5 GB).
+
+        For larger requests use fetch_range_batch() — Databento's own client
+        warns that streaming get_range over 5 GB tends to time out mid-pull.
+        Use this only for schema probes / tiny windows.
+        """
         client = self._client()
         safe = f"{symbols[0]}_{start}_{end}".replace(":", "").replace("-", "")
         out = self.raw_dir / f"{safe}.dbn.zst"
         if out.exists():
             log.info("cache hit: %s", out)
             return out
-        log.info("fetching databento %s %s [%s..%s] symbols=%s -> %s",
+        log.info("fetching databento %s %s [%s..%s] symbols=%s -> %s (streaming)",
                  self.dataset, self.schema, start, end, symbols, out)
         client.timeseries.get_range(
             dataset=self.dataset, schema=self.schema,
@@ -201,6 +207,122 @@ class DatabentoFetcher:
             path=str(out),
         )
         return out
+
+    # ------------------------------------------------------------------
+    # Batch API path — required for >5 GB requests
+    # ------------------------------------------------------------------
+
+    def _find_existing_job(self, client, params: dict) -> Optional[dict]:
+        """Idempotency: search existing jobs for one matching the params.
+
+        Saves money (no double-billing) and time (resume a job already
+        running from a prior run). Matches on dataset/schema/symbols/
+        start/end — the billable parameters.
+        """
+        try:
+            jobs = client.batch.list_jobs(states="received,queued,processing,done")
+        except Exception as e:
+            log.warning("list_jobs failed; can't dedupe (%s)", e)
+            return None
+        # Normalize symbol list for comparison.
+        want_syms = set(params.get("symbols") or [])
+        if isinstance(want_syms, str):
+            want_syms = {want_syms}
+        want_syms = {str(s).strip() for s in want_syms}
+        for j in jobs:
+            if (str(j.get("dataset")) != str(params.get("dataset"))
+                    or str(j.get("schema")) != str(params.get("schema"))
+                    or str(j.get("stype_in")) != str(params.get("stype_in"))):
+                continue
+            # Symbols may be str or list in the response.
+            jsym = j.get("symbols")
+            if isinstance(jsym, str):
+                jsym = {s.strip() for s in jsym.split(",")}
+            elif isinstance(jsym, list):
+                jsym = {str(s).strip() for s in jsym}
+            else:
+                jsym = set()
+            if jsym != want_syms:
+                continue
+            # Date boundaries can come back as various formats; compare
+            # the prefix YYYY-MM-DD which is enough for day-granularity pulls.
+            def _d(x):
+                return str(x)[:10] if x is not None else ""
+            if (_d(j.get("start")) != _d(params.get("start"))
+                    or _d(j.get("end")) != _d(params.get("end"))):
+                continue
+            return j
+        return None
+
+    def fetch_range_batch(self, start: str, end: str, symbols: List[str],
+                          poll_interval_s: int = 30,
+                          max_wait_s: int = 7200) -> list[Path]:
+        """Submit a batch job, poll until done, download files.
+
+        Returns list of .dbn.zst paths (one per split_duration=day split).
+        Idempotent: if a matching job exists and is done we just download
+        it; if still running we poll the existing one.
+        """
+        client = self._client()
+        bento_symbols = [f"{s}.OPT" for s in symbols]
+        params = dict(
+            dataset=self.dataset, schema=self.schema,
+            start=start, end=end,
+            symbols=bento_symbols, stype_in=self.stype_in,
+        )
+        existing = self._find_existing_job(client, params)
+        if existing:
+            job_id = existing["id"]
+            log.info("batch: found existing job %s (state=%s) — reusing",
+                     job_id, existing.get("state"))
+            job = existing
+        else:
+            log.info("batch: submitting new job %s %s [%s..%s] symbols=%s",
+                     self.dataset, self.schema, start, end, symbols)
+            job = client.batch.submit_job(
+                dataset=self.dataset, schema=self.schema,
+                start=start, end=end,
+                symbols=bento_symbols, stype_in=self.stype_in,
+                encoding="dbn", compression="zstd",
+                split_duration="day",
+                delivery="download",
+            )
+            job_id = job["id"]
+            log.info("batch: submitted job %s", job_id)
+
+        # Poll until done or errored.
+        t0 = time.time()
+        while job.get("state") not in ("done",):
+            if job.get("state") in ("expired", "errored", "canceled"):
+                raise RuntimeError(
+                    f"batch job {job_id} ended in state={job['state']}"
+                )
+            if time.time() - t0 > max_wait_s:
+                raise TimeoutError(
+                    f"batch job {job_id} not done in {max_wait_s}s"
+                )
+            time.sleep(poll_interval_s)
+            # Refresh state by listing jobs and finding ours.
+            try:
+                updated = [j for j in client.batch.list_jobs(
+                    states="received,queued,processing,done,expired,errored,canceled"
+                ) if j["id"] == job_id]
+                if updated:
+                    job = updated[0]
+                    log.info("batch %s state=%s  elapsed=%ds",
+                             job_id, job["state"], int(time.time() - t0))
+            except Exception as e:
+                log.warning("batch poll failed (retrying): %s", e)
+        # Done — download.
+        log.info("batch: downloading files for job %s", job_id)
+        paths = client.batch.download(
+            job_id=job_id, output_dir=str(self.raw_dir),
+        )
+        log.info("batch: downloaded %d file(s): %s",
+                 len(paths), [str(p.name) for p in paths])
+        # Filter to the actual data files (skip manifest / metadata).
+        data_files = [p for p in paths if str(p).endswith(".dbn.zst")]
+        return data_files
 
 
 # ---------------------------------------------------------------------------
@@ -239,12 +361,18 @@ def pack_databento(start: str, end: str, symbols: List[str],
                    shard_rows: int = 1_000_000,
                    api_key: Optional[str] = None,
                    skip_cost_check: bool = False,
-                   max_spend_usd: float = 50.0) -> list[Path]:
-    """End-to-end: cost-check, fetch, fit tokenizer, pack to shards.
+                   max_spend_usd: float = 50.0,
+                   force_streaming: bool = False) -> list[Path]:
+    """End-to-end: cost-check, fetch via batch API, fit tokenizer, pack.
+
+    Uses Databento's batch API for all pulls by default because the
+    streaming get_range() API times out for requests over ~5 GB (and
+    every cmbp-1 day is ~50 GB billable). Set force_streaming=True
+    only for tiny schema probes under 5 GB.
 
     Refuses to download if the estimated cost exceeds `max_spend_usd`
-    unless skip_cost_check=True. Keeps accidental $5k downloads from
-    happening via typo'd date ranges.
+    unless skip_cost_check=True. Prevents a typo'd date range from
+    billing $5k accidentally.
     """
     fetcher = DatabentoFetcher(api_key=api_key, raw_dir=raw_dir)
     est = fetcher.cost_estimate(start, end, symbols)
@@ -256,21 +384,28 @@ def pack_databento(start: str, end: str, symbols: List[str],
             f"${max_spend_usd:.2f}. Raise max_spend_usd or pass "
             f"skip_cost_check=True to override."
         )
-    # Download
-    dbn_path = fetcher.fetch_range(start, end, symbols)
+    # Fetch — default to batch API (reliable for large pulls); only
+    # use streaming get_range() for explicit small-sample paths.
+    if force_streaming or est["gb"] < 3.0:
+        dbn_paths = [fetcher.fetch_range(start, end, symbols)]
+    else:
+        dbn_paths = fetcher.fetch_range_batch(start, end, symbols)
+    log.info("databento fetch done: %d file(s)", len(dbn_paths))
+
     # Pack via existing DataShopPacker — it doesn't care whether the
     # chunks came from CSV or DBN as long as schema matches.
     packer = DataShopPacker(out_dir=Path(out_dir),
                             n_buckets=n_buckets, shard_rows=shard_rows)
-    # fit_tokenizer() expects an iterable of (any-path) and uses
-    # iter_csv_chunks internally. We bypass that by pre-feeding chunks.
-    def _chunks():
-        for ch in iter_dbn_chunks(dbn_path):
-            yield prepare_features(ch)
+
+    def _all_chunks():
+        for p in dbn_paths:
+            for ch in iter_dbn_chunks(p):
+                yield prepare_features(ch)
+
     # Pre-populate the streaming fit via the shared helper.
     from .streaming_quantiles import fit_hybrid_from_chunks
     from odte.tokenizer import HybridBinTokenizer
-    edges = fit_hybrid_from_chunks(_chunks(), packer.feature_spec,
+    edges = fit_hybrid_from_chunks(_all_chunks(), packer.feature_spec,
                                    n_buckets=n_buckets,
                                    checkpoint=Path(out_dir) / "_fit_ckpt")
     tok = HybridBinTokenizer(n_buckets=n_buckets,
@@ -278,28 +413,28 @@ def pack_databento(start: str, end: str, symbols: List[str],
     tok.edges = edges
     tok.save(Path(out_dir) / "tokenizer.json")
     packer.tokenizer = tok
-    # Now pack. We re-read the DBN (the chunk iterator above was consumed
-    # by the fit). For a single month this is fine; for multi-month runs,
-    # either cache the DataFrame in RAM or stream fit+pack jointly in a
-    # future version.
+
+    # Second pass: tokenize and write shards. Re-reads the DBN files
+    # from disk — the first-pass iterator is consumed by fit.
     buffer: list[dict] = []
     shard_idx = 0
     shard_paths: list[Path] = []
-    for ch in iter_dbn_chunks(dbn_path):
-        feats = prepare_features(ch)
-        toks = tok.tokenize_batch(feats, feature_order=list(packer.feature_spec))
-        for i, row in feats.reset_index(drop=True).iterrows():
-            buffer.append({
-                "ts": int(row["ts_ms"]),
-                "underlying": str(symbols[0]),  # parent sym; precise mapping later
-                "expiry": "",  # MBP-1 doesn't carry expiry by default; join via instrument_id
-                "day": pd.Timestamp(row["quote_datetime"]).strftime("%Y-%m-%d"),
-                "tokens": toks[i].tolist(),
-            })
-            if len(buffer) >= packer.shard_rows:
-                shard_paths.append(packer._flush_shard(buffer, shard_idx))
-                shard_idx += 1
-                buffer = []
+    for p in dbn_paths:
+        for ch in iter_dbn_chunks(p):
+            feats = prepare_features(ch)
+            toks = tok.tokenize_batch(feats, feature_order=list(packer.feature_spec))
+            for i, row in feats.reset_index(drop=True).iterrows():
+                buffer.append({
+                    "ts": int(row["ts_ms"]),
+                    "underlying": str(symbols[0]),  # parent sym
+                    "expiry": "",  # populate via instrument_id->definition later
+                    "day": pd.Timestamp(row["quote_datetime"]).strftime("%Y-%m-%d"),
+                    "tokens": toks[i].tolist(),
+                })
+                if len(buffer) >= packer.shard_rows:
+                    shard_paths.append(packer._flush_shard(buffer, shard_idx))
+                    shard_idx += 1
+                    buffer = []
     if buffer:
         shard_paths.append(packer._flush_shard(buffer, shard_idx))
     log.info("databento pack done: %d shards in %s", len(shard_paths), out_dir)

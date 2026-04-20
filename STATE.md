@@ -205,3 +205,62 @@ Dense reference of the "why" behind choices that don't survive in commit message
 3. Export `GCP_PROJECT`, `GCP_BUCKET`, `REPO_URL` (`github.com/nahomar/market-pattern-bot`).
 4. Run `./infra/gcp/phase2_a3mega.sh` from `/Users/nahom/market-pattern-bot/`.
 5. Then `./infra/gcp/launch_torchrun_524m.sh` from inside the provisioned head node.
+
+---
+
+## Session log — 2026-04-19 (Phase-2 data-vendor + safety patches)
+
+### Code shipped (three new commits on top of 84a7b23)
+
+- **e3c12dd** — Phase-2 pre-launch safety: `checkpoint.py` hard-fails on world-size mismatch (no silent step-0 restart at Gate 4) and on cfg_hash mismatch on resume. `ShardedTokenDataset` now rank-partitions shards (shared-seed shuffle → rank slice → per-rank within-shard shuffle). `micro_dev` dropped from default `feature_spec` (placeholder until depth feed). `streaming_quantiles` reservoir default bumped 1M → 2M. New `tests/odte/test_quantile_parity.py` passes at 3e-3 max-abs-err gate.
+- **640bf19** — `odte/data/databento_pack.py`: new adapter for Databento OPRA.PILLAR feed, pay-per-GB model. Reuses `DataShopPacker` via column translation. Built-in `max_spend_usd=50` cost guard before any bytes transfer.
+- **ae89459** — `databento_pack` streaming fix: `iter_dbn_chunks` uses `DBNStore.to_df(count=N)` iterator so memory stays at ~1 GB regardless of file size. Prevents OOM on multi-GB 1-day pulls. Schema constant corrected to `cmbp-1` (OPRA is SIP-consolidated; `mbp-1` is non-consolidated exchange feeds only).
+
+### Vendor decision chain (and the reasoning behind each flip)
+
+1. **DataShop (initial)** — rejected after cost reading: $5-10k/mo institutional bulk license is overkill for one-shot pretrain.
+2. **Databento (round 1)** — pay-per-GB better matches one-shot use, but schema matching ambiguity.
+3. **Polygon Options Advanced** — $199/mo flat looked cheapest for a multi-month pull. Adapter written (`odte/data/polygon_pack.py`, committed locally but NOT pushed).
+4. **Databento (final)** — tipped back by two signals: (a) research surfaced reports of Polygon tick-data inaccuracy (`dev.to` user: "wildly inaccurate ticks that threw off a backtest") which matters MORE for pretraining than backtesting because bad ticks silently poison tokenizer edges; (b) user framed strategy as "we beat HRT algorithmically, not on compute" — in which case data quality dominates cost.
+
+### Databento cost findings (1-day SPX+SPXW, OPRA.PILLAR)
+
+| Schema | $/day | Size | 3yr×2sym est. | What we get |
+|---|---|---|---|---|
+| `cmbp-1` | $17.78 | 119 GB | $13,439 | Full tick-level NBBO updates + trades ✓ chosen |
+| `tcbbo` | $9.85 | 0.05 GB | $7,449 | Trades-only with BBO snapshot (no inter-trade quote dynamics) |
+| `trades` | $7.88 | 0.03 GB | $5,959 | Trades only, no BBO |
+| `cbbo-1m` | $1.27 | 0.68 GB | $960 | 1-min BBO snapshots (microstructure dead) |
+
+**Key reframe:** 1 day of cmbp-1 already over-feeds 524M by 5-10× (Chinchilla-optimal = 10-20B tokens; 1 day cmbp-1 = ~100B tokens tokenized). **We do NOT need 3 years continuous.** Revised scope: 15 training days + 3 eval days, stratified across 2022-2025 by regime (low-vol / FOMC / OPEX / 0DTE-Monday / tariff-shock / holiday-shortened). Total budget: **~$300** for Phase-2 data, replacing the originally planned $5-10k/mo DataShop.
+
+### Probe results ($0.23, 5-min SPX opening cross 2024-01-03)
+
+- 8.97M rows, file=137 MB compressed
+- All adapter column mappings match real cmbp-1 schema (validated live)
+- Quality checks: `bid <= ask` ✓, `spread > 0` ✓, `mid ∈ [bid, ask]` ✓
+- Streaming memory: bounded ~1 GB regardless of file size
+- Adapter's `max_spend_usd` guard validated on the wrong-schema case ($0 spent on `mbp-1` failure)
+
+### Currently running
+
+**$7.59 smoke:** 1-day SPX cmbp-1 download + pack + tokenizer-fit. Background task `b3xs0rwtr`. Expected 30-120 min wall. File: `data/databento_raw/SPX_*.dbn.zst`. When complete, run `python -m odte.data.inspect_smoke --shards reports/odte_shards_real --raw-dbn <path>` for pro-desk quality checklist.
+
+### Strategic framing (to apply at Gate 5 decision point)
+
+User framed the project as: **"we don't have HRT's compute — we beat them by being algorithmically better."** Implications for future decisions:
+
+- **Data quality > quantity** (drove Databento over Polygon)
+- **Better features / objectives > bigger models** — at Gate 5, explicitly re-ask whether 524M beat a 40M model with engineered features. If not, redirect Phase 3 (CUDA kernels) and Phase 4 (adversarial RL) budget toward feature engineering and paper-trading feedback loops instead.
+- **Uncontested niches > head-to-head.** 0DTE retail decision-making, SPX pin-risk last 30-min dynamics — places HRT hedges but doesn't necessarily model.
+
+### Open admin items (still blockers before Gate 2 $500 smoke)
+
+- [ ] GCP `a3-megagpu-8g` quota request (1-3 day lead — submit today)
+- [ ] S3 ckpt bucket + scoped IAM user (Terraform draft pending)
+- [ ] W&B workspace + API key
+- [ ] OPRA redistribution attestation (usually part of Databento flow — verify at `databento.com/portal`)
+
+### RunPod status
+
+Pod `i7wndt4y3bjpsq` terminated (user confirmed). Old API key rotated.
