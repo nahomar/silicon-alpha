@@ -261,7 +261,18 @@ def train(args) -> dict:
                 batch = next(loader_iter)
             batch = batch.to(device, non_blocking=True)
             with wrap_fp8_autocast():
-                loss = model.module.loss(batch) if hasattr(model, "module") else model.loss(batch)
+                # Route through the FSDP-wrapped __call__ (not model.module.loss)
+                # so the pre-forward all-gather hook fires and unshards the
+                # root flat-param. Calling `model.module.loss(batch)` would
+                # bypass FSDP.__call__ entirely — nn.Embedding.forward then
+                # sees tok_emb.weight as a 1-D shard view and F.embedding
+                # raises "weight must be 2-D". Caught by the 8-GPU smoke.
+                logits = model(batch[:, :-1])
+                target = batch[:, 1:]
+                loss = torch.nn.functional.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    target.reshape(-1),
+                )
             (loss / args.grad_accum).backward()
             loss_accum += float(loss.item())
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
