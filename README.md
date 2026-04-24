@@ -67,7 +67,9 @@ Full diagram with Phase-4 strategic layer, edge semantics, and HRT palette
 | 2 | 524M multi-node H100 pretrain on OPRA | 🔄 pipeline validated on Modal; multi-node compute gated |
 | 2.5 | Cross-asset fusion (ES futures modality) | 📝 design ([`docs/cross_asset_fusion.md`](docs/cross_asset_fusion.md)) + opt-in scaffold |
 | 3 | Persistent-kernel live inference (4.6–15.8 µs) | 📝 kernels scaffolded, not live |
+| 3.5 | FPGA P2P DMA bridge for ns-resolution order entry (OUCH/FIX + hardware kill-switch) | 📝 design only ([`docs/fpga_bridge.md`](docs/fpga_bridge.md)) |
 | 4 | Hierarchical RL + MORL + POW-dTS strategic layer | 📝 design only ([`docs/phase4_strategic_layer.md`](docs/phase4_strategic_layer.md)) |
+| 5 | Agentic governance (Research + Risk + Compliance agents) | 📝 design only ([`docs/agentic_governance.md`](docs/agentic_governance.md)) |
 
 **Rule**: design docs land in `docs/` for any phase gated by unmet
 dependencies; code scaffolds only where a clean opt-in guard keeps them
@@ -146,4 +148,6 @@ cost estimates, and post-launch monitoring.
 - [`BUDGET.md`](BUDGET.md) — compute + data cost tracking
 - [`docs/architecture.md`](docs/architecture.md) — full flow diagram with HRT palette
 - [`docs/cross_asset_fusion.md`](docs/cross_asset_fusion.md) — Phase 2.5 spec
+- [`docs/fpga_bridge.md`](docs/fpga_bridge.md) — Phase 3.5 spec
 - [`docs/phase4_strategic_layer.md`](docs/phase4_strategic_layer.md) — Phase 4 spec
+- [`docs/agentic_governance.md`](docs/agentic_governance.md) — Phase 5 spec
