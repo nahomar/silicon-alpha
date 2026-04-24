@@ -191,9 +191,15 @@ class TradeFM(nn.Module):
                              if getattr(c, "modality_vocab", 0) > 0 else None)
         self.blocks = nn.ModuleList([TransformerBlock(c) for _ in range(c.n_layers)])
         self.norm = RMSNorm(c.d_model)
-        # LM head tied to the embedding (saves params).
+        # LM head — independent from tok_emb.
+        # Originally tied via `self.head.weight = self.tok_emb.weight` to
+        # save ~vocab*d_model params, but under FSDP the tie produces a
+        # flat 1-D root FlatParameter that breaks `nn.Embedding`'s 2-D
+        # weight expectation at forward. Caught by the 8-GPU NCCL smoke.
+        # Cost of untying: +vocab*d_model params (e.g. 524M -> ~532M, 1.5%);
+        # benefit: clean FSDP sharding, no weight-dim edge cases, and
+        # slightly more expressive independent in/out embeddings.
         self.head = nn.Linear(c.d_model, c.vocab, bias=False)
-        self.head.weight = self.tok_emb.weight
         head_dim = c.d_model // c.n_heads
         self.register_buffer("freqs_cis",
                              _precompute_freqs_cis(head_dim, c.ctx_len * 2),
