@@ -1,60 +1,58 @@
 # Silicon Alpha — End-to-End Architecture
 
-Full flow from raw exchange feeds → neural forecaster → deterministic call
-sheet → dual-venue execution. Mermaid renders natively on GitHub.
+Full flow from raw exchange feeds through the neural forecaster and
+deterministic call sheet to dual-venue execution. The diagram below
+renders natively on GitHub.
 
 ```mermaid
 flowchart TB
-    %% ==================== DATA LAYER ====================
-    subgraph DATA["📡 Layer 0 — Ingestion"]
+    %% ========== LAYER 0: INGESTION ==========
+    subgraph DATA["Layer 0 - Ingestion"]
         direction LR
-        OPRA["OPRA cmbp-1<br/>SPX/NDX options<br/><i>Databento · live</i>"]
-        ES["ES Futures MBP-1<br/><i>GLBX.MDP-3 · Phase 2.5</i>"]
-        POLY["Polymarket<br/>CLOB WSS<br/><i>~100 ms · Phase 3+</i>"]
-        KAL["Kalshi<br/>CLOB WSS<br/><i>~100 ms · Phase 3+</i>"]
+        OPRA["OPRA cmbp-1<br/>SPX/NDX options<br/>(Databento, live)"]
+        ES["ES Futures MBP-1<br/>(GLBX, Phase 2.5)"]
+        POLY["Polymarket CLOB WSS<br/>(~100ms, Phase 3+)"]
+        KAL["Kalshi CLOB WSS<br/>(~100ms, Phase 3+)"]
     end
 
-    %% ==================== LAYER 1 — NEURAL FORECASTER ====================
-    subgraph L1["🧠 Layer 1 — Neural Forecaster (H100, 4.6-15.8 µs)"]
+    %% ========== LAYER 1: NEURAL FORECASTER ==========
+    subgraph L1["Layer 1 - Neural Forecaster (H100, 4.6-15.8 us)"]
         direction TB
-        RDMA["GPUDirect RDMA<br/>→ HBM3 ring buffer<br/><i>bypasses CPU</i>"]
-        KERNEL["Persistent CUDA Kernels<br/>SM90a · always-resident"]
-        subgraph MODELS["Forecaster models"]
-            direction LR
-            TFM["524M TradeFM<br/>next-tick direction<br/><i>zero-shot multi-venue</i>"]
-            DML["DML Pricer<br/>0DTE Greeks + IV surface"]
-        end
+        RDMA["GPUDirect RDMA<br/>HBM3 ring buffer"]
+        KERNEL["Persistent CUDA Kernels<br/>SM90a always-resident"]
+        TFM["524M TradeFM<br/>next-tick direction"]
+        DML["DML Pricer<br/>0DTE Greeks + IV"]
         RDMA --> KERNEL
         KERNEL --> TFM
         KERNEL --> DML
     end
 
-    %% ==================== LAYER 2 — CALL SHEET ====================
-    subgraph L2["⚖️ Layer 2 — Deterministic Call Sheet"]
+    %% ========== LAYER 2: CALL SHEET ==========
+    subgraph L2["Layer 2 - Deterministic Call Sheet"]
         direction TB
-        QP["QP Executor<br/>risk-adjusted position w*<br/><i>closed-form solver</i>"]
+        QP["QP Executor<br/>risk-adjusted w*"]
         GAMMA["Gamma / VaR Gates<br/>kill-switch"]
-        ARB["Bundle Arb Detector<br/>YES+NO≠$1.00"]
-        XV["Cross-Venue Arb<br/>Polymarket ↔ Kalshi"]
+        ARB["Bundle Arb Detector<br/>YES + NO =/= $1.00"]
+        XV["Cross-Venue Arb<br/>Polymarket &lt;-&gt; Kalshi"]
     end
 
-    %% ==================== LAYER 3 — STRATEGIC (Phase 4) ====================
-    subgraph L3["🎯 Layer 3 — Strategic (Phase 4 · design only)"]
+    %% ========== LAYER 3: STRATEGIC (Phase 4, design only) ==========
+    subgraph L3["Layer 3 - Strategic (Phase 4, design only)"]
         direction LR
-        HLC["HLC (PPO)<br/>strategy weights<br/>+ capital allocator"]
-        POW["POW-dTS<br/>regime adapter<br/>(±γ, vol, events)"]
-        MORL["MORL reward<br/>Pareto front<br/>[pnl, slip, DD, γ, conc, up]"]
+        HLC["HLC PPO<br/>strategy weights<br/>+ capital allocator"]
+        POW["POW-dTS<br/>regime adapter"]
+        MORL["MORL reward<br/>Pareto front"]
     end
 
-    %% ==================== VENUES ====================
-    subgraph VEN["💰 Execution Venues"]
+    %% ========== VENUES ==========
+    subgraph VEN["Execution Venues"]
         direction LR
-        SPX["SPX/NDX 0DTE<br/><b>$166-$800 / unit / day</b><br/><i>MM + toxic-flow avoidance</i>"]
-        PM["Polymarket<br/><b>0.1-3.0% / arb cycle</b><br/><i>bundle + cross-venue</i>"]
-        KS["Kalshi<br/><b>0.1-3.0% / arb cycle</b><br/><i>market pull on catalysts</i>"]
+        SPX["SPX/NDX 0DTE<br/>$166-$800 per unit per day<br/>MM + toxic-flow avoidance"]
+        PM["Polymarket<br/>0.1-3.0% per arb cycle<br/>bundle + cross-venue"]
+        KS["Kalshi<br/>0.1-3.0% per arb cycle<br/>market pull on catalysts"]
     end
 
-    %% ==================== FLOW EDGES ====================
+    %% ========== EDGES ==========
     OPRA --> RDMA
     ES -.Phase 2.5.-> RDMA
     TFM --> QP
@@ -76,21 +74,19 @@ flowchart TB
     PM -.trade logs.-> MORL
     KS -.trade logs.-> MORL
 
-    %% ==================== HRT-INSPIRED STYLING ====================
-    %% Deep-navy primary, steel-blue secondary, cyan accent, white text.
+    %% ========== HRT-INSPIRED STYLING ==========
+    %% Deep navy primary, steel blue mid-layers, cyan venues, light-blue strategic.
     classDef data fill:#0a1e3f,stroke:#0a1e3f,stroke-width:2px,color:#ffffff
     classDef layer1 fill:#1e3a6f,stroke:#1e3a6f,stroke-width:2px,color:#ffffff
     classDef layer2 fill:#2c5aa0,stroke:#2c5aa0,stroke-width:2px,color:#ffffff
     classDef layer3 fill:#4a7fb8,stroke:#4a7fb8,stroke-width:2px,color:#ffffff,stroke-dasharray:5 3
     classDef venue fill:#22d3ee,stroke:#0a1e3f,stroke-width:2px,color:#0a1e3f
-    classDef group fill:#f0f4f8,stroke:#0a1e3f,stroke-width:2px,color:#0a1e3f
 
     class OPRA,ES,POLY,KAL data
     class RDMA,KERNEL,TFM,DML layer1
     class QP,GAMMA,ARB,XV layer2
     class HLC,POW,MORL layer3
     class SPX,PM,KS venue
-    class DATA,L1,L2,L3,VEN,MODELS group
 ```
 
 ## Legend
@@ -109,7 +105,7 @@ flowchart TB
 - **Dashed arrows**: Phase-gated — design spec exists, wiring pending upstream completion
 - **"trade logs → MORL"**: Phase 4 reward signal flows back from venues once live
 
-## Critical path legend (where we are today)
+## Critical path today
 
 1. ✅ OPRA ingestion (Databento)
 2. ✅ Streaming tokenizer fit on real MBP-1 tape
@@ -122,5 +118,3 @@ flowchart TB
 See also:
 - [`cross_asset_fusion.md`](cross_asset_fusion.md) — Phase 2.5 spec
 - [`phase4_strategic_layer.md`](phase4_strategic_layer.md) — Phase 4 spec
-- `memory/project_silicon_alpha_goal.md` — north-star goal (outside repo)
-- `memory/project_phase_roadmap.md` — phase sequencing rules (outside repo)
