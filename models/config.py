@@ -77,6 +77,15 @@ class TradeFMConfig:
     rotary: bool = True
     use_flash_attn: bool = False       # set True when flash_attn available
     grad_checkpointing: bool = False   # trade ~20% compute for ~60% activation mem
+    # Cross-asset fusion (Phase-2.5 scaffold, off by default).
+    # 0 = single-modality (current behavior, back-compat). >0 = enable a
+    # modality-embedding channel that gets added to tok_emb so the attention
+    # layers can learn cross-asset lead/lag. Typical values:
+    #   2 = OPRA + ES
+    #   3 = OPRA + ES + ETF-arb
+    # Tokens arrive with an aligned modality_ids tensor of the same shape.
+    # See docs/cross_asset_fusion.md for the token-interleaving schema.
+    modality_vocab: int = 0
     # Training
     lr: float = 3e-4
     weight_decay: float = 0.01

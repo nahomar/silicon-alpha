@@ -183,6 +183,12 @@ class TradeFM(nn.Module):
         self.cfg = cfg or TradeFMConfig.mini()
         c = self.cfg
         self.tok_emb = nn.Embedding(c.vocab, c.d_model)
+        # Cross-asset fusion scaffold: if modality_vocab > 0, each token carries
+        # an extra channel-ID embedding that the attention layers can learn to
+        # route lead/lag signals through (ES -> OPRA, ETF-arb -> OPRA, etc).
+        # Single-modality runs (modality_vocab == 0) are unaffected.
+        self.modality_emb = (nn.Embedding(c.modality_vocab, c.d_model)
+                             if getattr(c, "modality_vocab", 0) > 0 else None)
         self.blocks = nn.ModuleList([TransformerBlock(c) for _ in range(c.n_layers)])
         self.norm = RMSNorm(c.d_model)
         # LM head tied to the embedding (saves params).
@@ -193,9 +199,14 @@ class TradeFM(nn.Module):
                              _precompute_freqs_cis(head_dim, c.ctx_len * 2),
                              persistent=False)
 
-    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+    def forward(self, tokens: torch.Tensor,
+                modality_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
         B, T = tokens.shape
         x = self.tok_emb(tokens)
+        if self.modality_emb is not None and modality_ids is not None:
+            # modality_ids: (B, T) int64, aligned with tokens. Added (not
+            # concatenated) to keep d_model and downstream kernel shapes fixed.
+            x = x + self.modality_emb(modality_ids)
         freqs = self.freqs_cis[:T]
         ckpt = getattr(self.cfg, "grad_checkpointing", False) and self.training
         for blk in self.blocks:
@@ -209,9 +220,15 @@ class TradeFM(nn.Module):
         x = self.norm(x)
         return self.head(x)
 
-    def loss(self, tokens: torch.Tensor) -> torch.Tensor:
-        """Standard causal LM loss on shifted tokens."""
-        logits = self.forward(tokens[:, :-1])
+    def loss(self, tokens: torch.Tensor,
+             modality_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Standard causal LM loss on shifted tokens.
+
+        modality_ids (optional, same shape as tokens): per-token source ID for
+        cross-asset fusion. Sliced the same way as tokens for the forward pass.
+        """
+        mids = modality_ids[:, :-1] if modality_ids is not None else None
+        logits = self.forward(tokens[:, :-1], modality_ids=mids)
         target = tokens[:, 1:]
         return F.cross_entropy(logits.reshape(-1, self.cfg.vocab),
                                target.reshape(-1))

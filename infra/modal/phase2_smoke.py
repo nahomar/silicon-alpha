@@ -598,33 +598,83 @@ def smoke_databento_reuse(
     tok.edges = edges
     tok.save(out_dir / "tokenizer.json")
     packer.tokenizer = tok
-    print(f"[reuse] tokenizer fit done, edges for {len(edges)} features")
+    print(f"[reuse] tokenizer fit done, edges for {len(edges)} features", flush=True)
+    # Persist fit outputs NOW so if the pack crashes we don't re-fit the
+    # 50 GB stream (previous run's 29-min sunk cost).
+    shard_volume.commit()
 
-    buffer: list[dict] = []
+    # Pack pass — vectorized. Prior version used `feats.iterrows()` which is
+    # ~5 µs/row and hit ~16k rows/s (23× slower than the 367k rows/s fit pass,
+    # with 9h of wall-clock remaining on 636M rows). Batching via DataFrame
+    # concat + pyarrow lets each shard write in seconds instead of minutes.
+    import numpy as np
+    import time as _time
+
     shard_idx = 0
     shard_paths: list[Path] = []
+    buffer_dfs: list[pd.DataFrame] = []
+    buffer_rows = 0
+    n_chunks[0] = 0  # reset counters for the pack pass
+    n_rows[0] = 0
+    pack_t0 = _time.time()
+
+    def _flush_from_buffer(target_rows: int) -> None:
+        nonlocal shard_idx, buffer_rows
+        big = pd.concat(buffer_dfs, ignore_index=True, copy=False)
+        to_write = big.iloc[:target_rows]
+        remainder = big.iloc[target_rows:]
+        out_path = out_dir / f"opra_{shard_idx:06d}.parquet"
+        to_write.to_parquet(out_path, index=False)
+        print(f"[pack] wrote {out_path.name}  ({len(to_write):,} rows)", flush=True)
+        shard_paths.append(out_path)
+        shard_idx += 1
+        buffer_dfs.clear()
+        if len(remainder):
+            buffer_dfs.append(remainder)
+            buffer_rows = len(remainder)
+        else:
+            buffer_rows = 0
+
     for p in downloaded:
+        print(f"[pack] opening {p.name}", flush=True)
         for ch in iter_dbn_chunks(p):
             feats = prepare_features(ch)
             toks = tok.tokenize_batch(feats, feature_order=list(packer.feature_spec))
-            for i, row in feats.reset_index(drop=True).iterrows():
-                buffer.append({
-                    "ts": int(row["ts_ms"]),
-                    "underlying": "SPX",
-                    "expiry": "",
-                    "day": pd.Timestamp(row["quote_datetime"]).strftime("%Y-%m-%d"),
-                    "tokens": toks[i].tolist(),
-                })
-                if len(buffer) >= packer.shard_rows:
-                    shard_paths.append(packer._flush_shard(buffer, shard_idx))
-                    shard_idx += 1
-                    buffer = []
-    if buffer:
-        shard_paths.append(packer._flush_shard(buffer, shard_idx))
+            # Vectorized DataFrame build — zero per-row Python.
+            chunk_df = pd.DataFrame({
+                "ts": feats["ts_ms"].astype("int64").values,
+                "underlying": np.full(len(feats), "SPX", dtype=object),
+                "expiry": np.full(len(feats), "", dtype=object),
+                "day": pd.to_datetime(feats["quote_datetime"]).dt.strftime("%Y-%m-%d").values,
+                "tokens": list(toks),
+            })
+            buffer_dfs.append(chunk_df)
+            buffer_rows += len(chunk_df)
+            n_chunks[0] += 1
+            n_rows[0] += len(chunk_df)
+            while buffer_rows >= packer.shard_rows:
+                _flush_from_buffer(packer.shard_rows)
+            if n_chunks[0] % 10 == 0:
+                dt = _time.time() - pack_t0
+                rate = n_rows[0] / max(dt, 1e-6) / 1e3
+                print(f"[pack] chunk {n_chunks[0]:4d}  rows={n_rows[0]:,}  "
+                      f"shards={shard_idx}  elapsed={dt:.0f}s  rate={rate:.0f}k rows/s",
+                      flush=True)
+            # Checkpoint volume commits every 25 shards so a timeout doesn't
+            # cost us all the pack work.
+            if shard_idx and shard_idx % 25 == 0 and buffer_rows == 0:
+                shard_volume.commit()
+                print(f"[pack] volume.commit at shard {shard_idx}", flush=True)
+
+    if buffer_rows:
+        _flush_from_buffer(buffer_rows)
     shard_volume.commit()
-    print(f"[reuse] PASS — {len(shard_paths)} shards from real OPRA SPX tape")
+
+    total_dt = _time.time() - pack_t0
+    print(f"[reuse] PASS — {len(shard_paths)} shards from real OPRA SPX tape "
+          f"({n_rows[0]:,} rows in {total_dt:.0f}s)", flush=True)
     for s in shard_paths[:5]:
-        print(f"    {s}  ({s.stat().st_size / 1e6:.1f} MB)")
+        print(f"    {s.name}  ({s.stat().st_size / 1e6:.1f} MB)")
 
 
 @app.function(
@@ -738,6 +788,90 @@ def dryrun_databento_reuse():
     queue). Defaults to the already-paid OPRA-20260420-CTDQCTDCGX job."""
     smoke_databento_reuse.remote()
     print("[dryrun_databento_reuse] PASS.")
+
+
+@app.function(
+    gpu="H100",
+    timeout=3600,
+    volumes={"/ckpts": ckpt_volume, "/shards": shard_volume},
+)
+def smoke_train_real(
+    shards_glob: str = "/shards/databento_reuse_packed/OPRA-20260420-CTDQCTDCGX/opra_*.parquet",
+    steps: int = 200,
+    batch: int = 4,
+    grad_accum: int = 1,
+):
+    """40M TradeFM training on real OPRA SPX tape instead of Markov synthetic.
+
+    The Markov smoke proved the pipeline runs. This proves it *learns the
+    actual grammar of exchange messages* — the Silicon Alpha goal's premise.
+
+    Compares vs the Markov smoke:
+      - Markov: loss 60 → 2.48 (entropy floor ~1.4)
+      - Real OPRA: loss trajectory depends on how much structure the 40M can
+        extract from SPX tick-level MBP-1 in 200 steps. A healthy trajectory
+        looks like: high init → steady descent → eventual plateau above the
+        per-feature entropy floor. Divergence or flatlining = bug.
+    """
+    import shutil
+    import subprocess
+    import sys
+
+    repo = Path("/root/repo")
+    sys.path.insert(0, str(repo))
+
+    shard_volume.reload()
+    ckpt_volume.reload()
+
+    import torch
+    print(f"[real] torch={torch.__version__} device={torch.cuda.get_device_name(0)}",
+          flush=True)
+    assert torch.cuda.is_available(), "H100 not visible"
+
+    # Expand the glob on the client side so we fail fast if no shards exist.
+    import glob as _glob
+    shard_paths = sorted(_glob.glob(shards_glob))
+    assert shard_paths, f"no shards matched {shards_glob!r} — run databento_reuse first"
+    print(f"[real] using {len(shard_paths)} real-OPRA shards", flush=True)
+
+    ckpt_dir = Path("/ckpts/tradefm_real_smoke")
+    if ckpt_dir.exists():
+        shutil.rmtree(ckpt_dir)
+
+    # Same 40M Hopper config as the Markov smoke — only the data source changes.
+    cfg_path = Path("/tmp/tradefm_real_h100.yml")
+    cfg_path.write_text(SMOKE_CONFIG_YAML)
+
+    cmd = [
+        "torchrun", "--nproc_per_node=1", "--nnodes=1",
+        "-m", "odte.train.distributed",
+        "--config", str(cfg_path),
+        "--shards", shards_glob,
+        "--ckpt-store", str(ckpt_dir),
+        "--ckpt-prefix", "tradefm_real",
+        "--steps", str(steps),
+        "--batch", str(batch),
+        "--grad-accum", str(grad_accum),
+        "--ckpt-every", "100",
+        "--log-every", "10",
+        "--num-workers", "2",
+    ]
+    print("[real] launching:", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=str(repo), check=True)
+
+    ckpts = sorted(ckpt_dir.rglob("*.pt"))
+    assert ckpts, "no ckpts written — training didn't reach ckpt_every"
+    for c in ckpts:
+        print(f"    {c.name}  ({c.stat().st_size / 1e6:.1f} MB)")
+    ckpt_volume.commit()
+    print("[real] PASS — 40M trained on real OPRA SPX MBP-1 tape.", flush=True)
+
+
+@app.local_entrypoint()
+def dryrun_train_real():
+    """Train the 40M model on real OPRA shards produced by dryrun_databento_reuse."""
+    smoke_train_real.remote()
+    print("[dryrun_train_real] PASS.")
 
 
 @app.local_entrypoint()
