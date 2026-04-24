@@ -720,8 +720,19 @@ def smoke_8gpu(
     n_gpu = torch.cuda.device_count()
     print(f"[8gpu] device count: {n_gpu}", flush=True)
     assert n_gpu == 8, f"expected 8 GPUs, got {n_gpu}"
+    # Force CUDA init before per-device queries. Modal's multi-GPU allocation
+    # sometimes exposes `device_count()` before the runtime context is ready,
+    # which causes get_device_name() to raise "system not yet initialized".
+    # A single tiny tensor op warms the driver safely.
+    try:
+        torch.zeros(1, device="cuda:0")
+    except Exception as e:
+        print(f"[8gpu] warmup noted: {type(e).__name__}: {e}", flush=True)
     for i in range(n_gpu):
-        print(f"    gpu{i}: {torch.cuda.get_device_name(i)}", flush=True)
+        try:
+            print(f"    gpu{i}: {torch.cuda.get_device_name(i)}", flush=True)
+        except Exception as e:
+            print(f"    gpu{i}: (name unavailable: {e})", flush=True)
 
     import glob as _glob
     shard_paths = sorted(_glob.glob(shards_glob))
