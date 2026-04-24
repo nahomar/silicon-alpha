@@ -682,8 +682,11 @@ def smoke_databento_reuse(
     timeout=3600,
     volumes={"/ckpts": ckpt_volume, "/shards": shard_volume},
 )
-def smoke_8gpu():
-    """8× H100 single-node NCCL smoke.
+def smoke_8gpu(
+    shards_glob: str = "/shards/databento_reuse_packed/OPRA-20260420-CTDQCTDCGX/opra_*.parquet",
+    steps: int = 200,
+):
+    """8× H100 single-node NCCL smoke on real OPRA tape.
 
     Exercises the code path the 1-GPU smoke cannot:
       - world_size=8 FSDP sharding (24 layers across 8 ranks)
@@ -693,6 +696,9 @@ def smoke_8gpu():
       - Rank-specific checkpoint files: rank_0.pt ... rank_7.pt
       - CheckpointManager world_size metadata (guards against resuming
         an 8-GPU ckpt on a different world_size, committed in e3c12dd)
+
+    Defaults to the real-OPRA shards from dryrun_databento_reuse — pass
+    a Markov glob (`/shards/markov_*.parquet`) to test on synthetic.
 
     Explicitly does NOT test: inter-node TCPX bandwidth. That's the 20%
     that can only be measured on real A3 Mega. But NCCL-over-NVLink uses
@@ -712,14 +718,15 @@ def smoke_8gpu():
     import torch
 
     n_gpu = torch.cuda.device_count()
-    print(f"[8gpu] device count: {n_gpu}")
+    print(f"[8gpu] device count: {n_gpu}", flush=True)
     assert n_gpu == 8, f"expected 8 GPUs, got {n_gpu}"
     for i in range(n_gpu):
-        print(f"    gpu{i}: {torch.cuda.get_device_name(i)}")
+        print(f"    gpu{i}: {torch.cuda.get_device_name(i)}", flush=True)
 
-    shards = sorted(Path("/shards").glob("markov_*.parquet"))
-    assert shards, "run `modal run infra/modal/phase2_smoke.py` first to gen shards"
-    print(f"[8gpu] using {len(shards)} Markov shards")
+    import glob as _glob
+    shard_paths = sorted(_glob.glob(shards_glob))
+    assert shard_paths, f"no shards matched {shards_glob!r}"
+    print(f"[8gpu] using {len(shard_paths)} shards from {shards_glob}", flush=True)
 
     ckpt_dir = Path("/ckpts/tradefm_8gpu_smoke")
     if ckpt_dir.exists():
@@ -735,17 +742,17 @@ def smoke_8gpu():
         "torchrun", "--nproc_per_node=8", "--nnodes=1",
         "-m", "odte.train.distributed",
         "--config", str(cfg_path),
-        "--shards", SHARD_GLOB,
+        "--shards", shards_glob,
         "--ckpt-store", str(ckpt_dir),
         "--ckpt-prefix", "tradefm",
-        "--steps", "200",
+        "--steps", str(steps),
         "--batch", "4",
         "--grad-accum", "1",
         "--ckpt-every", "100",
         "--log-every", "25",
         "--num-workers", "2",
     ]
-    print("[8gpu] launching:", " ".join(cmd))
+    print("[8gpu] launching:", " ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=str(repo), check=True)
 
     # Verify rank-partitioned ckpts: distributed.py writes rank_{N}.pt per rank.
@@ -883,6 +890,11 @@ def dryrun_train_real(steps: int = 200, batch: int = 4, ckpt_every: int = 100,
 
 
 @app.local_entrypoint()
-def dryrun_8gpu():
-    smoke_8gpu.remote()
+def dryrun_8gpu(
+    shards_glob: str = "/shards/databento_reuse_packed/OPRA-20260420-CTDQCTDCGX/opra_*.parquet",
+    steps: int = 200,
+):
+    """8× H100 NCCL smoke. Defaults to real-OPRA shards from databento_reuse.
+    Pass `--shards-glob /shards/markov_*.parquet` to test on synthetic instead."""
+    smoke_8gpu.remote(shards_glob=shards_glob, steps=steps)
     print("[dryrun_8gpu] PASS.")
