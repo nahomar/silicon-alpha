@@ -800,6 +800,8 @@ def smoke_train_real(
     steps: int = 200,
     batch: int = 4,
     grad_accum: int = 1,
+    ckpt_every: int = 100,
+    log_every: int = 10,
 ):
     """40M TradeFM training on real OPRA SPX tape instead of Markov synthetic.
 
@@ -852,8 +854,8 @@ def smoke_train_real(
         "--steps", str(steps),
         "--batch", str(batch),
         "--grad-accum", str(grad_accum),
-        "--ckpt-every", "100",
-        "--log-every", "10",
+        "--ckpt-every", str(ckpt_every),
+        "--log-every", str(log_every),
         "--num-workers", "2",
     ]
     print("[real] launching:", " ".join(cmd), flush=True)
@@ -868,9 +870,15 @@ def smoke_train_real(
 
 
 @app.local_entrypoint()
-def dryrun_train_real():
-    """Train the 40M model on real OPRA shards produced by dryrun_databento_reuse."""
-    smoke_train_real.remote()
+def dryrun_train_real(steps: int = 200, batch: int = 4, ckpt_every: int = 100,
+                      log_every: int = 10):
+    """Train the 40M model on real OPRA shards produced by dryrun_databento_reuse.
+
+    Defaults are the short smoke (200 steps, ~30s, ~$0.25). For a real
+    convergence-shape run, invoke with --steps 2000 --ckpt-every 500.
+    """
+    smoke_train_real.remote(steps=steps, batch=batch,
+                            ckpt_every=ckpt_every, log_every=log_every)
     print("[dryrun_train_real] PASS.")
 
 
