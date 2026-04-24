@@ -44,10 +44,10 @@ flowchart LR
     TFM --> ARB --> PRED
     KERNEL --> DML --> QP
 
-    classDef data fill:#0a1e3f,stroke:#0a1e3f,color:#ffffff
-    classDef layer1 fill:#1e3a6f,stroke:#1e3a6f,color:#ffffff
-    classDef layer2 fill:#2c5aa0,stroke:#2c5aa0,color:#ffffff
-    classDef venue fill:#22d3ee,stroke:#0a1e3f,color:#0a1e3f
+    classDef data fill:#1A1A1A,stroke:#1A1A1A,color:#F8F5F0
+    classDef layer1 fill:#E85D2E,stroke:#E85D2E,color:#ffffff
+    classDef layer2 fill:#D94F23,stroke:#D94F23,color:#ffffff
+    classDef venue fill:#F8F5F0,stroke:#E85D2E,stroke-width:3px,color:#1A1A1A
 
     class OPRA,ES,PKWS data
     class KERNEL,TFM,DML layer1
@@ -55,8 +55,9 @@ flowchart LR
     class SPX,PRED venue
 ```
 
-Full diagram with Phase-4 strategic layer, edge semantics, and HRT-inspired
-color key: [`docs/architecture.md`](docs/architecture.md).
+Full diagram with Phase-4 strategic layer, edge semantics, and HRT palette
+(near-black ingestion, warm orange neural + execution tiers, cream venues):
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Phase roadmap
 

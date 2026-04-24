@@ -75,12 +75,13 @@ flowchart TB
     KS -.trade logs.-> MORL
 
     %% ========== HRT-INSPIRED STYLING ==========
-    %% Deep navy primary, steel blue mid-layers, cyan venues, light-blue strategic.
-    classDef data fill:#0a1e3f,stroke:#0a1e3f,stroke-width:2px,color:#ffffff
-    classDef layer1 fill:#1e3a6f,stroke:#1e3a6f,stroke-width:2px,color:#ffffff
-    classDef layer2 fill:#2c5aa0,stroke:#2c5aa0,stroke-width:2px,color:#ffffff
-    classDef layer3 fill:#4a7fb8,stroke:#4a7fb8,stroke-width:2px,color:#ffffff,stroke-dasharray:5 3
-    classDef venue fill:#22d3ee,stroke:#0a1e3f,stroke-width:2px,color:#0a1e3f
+    %% Near-black foundation, HRT warm orange primary, deeper orange mid,
+    %% light peach for design-only layers, warm cream for terminal venues.
+    classDef data fill:#1A1A1A,stroke:#1A1A1A,stroke-width:2px,color:#F8F5F0
+    classDef layer1 fill:#E85D2E,stroke:#E85D2E,stroke-width:2px,color:#ffffff
+    classDef layer2 fill:#D94F23,stroke:#D94F23,stroke-width:2px,color:#ffffff
+    classDef layer3 fill:#F4A261,stroke:#D94F23,stroke-width:2px,color:#1A1A1A,stroke-dasharray:5 3
+    classDef venue fill:#F8F5F0,stroke:#E85D2E,stroke-width:3px,color:#1A1A1A
 
     class OPRA,ES,POLY,KAL data
     class RDMA,KERNEL,TFM,DML layer1
@@ -91,13 +92,17 @@ flowchart TB
 
 ## Legend
 
+HRT-inspired palette: near-black foundation, warm orange for the active
+neural + execution tiers, pale peach for design-only phases, warm cream
+for terminal execution venues.
+
 | Color | Layer | Phase | Status |
 |---|---|---|---|
-| Deep navy `#0a1e3f` | Ingestion | 0 | OPRA live; ES scaffold; Poly/Kalshi pending signup |
-| Steel blue `#1e3a6f` | Neural Forecaster | 1 | Kernels scaffolded; TradeFM untrained (Phase 2 compute-blocked) |
-| HRT blue `#2c5aa0` | Call Sheet | 2 | QP/Gamma not wired live; arb detectors 0% |
-| Light blue `#4a7fb8` (dashed) | Strategic | 4 | **Design-only** (see `phase4_strategic_layer.md`) |
-| Cyan `#22d3ee` | Venues | deploy | All pending broker/API integration |
+| Near-black `#1A1A1A` | Ingestion | 0 | OPRA live; ES scaffold; Poly/Kalshi pending signup |
+| HRT orange `#E85D2E` | Neural Forecaster | 1 | Kernels scaffolded; TradeFM untrained (Phase 2 compute-blocked) |
+| Deep orange `#D94F23` | Call Sheet | 2 | QP/Gamma not wired live; arb detectors 0% |
+| Peach `#F4A261` (dashed) | Strategic | 4 | **Design-only** (see `phase4_strategic_layer.md`) |
+| Cream `#F8F5F0` + orange border | Venues | deploy | All pending broker/API integration |
 
 ## Edge semantics
 
