@@ -1,8 +1,8 @@
-# market-pattern-bot
+# silicon-alpha
 
-**Silicon Alpha** — a µs-latency dual-venue trading engine driven by a 524M
-decoder-only transformer (TradeFM) trained on exchange-message grammar
-from options, futures, and prediction markets.
+A µs-latency dual-venue trading engine driven by a 524M decoder-only
+transformer (TradeFM) trained on exchange-message grammar from options,
+futures, and prediction markets.
 
 Designed to deploy simultaneously across:
 
