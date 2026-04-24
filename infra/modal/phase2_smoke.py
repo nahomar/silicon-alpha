@@ -909,3 +909,68 @@ def dryrun_8gpu(
     Pass `--shards-glob /shards/markov_*.parquet` to test on synthetic instead."""
     smoke_8gpu.remote(shards_glob=shards_glob, steps=steps)
     print("[dryrun_8gpu] PASS.")
+
+
+# ---------------------------------------------------------------------------
+# Multi-day Phase-2 corpus packer — reads job IDs from the local submit
+# manifest and fans out one Modal container per day. Each container gets
+# a 10h timeout (long enough even for the 207 GB vol-spike days) and
+# runs in parallel, respecting the 10-GPU concurrent limit (these are
+# CPU-only, so no GPU contention).
+# ---------------------------------------------------------------------------
+
+@app.function(
+    cpu=4.0,
+    memory=65536,
+    # 10 hours — even the biggest 200+ GB days pack in ~6 hrs; 10 gives margin.
+    timeout=36000,
+    volumes={"/shards": shard_volume},
+    secrets=[modal.Secret.from_name("databento-api-key")],
+)
+def pack_one_day(job_id: str, day_label: str, split: str):
+    """Download + pack one Databento job into its own subdir of the volume.
+    Reuses the existing smoke_databento_reuse machinery but with an explicit
+    job_id argument per call — so each day becomes its own Modal invocation
+    that can run in parallel with others."""
+    # Call the existing reuse function with this job_id. Modal .local() runs
+    # it in-process (we're already in a Modal container with the same
+    # image + volumes), not spawning another container.
+    print(f"[multi] packing job {job_id} ({day_label}, split={split})",
+          flush=True)
+    return smoke_databento_reuse.local(job_id=job_id, max_files=99)
+
+
+@app.local_entrypoint()
+def dryrun_pack_all():
+    """Download + pack every Databento job listed in scripts/databento_jobs.json.
+    Fires one Modal container per day in parallel.
+
+    Assumes you already ran:
+      1. scripts/databento_submit_all.py  (submits jobs to Databento)
+      2. scripts/databento_status.py      (waited until all are 'done')
+    """
+    import json as _json
+    from pathlib import Path as _P
+    manifest_path = _P(__file__).resolve().parents[2] / "scripts" / "databento_jobs.json"
+    assert manifest_path.exists(), (
+        f"No manifest at {manifest_path}. Run scripts/databento_submit_all.py first."
+    )
+    rows = _json.loads(manifest_path.read_text())
+    runnable = [r for r in rows if r.get("job_id")]
+    print(f"[multi] dispatching {len(runnable)} parallel pack containers")
+    for r in runnable:
+        print(f"  {r['day']}  {r['split']:<5}  {r['job_id']}  ({r['note']})")
+    # Fan out — .spawn returns a handle without blocking, so all containers
+    # start in parallel (subject to Modal's concurrency limits).
+    handles = [
+        pack_one_day.spawn(r["job_id"], r["day"], r["split"])
+        for r in runnable
+    ]
+    # Block on all.
+    for h, r in zip(handles, runnable):
+        try:
+            h.get()
+            print(f"[multi] PASS {r['day']} ({r['job_id']})")
+        except Exception as e:
+            print(f"[multi] FAIL {r['day']} ({r['job_id']}): {e}")
+    print("[dryrun_pack_all] done.")
