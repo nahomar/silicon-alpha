@@ -237,10 +237,19 @@ def train(args) -> dict:
     # pass on --eval-shards and exit. Used by the post-training Modal
     # eval_524m function so we get the held-out metrics without re-running
     # all of training.
+    # Import eval helpers ONCE at function-scope. Putting `from ... import
+    # load_shards` inside the `--eval-only` branch made Python treat
+    # `load_shards` as a local of train() (LEGB rule: any assignment
+    # anywhere in the function makes the name local). When non-eval-only
+    # training reached the in-loop eval block, it hit `UnboundLocalError:
+    # cannot access local variable 'load_shards'` — the conditional import
+    # had been skipped. Caught by the 200-step verification with the new
+    # diagnostic prints.
+    from odte.train.eval_loop import evaluate, load_shards
+
     if args.eval_only:
         if not args.eval_shards:
             raise RuntimeError("--eval-only requires --eval-shards")
-        from odte.train.eval_loop import evaluate, load_shards
         eval_paths = load_shards(args.eval_shards)
         if not eval_paths:
             raise RuntimeError(f"no eval shards for {args.eval_shards!r}")
