@@ -13,51 +13,151 @@ Designed to deploy simultaneously across:
 
 ## Architecture
 
+End-to-end flow across all 9 phases. Phases 0-2 are live or in-progress;
+Phases 2.5-7 are design-only with code scaffolds where appropriate.
+HRT-inspired palette: near-black ingestion, warm orange neural + execution
+tiers, peach (dashed) for design-only phases, cream for terminal venues.
+
 ```mermaid
-flowchart LR
-    subgraph DATA["Ingestion"]
-        OPRA["OPRA cmbp-1<br/>(live)"]
-        ES["ES Futures<br/>(Phase 2.5)"]
-        PKWS["Polymarket / Kalshi<br/>WSS (Phase 3+)"]
+flowchart TB
+    %% ========== LAYER 0: REAL-TIME MARKET INGESTION ==========
+    subgraph DATA["Layer 0 - Real-time Market Ingestion"]
+        direction LR
+        OPRA["OPRA cmbp-1<br/>SPX/NDX options<br/>(Databento, live)"]
+        ES["ES Futures MBP-1<br/>(GLBX, Phase 2.5)"]
+        POLY["Polymarket CLOB WSS<br/>(~100ms, Phase 3+)"]
+        KAL["Kalshi CLOB WSS<br/>(~100ms, Phase 3+)"]
     end
 
-    subgraph FORECAST["Layer 1: Neural Forecaster<br/>H100, 4.6-15.8 us"]
-        KERNEL["Persistent CUDA<br/>kernels (SM90a)"]
-        TFM["524M TradeFM"]
-        DML["DML 0DTE Pricer"]
+    %% ========== PHASE 6: ALPHA FACTOR DISCOVERY ==========
+    subgraph P6["Phase 6 - Alpha Factor Discovery (design only)"]
+        direction LR
+        FUND["Fundamental NLP<br/>10-K / 10-Q + earnings<br/>(AlphaSense / LSEG)<br/>DeepSeek 1M-ctx"]
+        SYMR["AlphaFormer<br/>symbolic regression<br/>(LSEG Tick BigQuery)<br/>~80 PB tape"]
     end
 
-    subgraph EXEC["Layer 2: Deterministic Call Sheet"]
-        QP["QP Executor<br/>+ gamma gates"]
-        ARB["Bundle + cross-venue<br/>arb detector"]
+    %% ========== PHASE 7: ALT DATA ==========
+    subgraph P7["Phase 7 - Alternative Data (design only)"]
+        direction LR
+        PRICE["Bright Data<br/>250+ e-commerce<br/>SKU pricing"]
+        TXN["YipitData / Measurable AI<br/>2M+ user receipts<br/>weekly SKU txns"]
+        TALENT["PredictLeads<br/>job-posting flow<br/>3-6mo lead signal"]
     end
 
-    subgraph VEN["Venues"]
-        SPX["SPX/NDX<br/>0DTE MM"]
-        PRED["Polymarket<br/>+ Kalshi"]
+    %% ========== LAYER 1: NEURAL FORECASTER ==========
+    subgraph L1["Layer 1 - Neural Forecaster (H100, 4.6-15.8 us)"]
+        direction TB
+        RDMA["GPUDirect RDMA<br/>HBM3 ring buffer"]
+        KERNEL["Persistent CUDA Kernels<br/>SM90a always-resident"]
+        TFM["524M TradeFM<br/>multi-modal token attn"]
+        DML["DML Pricer<br/>0DTE Greeks + IV"]
+        RDMA --> KERNEL
+        KERNEL --> TFM
+        KERNEL --> DML
     end
 
-    OPRA --> KERNEL
-    ES -.-> KERNEL
-    PKWS --> ARB
-    KERNEL --> TFM --> QP --> SPX
-    TFM --> ARB --> PRED
-    KERNEL --> DML --> QP
+    %% ========== LAYER 2: CALL SHEET ==========
+    subgraph L2["Layer 2 - Deterministic Call Sheet"]
+        direction TB
+        QP["QP Executor<br/>risk-adjusted w*"]
+        GAMMA["Gamma / VaR Gates<br/>software kill-switch"]
+        ARB["Bundle Arb Detector<br/>YES + NO =/= $1.00"]
+        XV["Cross-Venue Arb<br/>Polymarket &lt;-&gt; Kalshi"]
+    end
 
-    classDef data fill:#1A1A1A,stroke:#1A1A1A,color:#F8F5F0
-    classDef layer1 fill:#E85D2E,stroke:#E85D2E,color:#ffffff
-    classDef layer2 fill:#D94F23,stroke:#D94F23,color:#ffffff
+    %% ========== LAYER 1.5: FPGA ACTOR ==========
+    subgraph FPGA["Layer 1.5 - FPGA Actor (Phase 3.5, design only)"]
+        direction TB
+        P2P["PCIe P2P DMA<br/>GPU HBM3 -&gt; FPGA BAR"]
+        HWKILL["Hardware Kill-Switch<br/>&lt;100ns dead-man"]
+        OUCH["OUCH/FIX Encoder<br/>tick-to-trade &lt; 450ns"]
+        P2P --> HWKILL --> OUCH
+    end
+
+    %% ========== LAYER 3: STRATEGIC ==========
+    subgraph L3["Layer 3 - Strategic (Phase 4, design only)"]
+        direction LR
+        HLC["HLC PPO<br/>strategy weights<br/>+ child-order slicing"]
+        POW["POW-dTS<br/>regime adapter"]
+        MORL["MORL reward<br/>[pnl, -IS, -DD,<br/>-gamma, -conc, up]"]
+    end
+
+    %% ========== LAYER 4: AGENTIC GOVERNANCE ==========
+    subgraph AGENTS["Layer 4 - Agentic Governance (Phase 5, design only)"]
+        direction LR
+        RES["Research Agent<br/>proposes signal mods"]
+        RISK["Risk Agent<br/>KKT validation<br/>+ hard veto"]
+        COMP["Compliance Agent<br/>hash-chained<br/>audit trail"]
+    end
+
+    %% ========== VENUES ==========
+    subgraph VEN["Execution Venues"]
+        direction LR
+        SPX["SPX/NDX 0DTE<br/>$166-$800 per unit / day<br/>MM + toxic-flow avoidance"]
+        PM["Polymarket<br/>0.1-3.0% per arb cycle"]
+        KS["Kalshi<br/>0.1-3.0% per arb cycle"]
+    end
+
+    %% ========== EDGES — LIVE / SOLID ==========
+    OPRA --> RDMA
+    TFM --> QP
+    DML --> QP
+    QP --> GAMMA
+    GAMMA -.software path.-> SPX
+    POLY --> ARB
+    KAL --> ARB
+    TFM --> ARB
+    ARB --> PM
+    ARB --> KS
+    ARB --> XV
+    XV --> PM
+    XV --> KS
+
+    %% ========== EDGES — PHASE-GATED / DASHED ==========
+    ES -.Phase 2.5.-> RDMA
+    FUND -.Phase 6.-> TFM
+    SYMR -.Phase 6.-> TFM
+    PRICE -.Phase 7.-> TFM
+    TXN -.Phase 7.-> TFM
+    TALENT -.Phase 7.-> TFM
+    GAMMA -.Phase 3.5 hardware path.-> P2P
+    OUCH -.wire.-> SPX
+    HLC -.Phase 4.-> QP
+    POW -.Phase 4.-> HLC
+    MORL -.Phase 4.-> HLC
+    SPX -.trade logs.-> MORL
+    PM -.trade logs.-> MORL
+    KS -.trade logs.-> MORL
+    RES -.proposes.-> HLC
+    RES -.proposes.-> TFM
+    RISK -.validates KKT.-> QP
+    RISK -.hard veto.-> P2P
+    QP -.logs.-> COMP
+    P2P -.logs.-> COMP
+    SPX -.logs.-> COMP
+    PM -.logs.-> COMP
+    KS -.logs.-> COMP
+
+    %% ========== HRT-INSPIRED STYLING ==========
+    classDef data fill:#1A1A1A,stroke:#1A1A1A,stroke-width:2px,color:#F8F5F0
+    classDef layer1 fill:#E85D2E,stroke:#E85D2E,stroke-width:2px,color:#ffffff
+    classDef layer2 fill:#D94F23,stroke:#D94F23,stroke-width:2px,color:#ffffff
+    classDef phaseDesign fill:#F4A261,stroke:#D94F23,stroke-width:2px,color:#1A1A1A,stroke-dasharray:5 3
     classDef venue fill:#F8F5F0,stroke:#E85D2E,stroke-width:3px,color:#1A1A1A
 
-    class OPRA,ES,PKWS data
-    class KERNEL,TFM,DML layer1
-    class QP,ARB layer2
-    class SPX,PRED venue
+    class OPRA,ES,POLY,KAL data
+    class RDMA,KERNEL,TFM,DML layer1
+    class QP,GAMMA,ARB,XV layer2
+    class P2P,HWKILL,OUCH phaseDesign
+    class HLC,POW,MORL phaseDesign
+    class RES,RISK,COMP phaseDesign
+    class FUND,SYMR phaseDesign
+    class PRICE,TXN,TALENT phaseDesign
+    class SPX,PM,KS venue
 ```
 
-Full diagram with Phase-4 strategic layer, edge semantics, and HRT palette
-(near-black ingestion, warm orange neural + execution tiers, cream venues):
-[`docs/architecture.md`](docs/architecture.md).
+Same diagram with edge-semantics legend, phase-by-phase doc map, and
+critical-path tracker also lives at [`docs/architecture.md`](docs/architecture.md).
 
 ## Phase roadmap
 
