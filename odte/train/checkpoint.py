@@ -299,14 +299,52 @@ class CheckpointManager:
         return meta
 
     def _load_state_dict(self, model: torch.nn.Module, state: Dict[str, Any]) -> None:
+        # FSDP path. The previous version silently swallowed errors here and
+        # fell through to a non-FSDP load, which then loudly failed with
+        # "Unexpected key(s): _flat_param". Now we surface FSDP errors and
+        # try a key-rename fallback for the activation-checkpointing prefix
+        # mismatch before giving up.
         try:
             from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, StateDictType
-            if isinstance(model, FSDP):
-                with FSDP.state_dict_type(model, StateDictType.LOCAL_STATE_DICT):
+        except ImportError:
+            FSDP = None  # type: ignore
+            StateDictType = None  # type: ignore
+
+        is_fsdp = FSDP is not None and isinstance(model, FSDP)
+        if is_fsdp:
+            with FSDP.state_dict_type(model, StateDictType.LOCAL_STATE_DICT):
+                # Attempt #1: load as-is.
+                try:
                     model.load_state_dict(state)
                     return
-        except Exception:
-            pass
+                except RuntimeError as e1:
+                    log.warning("[ckpt] direct LOCAL_STATE_DICT load failed: %s", e1)
+                # Attempt #2: keys may differ by an activation-checkpointing
+                # prefix. Try inserting / stripping `_checkpoint_wrapped_module.`
+                # at module boundaries. Save was probably written without the
+                # prefix; the current load model has the prefix (or vice versa).
+                for transform_name, transform in (
+                    ("add _checkpoint_wrapped_module prefix",
+                     lambda k: k.replace("blocks.", "blocks.")
+                                .replace(
+                                    "._flat_param",
+                                    "._checkpoint_wrapped_module._flat_param",
+                                )),
+                    ("strip _checkpoint_wrapped_module prefix",
+                     lambda k: k.replace("._checkpoint_wrapped_module.", ".")),
+                ):
+                    renamed = {transform(k): v for k, v in state.items()}
+                    try:
+                        model.load_state_dict(renamed)
+                        log.info("[ckpt] loaded after key transform: %s",
+                                 transform_name)
+                        return
+                    except RuntimeError as e2:
+                        log.warning("[ckpt] transform '%s' failed: %s",
+                                    transform_name, e2)
+                # If all FSDP attempts failed, fall through to a strict
+                # non-FSDP load below — it will likely fail with a clear
+                # error that tells us the real key mismatch.
         model.load_state_dict(state)
 
     # ------------------------------------------------------------------
