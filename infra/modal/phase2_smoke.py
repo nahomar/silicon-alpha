@@ -1127,7 +1127,11 @@ def train_524m_multi_day(
 
 
 @app.function(
-    gpu="H100",  # single GPU is fine for eval
+    # 8× H100 — must match the training-time world_size to load the
+    # FSDP-sharded ckpts. CheckpointManager writes one rank shard per GPU;
+    # loading on a different world_size is hard-blocked by the world-size
+    # guard in checkpoint.py (commit e3c12dd).
+    gpu="H100:8",
     timeout=3600,
     volumes={"/ckpts": ckpt_volume, "/shards": shard_volume},
 )
@@ -1162,8 +1166,18 @@ def eval_524m(
       - small gap, top-1 high         -> memorization of this day's drift.
         Sponsor red flag.
 
-    ckpt_step defaults to -1 → latest ckpt in /ckpts/tradefm_524m_multi.
+    Implementation: launches torchrun on the same 8× H100 layout as
+    training, so the FSDP-sharded ckpts in /ckpts/tradefm_524m_multi
+    load via CheckpointManager (which knows how to read rank-partitioned
+    ShardedTensors). The actual eval logic lives in the trainer's new
+    --eval-only branch which calls `evaluate()` and all_reduce-aggregates
+    metrics across ranks.
+
+    ckpt_step is currently informational — the trainer's --resume always
+    loads the latest ckpt. Future improvement: pass an explicit step.
     """
+    import shutil
+    import subprocess
     import sys
 
     repo = Path("/root/repo")
@@ -1172,106 +1186,51 @@ def eval_524m(
     shard_volume.reload()
     ckpt_volume.reload()
 
-    import glob as _glob
     import torch
-    import yaml
+    n_gpu = torch.cuda.device_count()
+    print(f"[eval] {n_gpu} GPUs visible", flush=True)
+    assert n_gpu == 8, f"expected 8 GPUs, got {n_gpu}"
+    try:
+        torch.zeros(1, device="cuda:0")
+    except Exception:
+        pass
 
-    eval_dir = Path(f"/shards/databento_reuse_packed/{eval_job_id}")
-    eval_shards = sorted(_glob.glob(f"{eval_dir}/opra_*.parquet"))
-    assert eval_shards, f"no eval shards at {eval_dir}"
-    print(f"[eval] using {len(eval_shards)} eval shards from {eval_job_id}",
-          flush=True)
+    eval_glob = f"/shards/databento_reuse_packed/{eval_job_id}/opra_*.parquet"
+    import glob as _glob
+    matched = sorted(_glob.glob(eval_glob))
+    print(f"[eval] {len(matched)} eval shards matched {eval_glob}", flush=True)
+    assert matched, f"no eval shards at {eval_glob}"
 
-    # Find the latest ckpt.
     ckpt_root = Path("/ckpts/tradefm_524m_multi/tradefm_524m_multi")
     step_dirs = sorted(ckpt_root.glob("step_*"),
                        key=lambda p: int(p.name.split("_")[1]))
     assert step_dirs, f"no ckpt dirs under {ckpt_root}"
-    ckpt_dir = step_dirs[-1] if ckpt_step == -1 else next(
-        (d for d in step_dirs if int(d.name.split("_")[1]) == ckpt_step),
-        step_dirs[-1],
-    )
-    print(f"[eval] loading ckpt from {ckpt_dir}", flush=True)
+    print(f"[eval] {len(step_dirs)} ckpt steps found; will load latest "
+          f"({step_dirs[-1].name})", flush=True)
 
-    # Load model — only rank_0.pt since we're evaluating on single GPU.
-    # (FSDP rank_N ckpts are sharded; for single-GPU eval we need to either
-    # load one rank's slice as the full weights, OR use the distributed
-    # checkpoint consolidation API. We do the simpler path: load rank_0
-    # and let any shape-mismatch expose itself, instead of fighting
-    # FSDP checkpoint internals.)
-    from models.config import TradeFMConfig
-    from odte.transformer_tradefm import TradeFM
-    cfg_yaml = yaml.safe_load(open(repo / "configs" / "tradefm_524m.yml"))
-    cfg = TradeFMConfig(**cfg_yaml)
-    model = TradeFM(cfg).to("cuda:0")
-    model.eval()
-
-    # CheckpointManager writes a consolidated state_dict on rank_0 when
-    # use_orig_params=True. Load that.
-    rank_ckpt = ckpt_dir / "rank_0.pt"
-    state = torch.load(rank_ckpt, map_location="cuda:0", weights_only=False)
-    if isinstance(state, dict) and "model" in state:
-        state = state["model"]
-    try:
-        model.load_state_dict(state, strict=False)
-        print(f"[eval] model state loaded (non-strict)", flush=True)
-    except Exception as e:
-        print(f"[eval] WARNING: partial state load: {e}", flush=True)
-
-    # Dataset — reuse the existing ShardTokenDataset.
-    from odte.train.pretrain_tradefm import ShardTokenDataset
-    from torch.utils.data import DataLoader
-    ds = ShardTokenDataset([Path(p) for p in eval_shards],
-                           ctx_len=cfg.ctx_len, seed=42)
-    loader = DataLoader(ds, batch_size=batch, num_workers=2)
-
-    total_loss = 0.0
-    total_tokens = 0
-    top1_correct = 0
-    above_median_correct = 0
-    median_bin = cfg.vocab // 2
-    n_batches = 0
-
-    with torch.no_grad():
-        for tokens in loader:
-            tokens = tokens.to("cuda:0", non_blocking=True)
-            logits = model(tokens[:, :-1])            # (B, T-1, V)
-            target = tokens[:, 1:]                    # (B, T-1)
-            pred = logits.argmax(dim=-1)              # (B, T-1)
-
-            loss = torch.nn.functional.cross_entropy(
-                logits.reshape(-1, cfg.vocab),
-                target.reshape(-1),
-                reduction="sum",
-            )
-            ntok = target.numel()
-            total_loss += float(loss.item())
-            total_tokens += ntok
-            top1_correct += int((pred == target).sum().item())
-            pred_above = (pred >= median_bin)
-            targ_above = (target >= median_bin)
-            above_median_correct += int((pred_above == targ_above).sum().item())
-
-            n_batches += 1
-            if n_batches >= max_batches:
-                break
-
-    mean_loss = total_loss / max(total_tokens, 1)
-    ppl = float(torch.exp(torch.tensor(mean_loss)).item())
-    top1 = top1_correct / max(total_tokens, 1)
-    above_med = above_median_correct / max(total_tokens, 1)
-
-    print()
-    print(f"[eval] ===== HELD-OUT METRICS on {eval_job_id} =====")
-    print(f"[eval] batches            : {n_batches}  (tokens: {total_tokens:,})")
-    print(f"[eval] mean eval loss     : {mean_loss:.4f}")
-    print(f"[eval] eval perplexity    : {ppl:.2f}")
-    print(f"[eval] top-1 accuracy     : {top1 * 100:.2f}%  (strict)")
-    print(f"[eval] above-median acc   : {above_med * 100:.2f}%  (direction proxy)")
-    print(f"[eval] threshold          : 53.00%  (above this = profitable vs 3.6% BA spread)")
-    verdict = "SIGNAL" if above_med >= 0.53 else "sub-threshold"
-    print(f"[eval] VERDICT            : {verdict}")
-    ckpt_volume.commit()
+    # Pass a placeholder shards arg — distributed.py requires it but in
+    # eval-only mode it's never used. We use the eval_glob for both so
+    # the shard-glob check passes even if eval-only short-circuits before
+    # touching it.
+    cmd = [
+        "torchrun", "--nproc_per_node=8", "--nnodes=1",
+        "-m", "odte.train.distributed",
+        "--config", "configs/tradefm_524m.yml",
+        "--shards", eval_glob,                      # not used in eval-only
+        "--ckpt-store", "/ckpts/tradefm_524m_multi",
+        "--ckpt-prefix", "tradefm_524m_multi",
+        "--steps", "0",
+        "--batch", str(batch),
+        "--grad-accum", "1",
+        "--num-workers", "2",
+        "--resume",
+        "--eval-only",
+        "--eval-shards", eval_glob,
+        "--eval-max-batches", str(max_batches),
+    ]
+    print("[eval] launching:", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=str(repo), check=True)
+    print("[eval] PASS", flush=True)
 
 
 @app.local_entrypoint()

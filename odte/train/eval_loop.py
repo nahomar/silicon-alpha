@@ -102,9 +102,11 @@ def evaluate(model: torch.nn.Module, shard_paths: List[Path],
 
 
 def _forward_logits(model: torch.nn.Module, tokens: torch.Tensor) -> torch.Tensor:
-    """Call the base TradeFM forward whether or not the model is FSDP-wrapped."""
-    inner = model.module if hasattr(model, "module") else model
-    return inner(tokens)
+    """Call the model's wrapped __call__ so FSDP's pre-forward all-gather
+    fires and unshards the root flat-param. Calling model.module(tokens)
+    bypasses the wrapper and reads sharded 1-D weight views, which breaks
+    nn.Embedding the same way it broke training (caught in 11103cc)."""
+    return model(tokens)
 
 
 def load_shards(glob_pattern: str) -> List[Path]:

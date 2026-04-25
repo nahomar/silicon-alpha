@@ -232,6 +232,61 @@ def train(args) -> dict:
             if args.resume else {"step": 0, "best_loss": float("inf")})
     start_step = int(meta["step"]); best_loss = float(meta["best_loss"])
 
+    # ---- Eval-only short-circuit ----------------------------------------
+    # Loaded ckpt; instead of running the training loop, run one evaluate()
+    # pass on --eval-shards and exit. Used by the post-training Modal
+    # eval_524m function so we get the held-out metrics without re-running
+    # all of training.
+    if args.eval_only:
+        if not args.eval_shards:
+            raise RuntimeError("--eval-only requires --eval-shards")
+        from odte.train.eval_loop import evaluate, load_shards
+        eval_paths = load_shards(args.eval_shards)
+        if not eval_paths:
+            raise RuntimeError(f"no eval shards for {args.eval_shards!r}")
+        if rank == 0:
+            log.info("[eval-only] %d eval shards from %s",
+                     len(eval_paths), args.eval_shards)
+        device_for_eval = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+        result = evaluate(
+            model, eval_paths, ctx_len=cfg.ctx_len, vocab=cfg.vocab,
+            device=device_for_eval, batch=args.batch,
+            max_batches=args.eval_max_batches,
+        )
+        if world > 1:
+            # Aggregate per-rank counts via all_reduce so rank 0 reports the
+            # global metrics (ranks see disjoint shard slices).
+            t = torch.tensor([
+                result.loss * result.n_tokens, float(result.n_tokens),
+                result.top1_acc * result.n_tokens,
+                result.top5_acc * result.n_tokens,
+                result.directional_acc * result.n_tokens,
+            ], device=device_for_eval, dtype=torch.float64)
+            dist.all_reduce(t, op=dist.ReduceOp.SUM)
+            n = max(float(t[1].item()), 1.0)
+            agg_loss = float(t[0].item() / n)
+            agg_top1 = float(t[2].item() / n)
+            agg_top5 = float(t[3].item() / n)
+            agg_dir = float(t[4].item() / n)
+        else:
+            agg_loss = result.loss; agg_top1 = result.top1_acc
+            agg_top5 = result.top5_acc; agg_dir = result.directional_acc
+        if rank == 0:
+            ppl = math.exp(min(agg_loss, 50.0))
+            verdict = "SIGNAL" if agg_dir >= 0.53 else "sub-threshold"
+            print()
+            print(f"[eval-only] ===== HELD-OUT METRICS =====")
+            print(f"[eval-only] eval shards   : {len(eval_paths)}")
+            print(f"[eval-only] step loaded   : {start_step}")
+            print(f"[eval-only] eval loss     : {agg_loss:.4f}")
+            print(f"[eval-only] perplexity    : {ppl:.2f}")
+            print(f"[eval-only] top-1 acc     : {agg_top1*100:.2f}%")
+            print(f"[eval-only] top-5 acc     : {agg_top5*100:.2f}%")
+            print(f"[eval-only] directional   : {agg_dir*100:.2f}%  (>= 53% threshold)")
+            print(f"[eval-only] verdict       : {verdict}")
+        return {"loss": agg_loss, "top1": agg_top1, "directional": agg_dir,
+                "step": start_step}
+
     # Data — support comma-separated glob patterns so multi-day corpora can
     # be passed as one arg (e.g. "/shards/day1/*.parquet,/shards/day2/*.parquet").
     # A single pattern with no commas behaves exactly as before.
@@ -350,6 +405,10 @@ def _cli():
                     help="glob of reserved eval shards; if set, eval every --eval-every steps")
     ap.add_argument("--eval-every", type=int, default=1000)
     ap.add_argument("--eval-max-batches", type=int, default=50)
+    # Eval-only mode: skip training, load latest ckpt via --resume, run one
+    # full evaluate() pass on --eval-shards, print metrics, exit.
+    ap.add_argument("--eval-only", action="store_true",
+                    help="skip training; load ckpt via --resume and run one eval pass")
     # LR-finder short-circuit: if set, skip normal training and run the sweep
     ap.add_argument("--find-lr", action="store_true",
                     help="run the LR finder instead of training")
