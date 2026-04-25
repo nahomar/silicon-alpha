@@ -37,6 +37,16 @@ Reference the Silicon Alpha goal in `memory/project_silicon_alpha_goal.md`.
 - Latency budget: GPU→FPGA ≈ 200-500 ns (PCIe 5.0 P2P), FPGA→wire ≈ 100-300 ns.
   Total order-emit path after GPU decision: **~1 µs end to wire**, vs
   10-20 µs via software TCP stack.
+- **Tick-to-trade target: < 450 ns** end-to-end (inbound feed tick to
+  outbound order on the wire) for the on-FPGA reactive path —
+  achievable when the decision is itself encoded in FPGA logic
+  (e.g., quote-pulling when a kill-switch fires, or auto-cancel on
+  position-limit breach). Decisions that require the GPU forecaster
+  pay an extra 200-500 ns for the P2P round-trip.
+- **Memory-mapped AXI**: C++ host process uses `mmap()` to expose the
+  FPGA's AXI registers directly into CPU virtual memory. Eliminates
+  ioctl/syscall overhead on the (rare) host-side queries; the hot path
+  is GPU-direct, never touches the host CPU.
 
 ## What the FPGA owns
 

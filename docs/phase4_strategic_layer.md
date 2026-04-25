@@ -35,12 +35,21 @@ Scalar-P/L reward is too crude for live capital. Phase-4 migrates to a
 
 ```
 R = [ pnl_bps,                     # realized P&L in basis points
-      -slippage_bps,               # execution cost vs mid
+      -IS_bps,                     # implementation shortfall:
+                                   #   (arrival_px × vol) − (exec_px × vol)
+                                   #   normalized to bps of notional
       -max_drawdown_bps,           # worst peak-to-trough in the episode
       -gamma_risk_pen,             # position gamma in units of $/$ move²
       -capital_concentration_pen,  # Herfindahl across venues/strikes
       +uptime_frac ]               # fraction of session engine was live
 ```
+
+**Implementation Shortfall (IS)** is the canonical execution-quality metric:
+the dollar gap between the price you'd have gotten by trading instantly at
+arrival, and the price you actually got after slicing the parent order over
+time. Minimizing −IS forces the LLC to learn slicing strategies that capture
+the spread (passive when toxicity is low) and pull aggressively (cross when
+the book is about to move against you).
 
 The policy is optimized over the **Pareto front** of this vector, not a
 linear combination. A dominant policy beats others on at least one axis
@@ -123,9 +132,15 @@ not per-tick. Output flows to LLC which handles per-tick execution.
 ```text
 LLC.quote(strategy_budget, neural_forecast, book_state)
      -> {cancel_orders, new_orders}
+LLC.slice(parent_order, market_state, urgency)
+     -> child_orders[]   # 1000+ children for a 1M-share parent
 ```
 
-Already spec'd in the Silicon Alpha goal.
+Already spec'd in the Silicon Alpha goal. The LLC must learn to slice
+multi-million-share parent orders into 1000+ child orders, slowing
+execution during high-volatility flash-crash regimes (capture spread,
+avoid being the marginal taker into a vacuum) and pulling aggressively
+during normal-vol regimes (pay spread to clear before the book moves).
 
 ### MORL objective
 
