@@ -361,16 +361,27 @@ def train(args) -> dict:
                 best_loss = avg
                 ckpt.save(model, opt, step, best_loss, asdict(cfg), label="best")
 
-        # Held-out eval — all ranks evaluate (distributed eval). The
-        # ShardedTokenDataset rank-partitioning gives each rank its
-        # disjoint slice; we all_reduce the per-rank counts to get
-        # global metrics. All-ranks participation also avoids the
-        # rank-0-only NCCL deadlock that would happen if rank 0 took a
-        # long detour while the other 7 ranks proceeded to the next
-        # iteration's collective.
+        # Diagnostic: print whether the eval condition is being checked at
+        # all. Once per ckpt boundary on rank 0 — proves the eval-gate is
+        # being reached even if it doesn't fire (e.g., args.eval_shards is
+        # None). Cheap; helps when Modal logs age out.
+        if (rank == 0 and args.ckpt_every > 0
+                and step > 0 and step % args.ckpt_every == 0):
+            print(f"[eval-gate@{step}] eval_shards={bool(args.eval_shards)} "
+                  f"eval_every={args.eval_every} "
+                  f"step%eval_every={step % max(args.eval_every, 1)}",
+                  flush=True)
+
+        # Held-out eval — all ranks evaluate (distributed eval). See the
+        # 2026-04-25 analysis in the FSDP load saga for why this is the
+        # primary metric path; the post-hoc CheckpointManager.load route
+        # has a non-isomorphic FSDP-tree problem we can't bridge cheaply.
         if (args.eval_shards and step > 0 and args.eval_every > 0
                 and step % args.eval_every == 0):
             try:
+                if rank == 0:
+                    print(f"[eval-fire@{step}] starting eval pass...",
+                          flush=True)
                 ev_paths = load_shards(args.eval_shards)
                 ev = evaluate(model, ev_paths, ctx_len=cfg.ctx_len,
                               vocab=cfg.vocab, device=device,
@@ -401,7 +412,29 @@ def train(args) -> dict:
                     rlog.scalar(step=step, eval_loss=agg_loss,
                                 eval_top1=agg_top1, eval_top5=agg_top5,
                                 eval_dir_acc=agg_dir, eval_ppl=ppl)
+                    # File-based persistence — durable on the Modal volume
+                    # even after log retention ages out. Append JSON-line
+                    # so each eval call adds an entry without overwriting.
+                    if args.ckpt_store:
+                        eval_log_path = Path(args.ckpt_store) / "eval_log.jsonl"
+                        eval_log_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(eval_log_path, "a") as fh:
+                            import json as _json
+                            fh.write(_json.dumps({
+                                "step": step,
+                                "eval_loss": agg_loss,
+                                "eval_ppl": ppl,
+                                "eval_top1": agg_top1,
+                                "eval_top5": agg_top5,
+                                "eval_dir_acc": agg_dir,
+                                "verdict": verdict,
+                            }) + "\n")
+                        print(f"[eval@{step}] appended to {eval_log_path}",
+                              flush=True)
             except Exception as e:
+                if rank == 0:
+                    print(f"[eval@{step}] FAILED: {type(e).__name__}: {e}",
+                          flush=True)
                 log.warning("eval skipped: %s", e)
         step += 1
 
