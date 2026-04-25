@@ -24,6 +24,15 @@ Once Silicon Alpha is live across SPX 0DTE + Polymarket + Kalshi:
 Phase 5 deploys three specialized agents that sit above the trading loop,
 each with a narrow, adversarial job.
 
+## The agents (3 core + 1 Phase-8 extension)
+
+> **Phase-8 update (QRAFTI extension)**: this doc was originally written
+> with three adversarially-separated agents (Research / Risk / Compliance).
+> Phase-8 (`phase8_sovereign_infrastructure.md`) adds a fourth — the
+> **Quant Dev Agent** — that closes the loop between proposed signal
+> modifications and shipped code. Spec'd in section "The fourth agent"
+> at the end of this doc; build only after the original three are stable.
+
 ## The three agents
 
 ### 1. Research Agent — signal proposer
@@ -176,6 +185,61 @@ Begin Phase-5 code only when:
    audit trail before the first regulatory touchpoint.
 3. **Research Agent third**. The "optimizer" of the three. Useful only
    once the other two are solid.
+4. **Quant Dev Agent fourth** (Phase-8 extension; see below).
+
+## The fourth agent — Quant Dev (Phase-8 extension)
+
+**Job**: autonomous code repair and proposal-to-merge translation. Bridges
+the Research Agent's signal proposals and the actual Git commit that ships
+the change.
+
+### Concretely
+
+- **Triggers**: a model deployment fails (NaN gradients, distribution
+  shift detected by a Compliance-Agent monitor, broken Fabricator feature
+  pipeline) **or** the Research Agent proposes a parameter / architecture
+  change that's not yet implemented.
+- **Inputs**:
+  - Stack traces + structured failure logs.
+  - Engram-resident library of past-incident reports (Phase 8) — same
+    failure category usually has the same fix shape.
+  - `git blame` + recent commits in the affected module.
+  - The Research Agent's natural-language proposal (if applicable).
+- **Output**: a draft pull request that includes (a) the code change,
+  (b) regression tests, (c) a rollback plan, (d) a `Risk Agent
+  validation request` block.
+
+### Adversarial separation preserved
+
+The Quant Dev Agent **cannot merge or deploy** anything. It can only
+*propose*. The Risk Agent retains hard-veto authority on whether the
+proposed PR's KKT/risk-envelope analysis passes. Compliance logs the
+full chain: incident → Dev proposal → Risk decision → merge.
+
+This keeps the Phase-5 invariant: every code change reaching production
+has been (a) proposed by something or someone, (b) validated by Risk,
+and (c) recorded by Compliance. The Quant Dev Agent does not weaken any
+of those gates — it just speeds up the proposal step that today is a
+human writing the PR.
+
+### Why fourth, not first
+
+Each upstream agent is a hard prerequisite:
+- Without **Risk** to validate, the Dev Agent's PRs are unfounded.
+- Without **Compliance** to log, regulatory exposure is unbounded.
+- Without **Research** to propose, the Dev Agent has no upstream to
+  translate — most useful incident-fix proposals come from Research's
+  drift detection.
+- The Dev Agent is the **last optimization**, not a foundational tier.
+
+### What it does NOT do
+
+- Author novel signals from scratch (that's Research).
+- Approve its own PRs (that's Risk).
+- Decide whether to deploy (Risk + Compliance gate).
+- Modify infrastructure-of-the-infrastructure (e.g., the Risk Agent's
+  validator code itself). Self-modifying governance is an invitation to
+  circumvent the veto chain. Lock that subset behind human-only review.
 
 ## Related files
 

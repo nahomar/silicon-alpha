@@ -8,6 +8,14 @@ where appropriate. The diagram renders natively on GitHub.
 
 ```mermaid
 flowchart TB
+    %% ========== LAYER -1: SOVEREIGN INFRASTRUCTURE SUBSTRATE ==========
+    subgraph INFRA["Layer -1 - Sovereign Infrastructure (Phase 8, design only)"]
+        direction LR
+        TFS["3FS RDMA Storage<br/>40 GiB/s random read<br/>kernel-bypass NVMe pool"]
+        ENGRAM["Engram Memory<br/>O(1) DRAM hash lookup<br/>SEC filings + statics"]
+        HFR["hfreduce<br/>CPU-overlapped AllReduce<br/>(MoE-only)"]
+    end
+
     %% ========== LAYER 0: REAL-TIME MARKET INGESTION ==========
     subgraph DATA["Layer 0 - Real-time Market Ingestion"]
         direction LR
@@ -71,9 +79,10 @@ flowchart TB
     end
 
     %% ========== LAYER 4: AGENTIC GOVERNANCE ==========
-    subgraph AGENTS["Layer 4 - Agentic Governance (Phase 5, design only)"]
+    subgraph AGENTS["Layer 4 - Agentic Governance (Phase 5 + Phase 8 QRAFTI)"]
         direction LR
         RES["Research Agent<br/>proposes signal mods"]
+        DEV["Quant Dev Agent<br/>auto-PR + code repair<br/>(Phase 8)"]
         RISK["Risk Agent<br/>KKT validation<br/>+ hard veto"]
         COMP["Compliance Agent<br/>hash-chained<br/>audit trail"]
     end
@@ -102,6 +111,10 @@ flowchart TB
     XV --> KS
 
     %% ========== EDGES — PHASE-GATED / DASHED ==========
+    TFS -.Phase 8 substrate.-> KERNEL
+    TFS -.Phase 8 substrate.-> TFM
+    ENGRAM -.Phase 8 lookup.-> TFM
+    HFR -.Phase 8 MoE only.-> TFM
     ES -.cross-asset.-> RDMA
     FUND -.Phase 6.-> TFM
     SYMR -.Phase 6.-> TFM
@@ -118,8 +131,11 @@ flowchart TB
     KS -.trade logs.-> MORL
     RES -.proposes.-> HLC
     RES -.proposes.-> TFM
+    RES -.proposes signal mods.-> DEV
+    DEV -.draft PR.-> RISK
     RISK -.validates KKT.-> QP
     RISK -.hard veto.-> P2P
+    DEV -.logs.-> COMP
     QP -.logs.-> COMP
     P2P -.logs.-> COMP
     SPX -.logs.-> COMP
@@ -140,9 +156,10 @@ flowchart TB
     class QP,GAMMA,ARB,XV layer2
     class P2P,HWKILL,OUCH phaseDesign
     class HLC,POW,MORL phaseDesign
-    class RES,RISK,COMP phaseDesign
+    class RES,DEV,RISK,COMP phaseDesign
     class FUND,SYMR phaseDesign
     class PRICE,TXN,TALENT phaseDesign
+    class TFS,ENGRAM,HFR phaseDesign
     class SPX,PM,KS venue
 ```
 
@@ -157,7 +174,7 @@ phases, warm cream for terminal execution venues.
 | Near-black `#1A1A1A` | Real-time market ingestion | 0 | OPRA live; ES scaffold; Poly/Kalshi pending signup |
 | HRT orange `#E85D2E` | Neural Forecaster | 1 | Kernels scaffolded; TradeFM untrained (Phase 2 compute-blocked) |
 | Deep orange `#D94F23` | Call Sheet | 2 | QP/Gamma not wired live; arb detectors 0% |
-| Peach `#F4A261` (dashed) | Cross-asset / FPGA / Strategic / Agentic / Alpha-Discovery / Alt-Data | 2.5 / 3.5 / 4 / 5 / 6 / 7 | **Design-only** — see per-phase doc |
+| Peach `#F4A261` (dashed) | Cross-asset / FPGA / Strategic / Agentic / Alpha-Discovery / Alt-Data / Sovereign Infra | 2.5 / 3.5 / 4 / 5 / 6 / 7 / 8 | **Design-only** — see per-phase doc |
 | Cream `#F8F5F0` + orange border | Venues | deploy | All pending broker/API integration |
 
 ## Phase-by-phase doc map
@@ -173,6 +190,7 @@ phases, warm cream for terminal execution venues.
 | 5 | [`agentic_governance.md`](agentic_governance.md) | design only |
 | 6 | [`phase6_alpha_factor_discovery.md`](phase6_alpha_factor_discovery.md) | design only |
 | 7 | [`phase7_alternative_data.md`](phase7_alternative_data.md) | design only |
+| 8 | [`phase8_sovereign_infrastructure.md`](phase8_sovereign_infrastructure.md) | design only |
 
 ## Edge semantics
 
@@ -198,3 +216,4 @@ phases, warm cream for terminal execution venues.
 11. ❌ Phase 5 agentic governance — blocked on (8) + QP solver live
 12. ❌ Phase 6 alpha factor discovery — blocked on (6) + AUM justifying $250k+/yr data
 13. ❌ Phase 7 alt-data integration — blocked on (12) + AUM justifying $140k+/yr data
+14. ❌ Phase 8 sovereign infrastructure (3FS + Engram + MoE + QRAFTI Quant Dev) — blocked on (6) hitting capacity ceiling + capex for 3FS pool ($200k-$1M)
