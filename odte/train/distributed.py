@@ -232,9 +232,16 @@ def train(args) -> dict:
             if args.resume else {"step": 0, "best_loss": float("inf")})
     start_step = int(meta["step"]); best_loss = float(meta["best_loss"])
 
-    # Data
+    # Data — support comma-separated glob patterns so multi-day corpora can
+    # be passed as one arg (e.g. "/shards/day1/*.parquet,/shards/day2/*.parquet").
+    # A single pattern with no commas behaves exactly as before.
     import glob as _glob
-    shard_paths = sorted(Path(p) for p in _glob.glob(args.shards))
+    patterns = [p.strip() for p in args.shards.split(",") if p.strip()]
+    matched: set[Path] = set()
+    for pat in patterns:
+        for p in _glob.glob(pat):
+            matched.add(Path(p))
+    shard_paths = sorted(matched)
     if args.max_shards:
         shard_paths = shard_paths[: args.max_shards]
     if not shard_paths:
