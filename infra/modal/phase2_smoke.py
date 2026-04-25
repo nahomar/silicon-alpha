@@ -589,19 +589,33 @@ def smoke_databento_reuse(
                           f"elapsed={dt:.0f}s  rate={rate:.0f}k rows/s", flush=True)
                 yield feats
 
-    print("[reuse] fitting tokenizer edges from real MBP-1 stream…", flush=True)
-    edges = fit_hybrid_from_chunks(
-        _all_chunks(), packer.feature_spec, n_buckets=64,
-        checkpoint=out_dir / "_fit_ckpt",
-    )
-    tok = HybridBinTokenizer(n_buckets=64, feature_spec=packer.feature_spec)
-    tok.edges = edges
-    tok.save(out_dir / "tokenizer.json")
-    packer.tokenizer = tok
-    print(f"[reuse] tokenizer fit done, edges for {len(edges)} features", flush=True)
-    # Persist fit outputs NOW so if the pack crashes we don't re-fit the
-    # 50 GB stream (previous run's 29-min sunk cost).
-    shard_volume.commit()
+    # Skip the fit pass entirely if tokenizer.json already exists from a
+    # previous run — fit is deterministic on the same DBN inputs, so re-fitting
+    # produces the same edges and just wastes ~30 min/day. This was the major
+    # cost in the disconnected-client rerun scenario; the volume.commit()
+    # after the fit on the prior run already persisted tokenizer.json.
+    tokenizer_path = out_dir / "tokenizer.json"
+    if tokenizer_path.exists():
+        print(f"[reuse] tokenizer.json found at {tokenizer_path} — skipping fit pass",
+              flush=True)
+        tok = HybridBinTokenizer.load(tokenizer_path)
+        packer.tokenizer = tok
+        print(f"[reuse] tokenizer loaded, {len(tok.edges)} feature edge sets", flush=True)
+    else:
+        print("[reuse] fitting tokenizer edges from real MBP-1 stream…", flush=True)
+        edges = fit_hybrid_from_chunks(
+            _all_chunks(), packer.feature_spec, n_buckets=64,
+            checkpoint=out_dir / "_fit_ckpt",
+        )
+        tok = HybridBinTokenizer(n_buckets=64, feature_spec=packer.feature_spec)
+        tok.edges = edges
+        tok.save(tokenizer_path)
+        packer.tokenizer = tok
+        print(f"[reuse] tokenizer fit done, edges for {len(edges)} features",
+              flush=True)
+        # Persist fit outputs NOW so if the pack crashes we don't re-fit the
+        # 50 GB stream (previous run's 29-min sunk cost).
+        shard_volume.commit()
 
     # Pack pass — vectorized. Prior version used `feats.iterrows()` which is
     # ~5 µs/row and hit ~16k rows/s (23× slower than the 367k rows/s fit pass,
