@@ -187,6 +187,48 @@ quant desk with hash-chained accountability.
   factors, but the discovery pipeline (AlphaFormer, fundamental NLP) is
   unchanged.
 
+## Bonus migration: Distributed Checkpoint (DCP)
+
+**Lesson from Phase-2 pretraining (April 2026):** the current
+`CheckpointManager` uses `StateDictType.LOCAL_STATE_DICT` plus
+`use_orig_params=True` and applies activation checkpointing **after**
+FSDP wrap. This combination is fragile:
+
+- `_CheckpointWrapper`'s `_post_state_dict_hook` strips its own
+  `_checkpoint_wrapped_module` FQN segment on save, producing "clean"
+  keys (`blocks.0._flat_param`).
+- The hook does NOT re-inject the prefix on load — runtime model
+  expects `blocks.0._checkpoint_wrapped_module._flat_param`.
+- This caused the 524M pilot's eval load to fail with "Unexpected
+  key(s)" until we added a re-inject transform in `_load_state_dict`.
+
+**Recommended migration as part of Phase 8:**
+
+1. **Adopt `torch.distributed.checkpoint` (DCP)** — `LOCAL_STATE_DICT`
+   is being deprecated in PyTorch. DCP's `state_dict.get_state_dict()` /
+   `set_state_dict()` handles FQN mappings across cluster topologies
+   and the activation-checkpointing prefix issue robustly. Industry
+   standard for H100 clusters as of 2026.
+2. **Order of wrapping**: apply activation checkpointing **before** FSDP
+   wrap, not after. This lets FSDP see the entire wrapped block as a
+   single unit, producing more consistent FQNs during serialization.
+3. **`use_orig_params=False` for the core training loop** — simplifies
+   the `_flat_param` hierarchy and avoids duplicate-parameter entries
+   sometimes seen under LOCAL_STATE_DICT. Use `use_orig_params=True`
+   only for inference / model-export paths where you need original
+   parameter names.
+4. **High-Flyer hfai integration**: when adopting `hfreduce` (above),
+   also adopt hfai's native `CheckpointManager`, which is co-designed
+   with hfreduce's asynchronous reduction and avoids the kernel-level
+   jitter that causes OOMs during `optim_state_dict_to_load` on the
+   Fire-Flyer II topology.
+
+**Today's surgical workaround** (commit `a08d7b0` and successor)
+re-injects `_checkpoint_wrapped_module` into `blocks.*` keys at load
+time. It works but is a band-aid; the DCP migration is the
+architecturally correct fix for billion-dollar-scale training where
+checkpoint robustness across topology changes is non-negotiable.
+
 ## Related files
 
 - [`docs/architecture.md`](architecture.md) — diagram with Layer -1

@@ -299,11 +299,20 @@ class CheckpointManager:
         return meta
 
     def _load_state_dict(self, model: torch.nn.Module, state: Dict[str, Any]) -> None:
-        # FSDP path. The previous version silently swallowed errors here and
-        # fell through to a non-FSDP load, which then loudly failed with
-        # "Unexpected key(s): _flat_param". Now we surface FSDP errors and
-        # try a key-rename fallback for the activation-checkpointing prefix
-        # mismatch before giving up.
+        # FSDP path. The combination of:
+        #   - FSDP wrap with use_orig_params=True
+        #   - apply_activation_checkpointing() AFTER FSDP wrap
+        #   - StateDictType.LOCAL_STATE_DICT for save/load
+        # produces an asymmetric serialization. On SAVE, _CheckpointWrapper's
+        # _post_state_dict_hook strips its own `_checkpoint_wrapped_module`
+        # FQN segment, producing "clean" keys like `blocks.0._flat_param`.
+        # On LOAD, the hook does NOT re-inject the prefix, so the runtime
+        # model (which has the wrapper in its module tree) expects keys like
+        # `blocks.0._checkpoint_wrapped_module._flat_param` and rejects the
+        # saved ones as "Unexpected key(s)".
+        #
+        # Fix: re-inject the prefix at module boundaries on the load side
+        # before handing the state to load_state_dict().
         try:
             from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, StateDictType
         except ImportError:
@@ -313,38 +322,61 @@ class CheckpointManager:
         is_fsdp = FSDP is not None and isinstance(model, FSDP)
         if is_fsdp:
             with FSDP.state_dict_type(model, StateDictType.LOCAL_STATE_DICT):
-                # Attempt #1: load as-is.
+                # Attempt #1: keys as-is.
                 try:
                     model.load_state_dict(state)
                     return
                 except RuntimeError as e1:
-                    log.warning("[ckpt] direct LOCAL_STATE_DICT load failed: %s", e1)
-                # Attempt #2: keys may differ by an activation-checkpointing
-                # prefix. Try inserting / stripping `_checkpoint_wrapped_module.`
-                # at module boundaries. Save was probably written without the
-                # prefix; the current load model has the prefix (or vice versa).
-                for transform_name, transform in (
-                    ("add _checkpoint_wrapped_module prefix",
-                     lambda k: k.replace("blocks.", "blocks.")
-                                .replace(
-                                    "._flat_param",
-                                    "._checkpoint_wrapped_module._flat_param",
-                                )),
-                    ("strip _checkpoint_wrapped_module prefix",
-                     lambda k: k.replace("._checkpoint_wrapped_module.", ".")),
-                ):
-                    renamed = {transform(k): v for k, v in state.items()}
-                    try:
-                        model.load_state_dict(renamed)
-                        log.info("[ckpt] loaded after key transform: %s",
-                                 transform_name)
-                        return
-                    except RuntimeError as e2:
-                        log.warning("[ckpt] transform '%s' failed: %s",
-                                    transform_name, e2)
-                # If all FSDP attempts failed, fall through to a strict
-                # non-FSDP load below — it will likely fail with a clear
-                # error that tells us the real key mismatch.
+                    log.warning("[ckpt] direct LOCAL_STATE_DICT load failed: %s",
+                                e1)
+
+                # Attempt #2: re-inject the activation-checkpointing prefix
+                # specifically at module boundaries inside `blocks.<N>.*`.
+                # Save: `blocks.0._flat_param`
+                # Load: `blocks.0._checkpoint_wrapped_module._flat_param`
+                renamed = {}
+                for k, v in state.items():
+                    if (k.startswith("blocks.")
+                            and "_checkpoint_wrapped_module" not in k):
+                        parts = k.split(".")
+                        # parts = ["blocks", "<N>", *rest]
+                        new_key = ".".join([
+                            parts[0], parts[1],
+                            "_checkpoint_wrapped_module",
+                            *parts[2:],
+                        ])
+                        renamed[new_key] = v
+                    else:
+                        renamed[k] = v
+                try:
+                    model.load_state_dict(renamed)
+                    log.info("[ckpt] loaded after re-injecting "
+                             "_checkpoint_wrapped_module prefix on blocks.* keys")
+                    return
+                except RuntimeError as e2:
+                    log.warning("[ckpt] re-inject transform failed: %s", e2)
+
+                # Attempt #3 (the inverse): strip prefix in case the runtime
+                # model lacks the wrapper but the save retained it.
+                stripped = {
+                    k.replace("._checkpoint_wrapped_module.", "."): v
+                    for k, v in state.items()
+                }
+                try:
+                    model.load_state_dict(stripped)
+                    log.info("[ckpt] loaded after stripping "
+                             "_checkpoint_wrapped_module prefix")
+                    return
+                except RuntimeError as e3:
+                    log.warning("[ckpt] strip transform failed: %s", e3)
+
+                # All FSDP attempts failed. Fall through to a non-FSDP load
+                # below — it will fail loudly with the real key mismatch.
+                # See `docs/phase8_sovereign_infrastructure.md`: the proper
+                # long-term fix is to migrate CheckpointManager from
+                # LOCAL_STATE_DICT to torch.distributed.checkpoint (DCP),
+                # which handles FQN mappings across cluster topologies and
+                # the _checkpoint_wrapped_module prefix robustly.
         model.load_state_dict(state)
 
     # ------------------------------------------------------------------
