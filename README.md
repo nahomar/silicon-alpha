@@ -114,13 +114,13 @@ flowchart TB
     XV --> KS
 
     %% ========== EDGES — PHASE-GATED / DASHED ==========
-    ES -.Phase 2.5.-> RDMA
+    ES -.cross-asset.-> RDMA
     FUND -.Phase 6.-> TFM
     SYMR -.Phase 6.-> TFM
     PRICE -.Phase 7.-> TFM
     TXN -.Phase 7.-> TFM
     TALENT -.Phase 7.-> TFM
-    GAMMA -.Phase 3.5 hardware path.-> P2P
+    GAMMA -.FPGA path.-> P2P
     OUCH -.wire.-> SPX
     HLC -.Phase 4.-> QP
     POW -.Phase 4.-> HLC
