@@ -1041,6 +1041,9 @@ def train_524m_multi_day(
     log_every: int = 50,
     resume: bool = False,
     eval_job_id: str = DEFAULT_EVAL_JOB_ID,
+    eval_every: int = 500,
+    eval_max_batches: int = 200,
+    enable_eval: bool = True,
 ):
     """524M TradeFM pretraining on the 4-day regime-stratified corpus.
 
@@ -1110,6 +1113,22 @@ def train_524m_multi_day(
     ]
     if resume:
         cmd.append("--resume")
+    # Enable in-process eval during training. This sidesteps the FSDP
+    # post-hoc load entirely — eval runs on the in-memory FSDP-wrapped
+    # model that just trained, so there's no serialization round-trip
+    # and no FQN / use_orig_params / activation-checkpointing-prefix
+    # asymmetry to worry about.
+    if enable_eval and eval_globs:
+        eval_glob_arg = ",".join(eval_globs)
+        cmd += [
+            "--eval-shards", eval_glob_arg,
+            "--eval-every", str(eval_every),
+            "--eval-max-batches", str(eval_max_batches),
+        ]
+        print(f"[524m-multi] eval enabled: every {eval_every} steps "
+              f"on {len(eval_globs)} held-out glob(s), "
+              f"{eval_max_batches} max batches per eval",
+              flush=True)
     print("[524m-multi] launching:", " ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=str(repo), check=True)
 
@@ -1238,14 +1257,24 @@ def dryrun_train_524m_multi(
     steps: int = 2000, batch: int = 1, grad_accum: int = 4,
     ckpt_every: int = 500, log_every: int = 50, resume: bool = False,
     eval_job_id: str = DEFAULT_EVAL_JOB_ID,
+    eval_every: int = 500, eval_max_batches: int = 200,
+    enable_eval: bool = True,
 ):
     """Phase-2 524M training on the 4-day regime-stratified corpus.
-    Default pilot: 2000 steps (~20-35 min on 8× H100, ~$20).
-    For longer run: `--steps 10000 --ckpt-every 1000`."""
+
+    Default pilot: 2000 steps with eval every 500 steps (~25-40 min on
+    8× H100, ~$36-40). Eval runs in-process on the held-out 2026-04-16
+    shards — no post-hoc FSDP load needed.
+
+    For longer run: `--steps 10000 --ckpt-every 1000 --eval-every 1000`.
+    To disable eval: `--no-enable-eval`.
+    """
     train_524m_multi_day.remote(
         steps=steps, batch=batch, grad_accum=grad_accum,
         ckpt_every=ckpt_every, log_every=log_every, resume=resume,
         eval_job_id=eval_job_id,
+        eval_every=eval_every, eval_max_batches=eval_max_batches,
+        enable_eval=enable_eval,
     )
     print("[dryrun_train_524m_multi] PASS.")
 

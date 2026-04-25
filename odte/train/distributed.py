@@ -361,15 +361,46 @@ def train(args) -> dict:
                 best_loss = avg
                 ckpt.save(model, opt, step, best_loss, asdict(cfg), label="best")
 
-        # Held-out eval (rank 0 only — runs on a reserved shard set)
+        # Held-out eval — all ranks evaluate (distributed eval). The
+        # ShardedTokenDataset rank-partitioning gives each rank its
+        # disjoint slice; we all_reduce the per-rank counts to get
+        # global metrics. All-ranks participation also avoids the
+        # rank-0-only NCCL deadlock that would happen if rank 0 took a
+        # long detour while the other 7 ranks proceeded to the next
+        # iteration's collective.
         if (args.eval_shards and step > 0 and args.eval_every > 0
-                and step % args.eval_every == 0 and rank == 0):
+                and step % args.eval_every == 0):
             try:
                 ev_paths = load_shards(args.eval_shards)
                 ev = evaluate(model, ev_paths, ctx_len=cfg.ctx_len,
                               vocab=cfg.vocab, device=device,
                               batch=args.batch, max_batches=args.eval_max_batches)
-                rlog.scalar(step=step, **ev.to_dict())
+                # Aggregate across ranks so rank 0 reports the global metric.
+                if world > 1:
+                    t = torch.tensor([
+                        ev.loss * ev.n_tokens, float(ev.n_tokens),
+                        ev.top1_acc * ev.n_tokens,
+                        ev.top5_acc * ev.n_tokens,
+                        ev.directional_acc * ev.n_tokens,
+                    ], device=device, dtype=torch.float64)
+                    dist.all_reduce(t, op=dist.ReduceOp.SUM)
+                    n = max(float(t[1].item()), 1.0)
+                    agg_loss = float(t[0].item() / n)
+                    agg_top1 = float(t[2].item() / n)
+                    agg_top5 = float(t[3].item() / n)
+                    agg_dir = float(t[4].item() / n)
+                else:
+                    agg_loss = ev.loss; agg_top1 = ev.top1_acc
+                    agg_top5 = ev.top5_acc; agg_dir = ev.directional_acc
+                if rank == 0:
+                    ppl = math.exp(min(agg_loss, 50.0))
+                    verdict = "SIGNAL" if agg_dir >= 0.53 else "sub-thresh"
+                    print(f"[eval@{step:>6d}] loss={agg_loss:.4f} ppl={ppl:.2f} "
+                          f"top1={agg_top1*100:.2f}% top5={agg_top5*100:.2f}% "
+                          f"dir={agg_dir*100:.2f}% [{verdict}]", flush=True)
+                    rlog.scalar(step=step, eval_loss=agg_loss,
+                                eval_top1=agg_top1, eval_top5=agg_top5,
+                                eval_dir_acc=agg_dir, eval_ppl=ppl)
             except Exception as e:
                 log.warning("eval skipped: %s", e)
         step += 1
