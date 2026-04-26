@@ -47,10 +47,25 @@ class EvalResult:
 
 def _directional(preds: torch.Tensor, targets: torch.Tensor, vocab: int
                  ) -> tuple[int, int]:
-    """Return (hits, total) for directional accuracy."""
-    median = vocab // 2
-    p_sign = torch.sign(preds.float() - median)
-    t_sign = torch.sign(targets.float() - median)
+    """Return (hits, total) for directional accuracy.
+
+    'Directional' here = "did we predict a token in the same half of the
+    actual target distribution as the true target?" This is a tractable
+    proxy for price direction when feature tokens are bin indices —
+    above-median bin = "high" half, below = "low" half.
+
+    NOTE on the threshold: we use the per-batch *target median* as the
+    cutoff, NOT `vocab // 2`. The HybridBinTokenizer with 7 features ×
+    64 buckets uses ~448 token IDs out of vocab=4096, so almost every
+    token lands in [0, 448) and `vocab // 2 = 2048` would always
+    classify everything as 'low' → spurious 100% agreement. Per-batch
+    target-median makes the threshold data-relative and meaningful.
+    """
+    targets_f = targets.float()
+    preds_f = preds.float()
+    median = targets_f.median()
+    p_sign = torch.sign(preds_f - median)
+    t_sign = torch.sign(targets_f - median)
     valid = (p_sign != 0) & (t_sign != 0)
     hits = int(((p_sign == t_sign) & valid).sum().item())
     total = int(valid.sum().item())
