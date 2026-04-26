@@ -58,15 +58,31 @@ class ShardTokenDataset(IterableDataset):
     """Yields fixed-length contexts of token ids from parquet shards.
 
     Rows across shards are concatenated (token-packed) until ctx_len.
+
+    Each row in the parquet has a `tokens` column containing exactly
+    `n_features` tokens in fixed feature order (from feature_spec). When
+    `n_features` is set and `with_feature_offset=True`, the dataset
+    yields (tokens, feature_offset) so evaluators can identify which
+    positions in the context correspond to which feature (e.g., return
+    tokens for trading-relevant directional metrics). The feature_offset
+    cycles through [0, n_features) as windows slide forward by ctx_len:
+    feature_offset = (yield_count * ctx_len) % n_features.
+
+    Backward-compatible: with_feature_offset=False (default) yields the
+    legacy tokens-only tensor used by the training loop.
     """
 
     def __init__(self, shard_paths: Iterable[Path], ctx_len: int,
-                 shuffle_buffer: int = 64, seed: int = 0):
+                 shuffle_buffer: int = 64, seed: int = 0,
+                 n_features: int = 7,
+                 with_feature_offset: bool = False):
         super().__init__()
         self.shards = sorted(Path(p) for p in shard_paths)
         self.ctx_len = ctx_len
         self.shuffle_buffer = shuffle_buffer
         self.seed = seed
+        self.n_features = n_features
+        self.with_feature_offset = with_feature_offset
 
     def _iter_rows(self):
         rng = np.random.default_rng(self.seed)
@@ -86,11 +102,19 @@ class ShardTokenDataset(IterableDataset):
 
     def __iter__(self):
         pack = np.empty(0, dtype=np.int32)
+        consumed = 0
         for arr in self._iter_rows():
             pack = np.concatenate([pack, arr]) if len(pack) else arr
             while len(pack) >= self.ctx_len + 1:
-                yield torch.as_tensor(pack[: self.ctx_len + 1], dtype=torch.long)
+                tokens = torch.as_tensor(pack[: self.ctx_len + 1],
+                                         dtype=torch.long)
+                if self.with_feature_offset:
+                    feat_off = consumed % max(self.n_features, 1)
+                    yield tokens, feat_off
+                else:
+                    yield tokens
                 pack = pack[self.ctx_len:]
+                consumed += self.ctx_len
 
 
 # ---------------------------------------------------------------------------

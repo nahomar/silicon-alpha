@@ -396,12 +396,18 @@ def train(args) -> dict:
                               vocab=cfg.vocab, device=device,
                               batch=args.batch, max_batches=args.eval_max_batches)
                 # Aggregate across ranks so rank 0 reports the global metric.
+                # Carry both the cross-feature (legacy) and return-only
+                # (trading-relevant) directional metrics.
+                ret_n = ev.directional_ret_n
+                ret_acc = (ev.directional_ret_acc
+                           if ret_n > 0 and not (ret_n != ret_n) else 0.0)
                 if world > 1:
                     t = torch.tensor([
                         ev.loss * ev.n_tokens, float(ev.n_tokens),
                         ev.top1_acc * ev.n_tokens,
                         ev.top5_acc * ev.n_tokens,
                         ev.directional_acc * ev.n_tokens,
+                        ret_acc * ret_n, float(ret_n),
                     ], device=device, dtype=torch.float64)
                     dist.all_reduce(t, op=dist.ReduceOp.SUM)
                     n = max(float(t[1].item()), 1.0)
@@ -409,21 +415,38 @@ def train(args) -> dict:
                     agg_top1 = float(t[2].item() / n)
                     agg_top5 = float(t[3].item() / n)
                     agg_dir = float(t[4].item() / n)
+                    agg_ret_n = float(t[6].item())
+                    agg_ret_dir = (float(t[5].item() / agg_ret_n)
+                                   if agg_ret_n > 0 else float("nan"))
                 else:
                     agg_loss = ev.loss; agg_top1 = ev.top1_acc
                     agg_top5 = ev.top5_acc; agg_dir = ev.directional_acc
+                    agg_ret_dir = ev.directional_ret_acc
+                    agg_ret_n = float(ev.directional_ret_n)
                 if rank == 0:
                     ppl = math.exp(min(agg_loss, 50.0))
-                    verdict = "SIGNAL" if agg_dir >= 0.53 else "sub-thresh"
+                    # Verdict is now based on return-only directional
+                    # (the trading-relevant metric), not the cross-feature
+                    # one. The latter is reported for context but the
+                    # 53% threshold applies to ret_dir.
+                    if agg_ret_dir == agg_ret_dir and agg_ret_n > 0:
+                        verdict = "SIGNAL" if agg_ret_dir >= 0.53 else "sub-thresh"
+                        ret_str = f"ret_dir={agg_ret_dir*100:.2f}% (n={int(agg_ret_n)})"
+                    else:
+                        verdict = "n/a"
+                        ret_str = "ret_dir=n/a"
                     print(f"[eval@{step:>6d}] loss={agg_loss:.4f} ppl={ppl:.2f} "
                           f"top1={agg_top1*100:.2f}% top5={agg_top5*100:.2f}% "
-                          f"dir={agg_dir*100:.2f}% [{verdict}]", flush=True)
+                          f"dir={agg_dir*100:.2f}% {ret_str} [{verdict}]",
+                          flush=True)
                     rlog.scalar(step=step, eval_loss=agg_loss,
                                 eval_top1=agg_top1, eval_top5=agg_top5,
-                                eval_dir_acc=agg_dir, eval_ppl=ppl)
-                    # File-based persistence — durable on the Modal volume
-                    # even after log retention ages out. Append JSON-line
-                    # so each eval call adds an entry without overwriting.
+                                eval_dir_acc=agg_dir,
+                                eval_ret_dir_acc=(agg_ret_dir
+                                    if agg_ret_dir == agg_ret_dir else 0.0),
+                                eval_ret_dir_n=agg_ret_n,
+                                eval_ppl=ppl)
+                    # File-based persistence on the Modal volume.
                     if args.ckpt_store:
                         eval_log_path = Path(args.ckpt_store) / "eval_log.jsonl"
                         eval_log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -436,6 +459,9 @@ def train(args) -> dict:
                                 "eval_top1": agg_top1,
                                 "eval_top5": agg_top5,
                                 "eval_dir_acc": agg_dir,
+                                "eval_ret_dir_acc": (agg_ret_dir
+                                    if agg_ret_dir == agg_ret_dir else None),
+                                "eval_ret_dir_n": agg_ret_n,
                                 "verdict": verdict,
                             }) + "\n")
                         print(f"[eval@{step}] appended to {eval_log_path}",
