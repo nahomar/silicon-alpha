@@ -70,7 +70,9 @@ class ShardedTokenDataset(ShardTokenDataset):
     """
 
     def __init__(self, shard_paths, ctx_len, rank: int, world_size: int,
-                 shuffle_buffer: int = 64, seed: int = 0):
+                 shuffle_buffer: int = 64, seed: int = 0,
+                 n_features: int = 7,
+                 with_feature_offset: bool = False):
         all_shards = sorted(Path(p) for p in shard_paths)
         # Shared-seed shuffle so every rank agrees on the global shard order.
         perm_rng = np.random.default_rng(seed)
@@ -80,7 +82,8 @@ class ShardedTokenDataset(ShardTokenDataset):
                      for i in range(rank, len(order), world_size)]
         # Parent uses seed+rank for per-rank within-shard row shuffle.
         super().__init__(my_shards, ctx_len, shuffle_buffer=shuffle_buffer,
-                         seed=seed + rank)
+                         seed=seed + rank, n_features=n_features,
+                         with_feature_offset=with_feature_offset)
         self.rank = rank
         self.world_size = world_size
 
@@ -310,10 +313,26 @@ def train(args) -> dict:
         shard_paths = shard_paths[: args.max_shards]
     if not shard_paths:
         raise RuntimeError(f"no shards for {args.shards!r}")
+    # When the auxiliary directional head is enabled, the dataset yields
+    # (tokens, feature_offset) pairs so the joint-loss path can identify
+    # return-token positions and build labels in-batch. Standard LM-only
+    # training uses the legacy tokens-only iterator (back-compat).
+    use_joint_loss = bool(getattr(cfg, "dir_head_enabled", False))
+    n_feats = int(getattr(cfg, "dir_n_features", 7))
     ds = ShardedTokenDataset(shard_paths, ctx_len=cfg.ctx_len,
-                             rank=rank, world_size=world, seed=args.seed)
-    loader = DataLoader(ds, batch_size=args.batch, num_workers=args.num_workers,
-                        pin_memory=torch.cuda.is_available())
+                             rank=rank, world_size=world, seed=args.seed,
+                             n_features=n_feats,
+                             with_feature_offset=use_joint_loss)
+    if use_joint_loss:
+        from odte.train.eval_loop import _collate_with_feature_offset
+        loader = DataLoader(ds, batch_size=args.batch,
+                            num_workers=args.num_workers,
+                            pin_memory=torch.cuda.is_available(),
+                            collate_fn=_collate_with_feature_offset)
+    else:
+        loader = DataLoader(ds, batch_size=args.batch,
+                            num_workers=args.num_workers,
+                            pin_memory=torch.cuda.is_available())
 
     rlog = RankLogger(rank=rank, wandb_project=args.wandb)
 
@@ -321,16 +340,29 @@ def train(args) -> dict:
     t0 = time.time()
     step = start_step
     run_loss: list[float] = []
+    # For joint-loss logging: track L_lm and L_dir separately so we can
+    # confirm the auxiliary head is actually pulling weight (not just sitting
+    # at 0.69 chance BCE). EMA over the last log_every steps; rank 0 only.
+    run_lm: list[float] = []
+    run_dir: list[float] = []
     while step < args.steps:
         opt.zero_grad(set_to_none=True)
         loss_accum = 0.0
+        lm_accum = 0.0
+        dir_accum = 0.0
         for _ in range(args.grad_accum):
             try:
-                batch = next(loader_iter)
+                item = next(loader_iter)
             except StopIteration:
                 loader_iter = iter(loader)
-                batch = next(loader_iter)
-            batch = batch.to(device, non_blocking=True)
+                item = next(loader_iter)
+            if use_joint_loss:
+                batch, feat_off = item
+                batch = batch.to(device, non_blocking=True)
+                feat_off = feat_off.to(device, non_blocking=True)
+            else:
+                batch = item.to(device, non_blocking=True)
+                feat_off = None
             with wrap_fp8_autocast():
                 # Route through the FSDP-wrapped __call__ (not model.module.loss)
                 # so the pre-forward all-gather hook fires and unshards the
@@ -338,12 +370,39 @@ def train(args) -> dict:
                 # bypass FSDP.__call__ entirely — nn.Embedding.forward then
                 # sees tok_emb.weight as a 1-D shard view and F.embedding
                 # raises "weight must be 2-D". Caught by the 8-GPU smoke.
-                logits = model(batch[:, :-1])
-                target = batch[:, 1:]
-                loss = torch.nn.functional.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)),
-                    target.reshape(-1),
-                )
+                if use_joint_loss:
+                    # FSDP all-gather fires here via the wrapped __call__.
+                    # return_aux=True asks for (lm_logits, dir_logits).
+                    lm_logits, dir_logits = model(
+                        batch[:, :-1], return_aux=True)
+                    target_lm = batch[:, 1:]
+                    L_lm = torch.nn.functional.cross_entropy(
+                        lm_logits.reshape(-1, lm_logits.size(-1)),
+                        target_lm.reshape(-1))
+                    # _build_dir_targets has no parameters — safe to call on
+                    # the inner module (post-gather state is already active
+                    # in the enclosing forward block).
+                    inner = model.module if hasattr(model, "module") else model
+                    dir_tgt, dir_mask = inner._build_dir_targets(
+                        batch, feature_offset=feat_off)
+                    if int(dir_mask.sum().item()) > 0:
+                        L_dir = torch.nn.functional.binary_cross_entropy_with_logits(
+                            dir_logits[dir_mask], dir_tgt[dir_mask],
+                            reduction="mean")
+                    else:
+                        L_dir = torch.zeros(
+                            (), device=device, dtype=lm_logits.dtype)
+                    loss = (float(cfg.dir_alpha) * L_lm
+                            + float(cfg.dir_beta) * L_dir)
+                    lm_accum += float(L_lm.item())
+                    dir_accum += float(L_dir.item())
+                else:
+                    logits = model(batch[:, :-1])
+                    target = batch[:, 1:]
+                    loss = torch.nn.functional.cross_entropy(
+                        logits.reshape(-1, logits.size(-1)),
+                        target.reshape(-1),
+                    )
             (loss / args.grad_accum).backward()
             loss_accum += float(loss.item())
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -357,11 +416,18 @@ def train(args) -> dict:
         else:
             step_loss = loss_accum / args.grad_accum
         run_loss.append(step_loss)
+        if use_joint_loss:
+            run_lm.append(lm_accum / args.grad_accum)
+            run_dir.append(dir_accum / args.grad_accum)
 
         if step % args.log_every == 0:
             avg = float(np.mean(run_loss[-args.log_every:]))
-            rlog.scalar(step=step, loss=avg, lr=sched.get_last_lr()[0],
-                        step_per_s=(step - start_step + 1) / max(1e-3, time.time() - t0))
+            log_kwargs = dict(step=step, loss=avg, lr=sched.get_last_lr()[0],
+                              step_per_s=(step - start_step + 1) / max(1e-3, time.time() - t0))
+            if use_joint_loss and run_lm and run_dir:
+                log_kwargs["L_lm"] = float(np.mean(run_lm[-args.log_every:]))
+                log_kwargs["L_dir"] = float(np.mean(run_dir[-args.log_every:]))
+            rlog.scalar(**log_kwargs)
 
         if step > 0 and step % args.ckpt_every == 0:
             ckpt.save(model, opt, step, best_loss, asdict(cfg), label="ckpt")

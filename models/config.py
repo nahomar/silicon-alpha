@@ -86,6 +86,19 @@ class TradeFMConfig:
     # Tokens arrive with an aligned modality_ids tensor of the same shape.
     # See docs/cross_asset_fusion.md for the token-interleaving schema.
     modality_vocab: int = 0
+    # Auxiliary directional head (Phase-2 Option A, off by default).
+    # When enabled, an MLP predicts price-direction targets at every position
+    # alongside the standard LM logits. The total loss becomes:
+    #     loss = dir_alpha * L_lm + dir_beta * L_dir
+    # Targets are derived from the input tokens at training time (the
+    # n-step-ahead majority direction of return tokens vs the per-batch
+    # median return-token threshold). See odte/transformer_tradefm.py
+    # for the head architecture and target construction.
+    dir_head_enabled: bool = False
+    dir_alpha: float = 1.0
+    dir_beta: float = 0.5
+    dir_horizon: int = 10              # rows-ahead for directional target
+    dir_n_features: int = 7            # number of feature tokens per row
     # Training
     lr: float = 3e-4
     weight_decay: float = 0.01

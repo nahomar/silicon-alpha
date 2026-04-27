@@ -200,13 +200,30 @@ class TradeFM(nn.Module):
         # benefit: clean FSDP sharding, no weight-dim edge cases, and
         # slightly more expressive independent in/out embeddings.
         self.head = nn.Linear(c.d_model, c.vocab, bias=False)
+        # Auxiliary directional head — 3-layer MLP from last hidden state to a
+        # binary "majority direction" logit per position. Disabled by default;
+        # opt-in via cfg.dir_head_enabled. Shape contract: (B, T, d_model)
+        # → (B, T) binary logit.
+        if getattr(c, "dir_head_enabled", False):
+            d_h = c.d_model
+            self.dir_head = nn.Sequential(
+                nn.Linear(d_h, d_h // 2, bias=False),
+                nn.GELU(),
+                nn.Linear(d_h // 2, d_h // 4, bias=False),
+                nn.GELU(),
+                nn.Linear(d_h // 4, 1, bias=True),
+            )
+        else:
+            self.dir_head = None
         head_dim = c.d_model // c.n_heads
         self.register_buffer("freqs_cis",
                              _precompute_freqs_cis(head_dim, c.ctx_len * 2),
                              persistent=False)
 
     def forward(self, tokens: torch.Tensor,
-                modality_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
+                modality_ids: Optional[torch.Tensor] = None,
+                return_aux: bool = False
+                ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         B, T = tokens.shape
         x = self.tok_emb(tokens)
         if self.modality_emb is not None and modality_ids is not None:
@@ -224,7 +241,11 @@ class TradeFM(nn.Module):
             else:
                 x = blk(x, freqs)
         x = self.norm(x)
-        return self.head(x)
+        lm_logits = self.head(x)
+        if return_aux and self.dir_head is not None:
+            dir_logits = self.dir_head(x).squeeze(-1)  # (B, T)
+            return lm_logits, dir_logits
+        return lm_logits
 
     def loss(self, tokens: torch.Tensor,
              modality_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -238,6 +259,126 @@ class TradeFM(nn.Module):
         target = tokens[:, 1:]
         return F.cross_entropy(logits.reshape(-1, self.cfg.vocab),
                                target.reshape(-1))
+
+    def _build_dir_targets(self, tokens: torch.Tensor,
+                           feature_offset: torch.Tensor | int = 0
+                           ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return (dir_target, mask) for tokens of shape (B, T).
+
+        At each position p in the *input* (B, T-1) window, the target is:
+            1 if the count of return tokens in [p+1, p+1+H*N) that are above
+            the per-batch return-token median is > H/2, else 0.
+        where N = cfg.dir_n_features (one full feature cycle per H step) and
+        H = cfg.dir_horizon (rows-ahead).
+
+        `mask` is True where the lookahead window fits inside `tokens` AND
+        the position is itself a return-feature position (feature index 0).
+        Targets at masked-False positions are arbitrary (zero) and excluded
+        from the BCE reduction.
+
+        Shapes: dir_target (B, T-1) float32, mask (B, T-1) bool.
+        """
+        c = self.cfg
+        N = int(getattr(c, "dir_n_features", 7))
+        H = int(getattr(c, "dir_horizon", 10))
+        B, T = tokens.shape
+        device = tokens.device
+
+        # Per-batch threshold computed from return-token positions only.
+        # offsets shape (B,). For sample b, pos p is a return position iff
+        # (p + off_b) % N == 0.
+        if isinstance(feature_offset, int):
+            offsets = torch.full((B,), feature_offset, dtype=torch.long, device=device)
+        else:
+            offsets = feature_offset.to(device=device, dtype=torch.long)
+
+        positions = torch.arange(T, device=device).unsqueeze(0).expand(B, T)
+        feat_idx = (positions + offsets.unsqueeze(1)) % N
+        ret_pos_mask = (feat_idx == 0)
+
+        # Threshold: median over the union of all return-token values in the batch.
+        ret_vals = tokens[ret_pos_mask].float()
+        if ret_vals.numel() == 0:
+            empty = torch.zeros((B, T - 1), device=device, dtype=torch.float32)
+            mask = torch.zeros((B, T - 1), device=device, dtype=torch.bool)
+            return empty, mask
+        thresh = ret_vals.median()
+
+        above = (tokens.float() > thresh).to(torch.float32)  # (B, T)
+
+        # For each input position p (0..T-2), look at next H * N tokens
+        # starting at p+1 and count how many of them are above-threshold
+        # AND at a return-feature position. Then compare to H/2 (i.e.,
+        # majority among the H return positions that fall inside the window).
+        T_in = T - 1
+        target = torch.zeros((B, T_in), device=device, dtype=torch.float32)
+        mask = torch.zeros((B, T_in), device=device, dtype=torch.bool)
+
+        # Slow but correct: iterate over offsets within the lookahead window.
+        # Vectorised over (B, T_in). H*N is small (≤100 at default cfg) so
+        # this is cheap relative to the transformer forward.
+        max_lookahead = H * N
+        if T < 2 + max_lookahead:
+            return target, mask  # window too small to score any position
+
+        # Boolean: at position q = p + 1 + k, is q a return position AND q < T?
+        # For k in [0, H*N): pos_q = positions + 1 + k (broadcast over k).
+        ks = torch.arange(max_lookahead, device=device)              # (H*N,)
+        q_idx = (positions[:, :T_in].unsqueeze(-1) + 1 + ks)         # (B, T_in, H*N)
+        q_in_range = q_idx < T                                       # (B, T_in, H*N)
+        q_feat_idx = (q_idx + offsets.view(B, 1, 1)) % N
+        q_is_ret = (q_feat_idx == 0) & q_in_range                    # (B, T_in, H*N)
+
+        # `above_q` at q_idx — gather from (B, T) above tensor.
+        # Clamp out-of-range indices to 0; mask them out via q_is_ret.
+        q_clamped = torch.where(q_in_range, q_idx, torch.zeros_like(q_idx))
+        above_q = torch.gather(above, 1, q_clamped.view(B, -1)).view(B, T_in, max_lookahead)
+        ups = (above_q * q_is_ret.float()).sum(dim=-1)               # (B, T_in)
+        n_rets = q_is_ret.float().sum(dim=-1)                        # (B, T_in)
+
+        # Position p is "labeled" iff it's a return position AND the full
+        # lookahead window contains H return positions.
+        target = (ups * 2 > n_rets).float()
+        mask = ret_pos_mask[:, :T_in] & (n_rets >= H)
+        return target, mask
+
+    def joint_loss(self, tokens: torch.Tensor,
+                   feature_offset: torch.Tensor | int = 0,
+                   modality_ids: Optional[torch.Tensor] = None,
+                   ) -> dict:
+        """LM + auxiliary directional loss. cfg.dir_head_enabled must be True.
+
+        Returns a dict with:
+          - total: weighted sum (alpha * L_lm + beta * L_dir)
+          - L_lm:  cross-entropy on next-token prediction
+          - L_dir: BCE-with-logits on majority-direction at H rows ahead
+          - n_dir: number of valid directional positions in the batch
+
+        Targets are constructed from the input batch, mirroring the
+        h=`dir_horizon` majority-direction labeling used by the dir_baseline
+        diagnostics.
+        """
+        assert self.dir_head is not None, "joint_loss requires dir_head_enabled"
+        c = self.cfg
+        mids = modality_ids[:, :-1] if modality_ids is not None else None
+        lm_logits, dir_logits = self.forward(
+            tokens[:, :-1], modality_ids=mids, return_aux=True)
+        target_lm = tokens[:, 1:]
+        L_lm = F.cross_entropy(
+            lm_logits.reshape(-1, c.vocab), target_lm.reshape(-1))
+
+        dir_target, dir_mask = self._build_dir_targets(tokens, feature_offset)
+        n_valid = int(dir_mask.sum().item())
+        if n_valid == 0:
+            L_dir = torch.zeros((), device=tokens.device, dtype=lm_logits.dtype)
+        else:
+            logits_flat = dir_logits[dir_mask]
+            target_flat = dir_target[dir_mask]
+            L_dir = F.binary_cross_entropy_with_logits(
+                logits_flat, target_flat, reduction="mean")
+
+        total = float(c.dir_alpha) * L_lm + float(c.dir_beta) * L_dir
+        return {"total": total, "L_lm": L_lm, "L_dir": L_dir, "n_dir": n_valid}
 
     def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())

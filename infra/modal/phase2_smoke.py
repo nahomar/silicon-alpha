@@ -1294,3 +1294,150 @@ def dryrun_eval_524m(
         batch=batch, max_batches=max_batches,
     )
     print("[dryrun_eval_524m] PASS.")
+
+
+# ---------------------------------------------------------------------------
+# Directional-head joint-loss smoke (Phase 2 Option A)
+# ---------------------------------------------------------------------------
+
+@app.function(
+    gpu="T4",
+    cpu=4.0,
+    memory=32768,
+    timeout=900,
+    volumes={"/shards": shard_volume},
+)
+def smoke_dir_head(
+    steps: int = 50,
+    ctx_len: int = 256,
+    batch: int = 4,
+):
+    """Validate the DirectionalHead + joint_loss path end-to-end on real
+    GPU before committing to a multi-day retrain.
+
+    Builds a 16M-ish TradeFM with dir_head_enabled=True, runs a few
+    optimizer steps on real OPRA shards, and asserts:
+
+      1. Forward with return_aux=True returns (lm_logits, dir_logits) of
+         the right shape (no FSDP weight-shape blowup since we're single-GPU).
+      2. _build_dir_targets returns a non-empty mask on real data.
+      3. L_lm decreases over `steps` (model is learning the LM objective).
+      4. L_dir decreases below log(2)≈0.693 (head is finding directional
+         signal, not stuck at chance).
+
+    On a T4 this runs in ~3-5 min for 50 steps and costs ~$0.05.
+    """
+    import os, sys, time, glob as _glob
+    sys.path.insert(0, "/root/repo")
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")
+
+    import math
+    import numpy as np
+    import torch
+    from torch.utils.data import DataLoader
+
+    from models.config import TradeFMConfig
+    from odte.transformer_tradefm import TradeFM
+    from odte.train.pretrain_tradefm import ShardTokenDataset
+    from odte.train.eval_loop import _collate_with_feature_offset
+
+    print(f"[dir-smoke] cuda={torch.cuda.is_available()}  "
+          f"device={torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'}",
+          flush=True)
+
+    base = "/shards/databento_reuse_packed"
+    shard_paths = sorted(
+        Path(p) for p in _glob.glob(f"{base}/*/opra_*.parquet")
+    )[:3]
+    assert shard_paths, f"no shards under {base}"
+    print(f"[dir-smoke] using {len(shard_paths)} shards", flush=True)
+
+    cfg = TradeFMConfig(
+        d_model=256, n_heads=4, n_layers=4, vocab=4096, ctx_len=ctx_len,
+        dropout=0.1, fp8=False, use_flash_attn=False,
+        dir_head_enabled=True, dir_alpha=1.0, dir_beta=0.5,
+        dir_horizon=10, dir_n_features=7,
+    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = TradeFM(cfg).to(device)
+    print(f"[dir-smoke] params: {model.num_params():,}  "
+          f"dir_head: {model.dir_head is not None}", flush=True)
+
+    ds = ShardTokenDataset(shard_paths, ctx_len=cfg.ctx_len, seed=0,
+                           n_features=cfg.dir_n_features,
+                           with_feature_offset=True)
+    loader = DataLoader(ds, batch_size=batch, num_workers=0,
+                        collate_fn=_collate_with_feature_offset)
+
+    opt = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    model.train()
+    history = []
+    t0 = time.time()
+    it = iter(loader)
+    for step in range(steps):
+        try:
+            batch_tok, feat_off = next(it)
+        except StopIteration:
+            it = iter(loader)
+            batch_tok, feat_off = next(it)
+        batch_tok = batch_tok.to(device)
+        feat_off = feat_off.to(device)
+
+        opt.zero_grad(set_to_none=True)
+        lm_logits, dir_logits = model(
+            batch_tok[:, :-1], return_aux=True)
+        target_lm = batch_tok[:, 1:]
+        L_lm = torch.nn.functional.cross_entropy(
+            lm_logits.reshape(-1, cfg.vocab), target_lm.reshape(-1))
+        dir_tgt, dir_mask = model._build_dir_targets(
+            batch_tok, feature_offset=feat_off)
+        n_valid = int(dir_mask.sum().item())
+        if n_valid > 0:
+            L_dir = torch.nn.functional.binary_cross_entropy_with_logits(
+                dir_logits[dir_mask], dir_tgt[dir_mask], reduction="mean")
+        else:
+            L_dir = torch.zeros((), device=device, dtype=lm_logits.dtype)
+        loss = cfg.dir_alpha * L_lm + cfg.dir_beta * L_dir
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
+        history.append({"L_lm": float(L_lm.item()),
+                        "L_dir": float(L_dir.item()),
+                        "n_dir": n_valid})
+        if step % 5 == 0:
+            print(f"[dir-smoke] step={step:>3}  L_lm={float(L_lm.item()):.4f}  "
+                  f"L_dir={float(L_dir.item()):.4f}  "
+                  f"n_dir={n_valid:,}", flush=True)
+
+    elapsed = time.time() - t0
+    early_lm = float(np.mean([h["L_lm"] for h in history[:10]]))
+    late_lm  = float(np.mean([h["L_lm"] for h in history[-10:]]))
+    early_dir = float(np.mean([h["L_dir"] for h in history[:10]]))
+    late_dir  = float(np.mean([h["L_dir"] for h in history[-10:]]))
+    print()
+    print(f"[dir-smoke] ===== RESULT =====", flush=True)
+    print(f"[dir-smoke] steps={steps}  elapsed={elapsed:.1f}s", flush=True)
+    print(f"[dir-smoke] L_lm:  early={early_lm:.4f}  late={late_lm:.4f}  "
+          f"Δ={late_lm-early_lm:+.4f}", flush=True)
+    print(f"[dir-smoke] L_dir: early={early_dir:.4f}  late={late_dir:.4f}  "
+          f"Δ={late_dir-early_dir:+.4f}  (chance=0.6931)", flush=True)
+    lm_ok = late_lm < early_lm
+    dir_ok = late_dir < 0.69 and late_dir < early_dir
+    print(f"[dir-smoke] LM decreasing : {'PASS' if lm_ok else 'FAIL'}",
+          flush=True)
+    print(f"[dir-smoke] dir < chance  : {'PASS' if dir_ok else 'FAIL'}",
+          flush=True)
+
+    return {
+        "steps": steps, "elapsed_s": elapsed,
+        "early_lm": early_lm, "late_lm": late_lm,
+        "early_dir": early_dir, "late_dir": late_dir,
+        "lm_decreasing": lm_ok, "dir_below_chance": dir_ok,
+    }
+
+
+@app.local_entrypoint()
+def dryrun_dir_head(steps: int = 50):
+    """Local entrypoint for the directional-head smoke. ~$0.05, ~5 min on T4."""
+    result = smoke_dir_head.remote(steps=steps)
+    print(f"[dryrun_dir_head] result: {result}")
