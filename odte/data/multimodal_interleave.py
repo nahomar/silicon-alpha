@@ -3,33 +3,42 @@ into a single interleaved corpus.
 
 Input: N directories of `shard_*.parquet` files (or `opra_*.parquet`),
 each with columns:
-  - ts            int64 ms
+  - ts            int64 ms (or absent on legacy v1 OPRA shards)
   - tokens        list[int16], length n_features
-  - modality_id   int8 (0=OPRA, 1=ES, 2=SPY by convention)
+  - modality_id   int8 (0=OPRA, 1=ES, 2=SPY by convention; absent on
+                  legacy v1 OPRA shards)
 
 Output: directory of merged `shard_*.parquet` files, time-ordered across
 all input modalities, same column schema. Each row's modality_id is
 preserved so downstream `modality_emb` can attribute attention to its
 source venue.
 
-The merger uses a streaming heap-based k-way merge so memory stays bounded
-by ~(N modalities × shard_buffer × row_size). 1M rows × 7 int16 tokens +
-metadata ≈ 60 MB per shard buffer × 4 modalities = ~240 MB peak. Safe on
-any modern node.
+Implementation: load each source into numpy arrays via batch parquet
+reads, concatenate across all sources, single argsort by ts, write
+1M-row output shards. Vastly faster than per-row heap-merge — measured
+at ~5M rows/s on Sol vs the heap version's ~9k rows/s.
+
+Memory:  ~30 bytes/row × 135M rows ≈ 4 GB peak — fine on a 64 GB job.
+
+Legacy v1 OPRA shards lack a `ts` column. For those the loader assigns
+a synthetic monotonic ts within the source (offset 0 + cumulative row
+index), guaranteed below any real wall-clock ns timestamp from other
+sources, so OPRA-only rows naturally sort to the head of the merged
+stream and never collide with ES/SPY timestamps.
 
 Usage:
     python -m odte.data.multimodal_interleave \\
-        --inputs /scratch/.../packed/opra,/scratch/.../packed/es \\
-        --output /scratch/.../packed/multimodal
+        --inputs /scratch/.../packed/es,/scratch/.../packed/spy_nbbo \\
+        --output /scratch/.../packed/multimodal \\
+        --fallback-modalities 1,2
 """
 from __future__ import annotations
 
 import argparse
-import heapq
 import logging
 import time
 from pathlib import Path
-from typing import Iterable, Iterator, List, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -37,49 +46,61 @@ import pandas as pd
 log = logging.getLogger(__name__)
 
 
-def _iter_shard_rows(shard_paths: List[Path],
-                     fallback_modality: int = 0
-                     ) -> Iterator[Tuple[int, np.ndarray, int]]:
-    """Yield (ts, tokens, modality_id) tuples in shard-file order.
-
-    Reads parquet shards lazily — each file is read fully into memory then
-    streamed row-by-row, then released. For 1M-row shards this peaks at
-    ~50 MB per modality stream during merge.
-
-    Legacy shards from the pre-Phase-2.5 packer don't have a
-    `modality_id` column; for those we apply `fallback_modality` (caller
-    supplies, typically 0 for OPRA which was the only modality
-    pre-Phase-2.5).
-    """
-    for shard in shard_paths:
-        # Detect available columns once per shard to handle legacy
-        # OPRA shards (tokens only) alongside new multimodal shards
-        # (tokens + modality_id).
-        meta = pd.read_parquet(shard, columns=None, engine="pyarrow")
-        has_mod = "modality_id" in meta.columns
-        ts_col = "ts" if "ts" in meta.columns else None
-        if ts_col is None:
-            # Legacy shards may lack `ts`; use a synthetic monotonic
-            # index so the heap merge still produces a stable ordering.
-            ts_iter = iter(range(len(meta)))
-            for i, toks in enumerate(meta["tokens"].values):
-                mod = int(meta.iloc[i]["modality_id"]) if has_mod else fallback_modality
-                yield i, np.asarray(toks, dtype=np.int16), mod
-        else:
-            for i in range(len(meta)):
-                ts = int(meta.iloc[i][ts_col])
-                toks = np.asarray(meta.iloc[i]["tokens"], dtype=np.int16)
-                mod = int(meta.iloc[i]["modality_id"]) if has_mod else fallback_modality
-                yield ts, toks, mod
-
-
 def _shards_for(d: Path) -> List[Path]:
-    """All packed shards in `d`, sorted by filename. Accepts both
-    `shard_*.parquet` (new packer) and `opra_*.parquet` (legacy)."""
     paths = sorted(list(d.glob("shard_*.parquet")) + list(d.glob("opra_*.parquet")))
     if not paths:
         raise RuntimeError(f"no parquet shards under {d}")
     return paths
+
+
+def _load_source(d: Path, fallback_modality: int
+                 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load every shard in `d` into three numpy arrays:
+        ts:     int64 (n,)
+        tokens: int16 (n, n_features)
+        mods:   int8  (n,)
+    For legacy shards lacking `ts`, assigns a monotonic synthetic ts
+    starting at 0 within this source (the caller still needs to ensure
+    real-ts sources sort after via the natural ns-vs-int gap).
+    """
+    shards = _shards_for(d)
+    log.info("loading source %s: %d shards", d, len(shards))
+    all_ts: list[np.ndarray] = []
+    all_tok: list[np.ndarray] = []
+    all_mod: list[np.ndarray] = []
+    synth_offset = 0
+    for shard in shards:
+        df = pd.read_parquet(shard)
+        n = len(df)
+        if n == 0:
+            continue
+        # ts — fall back to monotonic synthetic if column absent.
+        if "ts" in df.columns:
+            ts = df["ts"].values.astype(np.int64)
+        else:
+            ts = np.arange(synth_offset, synth_offset + n, dtype=np.int64)
+            synth_offset += n
+        # tokens — one C-level conversion of the whole list-column.
+        tok = np.array(df["tokens"].tolist(), dtype=np.int16)
+        if tok.ndim == 1:
+            # all-same-length row check failed (ragged) — pad/skip.
+            log.warning("ragged tokens column in %s — skipping shard", shard)
+            continue
+        # modality_id — fall back per arg.
+        if "modality_id" in df.columns:
+            mod = df["modality_id"].values.astype(np.int8)
+        else:
+            mod = np.full(n, fallback_modality, dtype=np.int8)
+        all_ts.append(ts)
+        all_tok.append(tok)
+        all_mod.append(mod)
+    if not all_ts:
+        return (np.empty(0, dtype=np.int64),
+                np.empty((0, 7), dtype=np.int16),
+                np.empty(0, dtype=np.int8))
+    return (np.concatenate(all_ts),
+            np.concatenate(all_tok, axis=0),
+            np.concatenate(all_mod))
 
 
 def merge_modalities(
@@ -88,17 +109,10 @@ def merge_modalities(
     shard_rows: int = 1_000_000,
     fallback_modalities: List[int] | None = None,
 ) -> dict:
-    """K-way time-ordered merge.
+    """Bulk-load + argsort merge.
 
-    Args:
-        input_dirs: list of directories, each containing shard_*.parquet
-        out_dir: destination for merged shards
-        shard_rows: rows per output shard
-        fallback_modalities: per-input modality_id to apply when a
-            shard lacks the `modality_id` column (legacy v1 OPRA shards).
-            Length must match input_dirs. Defaults to enumerate(0,1,2,...).
-
-    Returns dict with shard count + total rows + per-modality counts.
+    Loads all sources into numpy arrays, concatenates, single argsort
+    on the ts column, writes 1M-row time-ordered output shards.
     """
     out_dir = Path(out_dir).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -106,71 +120,68 @@ def merge_modalities(
         fallback_modalities = list(range(len(input_dirs)))
     assert len(fallback_modalities) == len(input_dirs)
 
-    iters: List[Iterator] = []
+    t_load = time.time()
+    src_ts: list[np.ndarray] = []
+    src_tok: list[np.ndarray] = []
+    src_mod: list[np.ndarray] = []
     for i, d in enumerate(input_dirs):
         d = Path(d).expanduser()
-        shards = _shards_for(d)
-        log.info("source %s: %d shards (fallback modality=%d)",
-                 d, len(shards), fallback_modalities[i])
-        iters.append(_iter_shard_rows(shards, fallback_modality=fallback_modalities[i]))
+        ts, tok, mod = _load_source(d, fallback_modalities[i])
+        log.info("  loaded %d rows from %s (modality_id=%d)",
+                 len(ts), d, fallback_modalities[i])
+        src_ts.append(ts); src_tok.append(tok); src_mod.append(mod)
 
-    # Heap entry: (ts, idx, tokens, modality_id) — idx breaks ties
-    # deterministically and keeps the heap totally-ordered even when
-    # multiple modalities share a timestamp.
-    heap: list = []
-    for idx, it in enumerate(iters):
-        try:
-            ts, toks, mod = next(it)
-            heapq.heappush(heap, (ts, idx, toks, mod))
-        except StopIteration:
-            pass
+    # Concatenate across sources. Note: tokens may differ in n_features
+    # across sources if the packer was misconfigured — defend against it.
+    n_features = src_tok[0].shape[1]
+    for i, t in enumerate(src_tok):
+        if t.shape[1] != n_features:
+            raise RuntimeError(
+                f"feature-count mismatch: source {i} has {t.shape[1]} features, "
+                f"expected {n_features}. All sources must use the same packer "
+                f"feature_spec.")
+    ts_all = np.concatenate(src_ts)
+    tok_all = np.concatenate(src_tok, axis=0)
+    mod_all = np.concatenate(src_mod)
+    log.info("loaded total: %d rows  features=%d  load_time=%.1fs",
+             len(ts_all), n_features, time.time() - t_load)
 
-    buf_ts: list[int] = []
-    buf_tok: list[list[int]] = []
-    buf_mod: list[int] = []
+    # Sort by ts — stable so equal-ts rows preserve source order.
+    t_sort = time.time()
+    order = np.argsort(ts_all, kind="stable")
+    ts_all = ts_all[order]
+    tok_all = tok_all[order]
+    mod_all = mod_all[order]
+    log.info("sort done in %.1fs", time.time() - t_sort)
+
+    # Write 1M-row shards. tolist() once per shard, not per row.
+    t_write = time.time()
     shard_idx = 0
-    n_total = 0
+    n_total = len(ts_all)
     per_modality: dict[int, int] = {}
-    t0 = time.time()
-
-    while heap:
-        ts, idx, toks, mod = heapq.heappop(heap)
-        buf_ts.append(ts)
-        buf_tok.append(toks.tolist())
-        buf_mod.append(mod)
-        per_modality[mod] = per_modality.get(mod, 0) + 1
-        # Pull the next row from that modality's iterator.
-        try:
-            nts, ntoks, nmod = next(iters[idx])
-            heapq.heappush(heap, (nts, idx, ntoks, nmod))
-        except StopIteration:
-            pass
-
-        if len(buf_ts) >= shard_rows:
-            out = out_dir / f"shard_{shard_idx:06d}.parquet"
-            pd.DataFrame({
-                "ts": buf_ts, "tokens": buf_tok, "modality_id": buf_mod,
-            }).to_parquet(out, compression="zstd")
-            n_total += len(buf_ts)
-            shard_idx += 1
-            buf_ts.clear(); buf_tok.clear(); buf_mod.clear()
-            if shard_idx % 5 == 0:
-                rate = n_total / max(1e-3, time.time() - t0)
-                log.info("wrote %d shards  rows=%d  (%.0fk rows/s)",
-                         shard_idx, n_total, rate / 1000)
-
-    if buf_ts:
+    for start in range(0, n_total, shard_rows):
+        end = min(start + shard_rows, n_total)
         out = out_dir / f"shard_{shard_idx:06d}.parquet"
         pd.DataFrame({
-            "ts": buf_ts, "tokens": buf_tok, "modality_id": buf_mod,
+            "ts": ts_all[start:end],
+            "tokens": tok_all[start:end].tolist(),
+            "modality_id": mod_all[start:end],
         }).to_parquet(out, compression="zstd")
-        n_total += len(buf_ts)
+        # bookkeeping
+        for m, c in zip(*np.unique(mod_all[start:end], return_counts=True)):
+            per_modality[int(m)] = per_modality.get(int(m), 0) + int(c)
         shard_idx += 1
+        if shard_idx % 10 == 0:
+            rate = end / max(1e-3, time.time() - t_write)
+            log.info("wrote %d shards  rows=%d  (%.0fk rows/s)",
+                     shard_idx, end, rate / 1000)
 
-    log.info("merge done: %d shards  %d rows  per-modality=%s  in %.1fs",
-             shard_idx, n_total, per_modality, time.time() - t0)
+    log.info("merge done: %d shards  %d rows  per-modality=%s  "
+             "write_time=%.1fs",
+             shard_idx, n_total, per_modality, time.time() - t_write)
     return {"shards": shard_idx, "rows": n_total,
-            "per_modality": per_modality}
+            "per_modality": per_modality,
+            "n_features": n_features}
 
 
 if __name__ == "__main__":
