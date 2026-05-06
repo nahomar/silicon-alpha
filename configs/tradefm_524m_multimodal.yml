@@ -17,7 +17,12 @@ d_model: 2048
 n_heads: 16
 n_layers: 24
 vocab: 4096
-ctx_len: 4096
+# V1 ctx_len: 1024 instead of 4096. Attention cost is O(N^2), so 16x cheaper
+# per step. For directional + cross-asset signals at h=10, 1024 tokens is
+# already 145+ rows of multi-modal context — way more than the 16 rows that
+# capped at AUC 0.64 in our LightGBM baseline. Anneal to 4096 for V2 if/when
+# V1 establishes a baseline.
+ctx_len: 1024
 dropout: 0.0
 
 # Phase 2 H100 path. On A100 (Sol), set fp8=false (TE FP8 needs Hopper);

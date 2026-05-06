@@ -209,6 +209,15 @@ def train(args) -> dict:
     device = _device_for(local_rank)
     log.info("[rank %d/%d] device=%s", rank, world, device)
 
+    # A100/H100 hardware-aware precision: TF32 for fp32 matmuls (~5x throughput
+    # vs strict fp32, negligible accuracy hit) + bf16 autocast for the forward
+    # pass (matches fp32 dynamic range, half the memory). Together these
+    # unlock the A100's 312 TFLOPS Tensor Cores instead of the 19.5 TFLOPS
+    # FP32 path. No-op on CPU.
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
 
@@ -399,7 +408,15 @@ def train(args) -> dict:
                 batch = item.to(device, non_blocking=True)
                 feat_off = None; mids = None
             mids_in = mids[:, :-1] if mids is not None else None
-            with wrap_fp8_autocast():
+            # Pick precision context: bf16 autocast on CUDA (unless cfg.fp8=true,
+            # in which case TE handles it via wrap_fp8_autocast). bf16 matches
+            # fp32 dynamic range and gives ~10× throughput on A100 Tensor Cores
+            # vs naive fp32 — the difference between 5-10 min/step and ~30s/step.
+            if (torch.cuda.is_available() and not getattr(cfg, "fp8", False)):
+                _ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+            else:
+                _ctx = wrap_fp8_autocast()
+            with _ctx:
                 # Route through the FSDP-wrapped __call__ (not model.module.loss)
                 # so the pre-forward all-gather hook fires and unshards the
                 # root flat-param. Calling `model.module.loss(batch)` would
