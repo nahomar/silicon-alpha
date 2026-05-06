@@ -1,0 +1,44 @@
+# TradeFM 524M — multimodal cross-asset (Phase 2.5).
+# Builds on tradefm_524m.yml: same architecture, plus modality_emb +
+# directional head. Multi-modal corpus = OPRA + ES + SPY interleaved.
+#
+# Modality channel adds ~6k params (modality_vocab × d_model = 3 × 2048).
+# Directional head adds ~3M params (3-layer MLP on d_model). Total ~527M.
+#
+# Training entry:
+#   sbatch infra/sol/train_multimodal.sh   (writes a Slurm job)
+# OR direct:
+#   torchrun --nproc_per_node=N --nnodes=M ... \
+#     odte/train/distributed.py \
+#     --config configs/tradefm_524m_multimodal.yml \
+#     --shards "/scratch/.../packed/multimodal/shard_*.parquet"
+
+d_model: 2048
+n_heads: 16
+n_layers: 24
+vocab: 4096
+ctx_len: 4096
+dropout: 0.0
+
+# Phase 2 H100 path. On A100 (Sol), set fp8=false (TE FP8 needs Hopper);
+# bf16 mixed-precision is already auto-enabled in distributed.py.
+fp8: false
+rotary: true
+use_flash_attn: false   # Sol's image doesn't ship flash_attn; SDPA fallback is fine for A100
+
+# Phase 2.5 cross-asset: 3 modalities (OPRA=0, ES=1, SPY=2). The modality
+# channel is added to tok_emb at every position; the model learns
+# cross-asset attention through the standard transformer stack.
+modality_vocab: 3
+
+# Phase 2 Option A: directional head + uncertainty-weighted joint loss.
+# alpha/beta are static for V1; can swap to Kendall LogSigma in V2.
+dir_head_enabled: true
+dir_alpha: 1.0
+dir_beta: 0.5
+dir_horizon: 10
+dir_n_features: 7
+
+lr: 3.0e-4
+weight_decay: 0.1
+warmup_steps: 2000

@@ -313,22 +313,50 @@ def train(args) -> dict:
         shard_paths = shard_paths[: args.max_shards]
     if not shard_paths:
         raise RuntimeError(f"no shards for {args.shards!r}")
-    # When the auxiliary directional head is enabled, the dataset yields
-    # (tokens, feature_offset) pairs so the joint-loss path can identify
-    # return-token positions and build labels in-batch. Standard LM-only
-    # training uses the legacy tokens-only iterator (back-compat).
+    # Two opt-in dataset features:
+    #   - with_feature_offset: needed by the directional head (joint loss)
+    #     to identify which positions are return-tokens.
+    #   - with_modality_ids:    needed by the multi-modal model
+    #     (cfg.modality_vocab > 0) so each token's modality is fed into
+    #     modality_emb at forward time.
+    # Both flags can be on independently; the dataset yields a 2- or 3-tuple
+    # accordingly (see ShardTokenDataset._iter_modality + _iter_legacy).
     use_joint_loss = bool(getattr(cfg, "dir_head_enabled", False))
+    use_modality = int(getattr(cfg, "modality_vocab", 0)) > 0
     n_feats = int(getattr(cfg, "dir_n_features", 7))
     ds = ShardedTokenDataset(shard_paths, ctx_len=cfg.ctx_len,
                              rank=rank, world_size=world, seed=args.seed,
                              n_features=n_feats,
-                             with_feature_offset=use_joint_loss)
-    if use_joint_loss:
+                             with_feature_offset=use_joint_loss,
+                             with_modality_ids=use_modality)
+    if use_joint_loss or use_modality:
         from odte.train.eval_loop import _collate_with_feature_offset
+
+        def _collate(batch):
+            """Stack the variable-length yielded tuples into batched tensors.
+            Yielded item shapes (per dataset config):
+              (tokens,)                              base
+              (tokens, feat_off)                     +offset
+              (tokens, mids)                         +modality
+              (tokens, feat_off, mids)               +both
+            Returns dict with keys present in the batch.
+            """
+            out = {"tokens": torch.stack([b[0] for b in batch], dim=0)}
+            if use_joint_loss and use_modality:
+                out["feat_off"] = torch.tensor([int(b[1]) for b in batch],
+                                               dtype=torch.long)
+                out["mids"] = torch.stack([b[2] for b in batch], dim=0)
+            elif use_joint_loss:
+                out["feat_off"] = torch.tensor([int(b[1]) for b in batch],
+                                               dtype=torch.long)
+            elif use_modality:
+                out["mids"] = torch.stack([b[1] for b in batch], dim=0)
+            return out
+
         loader = DataLoader(ds, batch_size=args.batch,
                             num_workers=args.num_workers,
                             pin_memory=torch.cuda.is_available(),
-                            collate_fn=_collate_with_feature_offset)
+                            collate_fn=_collate)
     else:
         loader = DataLoader(ds, batch_size=args.batch,
                             num_workers=args.num_workers,
@@ -356,13 +384,19 @@ def train(args) -> dict:
             except StopIteration:
                 loader_iter = iter(loader)
                 item = next(loader_iter)
-            if use_joint_loss:
-                batch, feat_off = item
-                batch = batch.to(device, non_blocking=True)
-                feat_off = feat_off.to(device, non_blocking=True)
+            # Unify on a dict shape: {tokens, [feat_off], [mids]} regardless
+            # of which flags are on. Older path that returns a bare tensor
+            # is the all-flags-off legacy case.
+            if isinstance(item, dict):
+                batch = item["tokens"].to(device, non_blocking=True)
+                feat_off = (item["feat_off"].to(device, non_blocking=True)
+                            if "feat_off" in item else None)
+                mids = (item["mids"].to(device, non_blocking=True)
+                        if "mids" in item else None)
             else:
                 batch = item.to(device, non_blocking=True)
-                feat_off = None
+                feat_off = None; mids = None
+            mids_in = mids[:, :-1] if mids is not None else None
             with wrap_fp8_autocast():
                 # Route through the FSDP-wrapped __call__ (not model.module.loss)
                 # so the pre-forward all-gather hook fires and unshards the
@@ -374,7 +408,7 @@ def train(args) -> dict:
                     # FSDP all-gather fires here via the wrapped __call__.
                     # return_aux=True asks for (lm_logits, dir_logits).
                     lm_logits, dir_logits = model(
-                        batch[:, :-1], return_aux=True)
+                        batch[:, :-1], modality_ids=mids_in, return_aux=True)
                     target_lm = batch[:, 1:]
                     L_lm = torch.nn.functional.cross_entropy(
                         lm_logits.reshape(-1, lm_logits.size(-1)),
@@ -397,7 +431,7 @@ def train(args) -> dict:
                     lm_accum += float(L_lm.item())
                     dir_accum += float(L_dir.item())
                 else:
-                    logits = model(batch[:, :-1])
+                    logits = model(batch[:, :-1], modality_ids=mids_in)
                     target = batch[:, 1:]
                     loss = torch.nn.functional.cross_entropy(
                         logits.reshape(-1, logits.size(-1)),
