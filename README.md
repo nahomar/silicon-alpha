@@ -53,7 +53,7 @@ flowchart TB
     end
 
     %% ========== LAYER 1: NEURAL FORECASTER ==========
-    subgraph L1["Layer 1 - Neural Forecaster (target: 4.6-15.8 us @ H100)"]
+    subgraph L1["Layer 1 - Neural Forecaster (target 4.6-15.8 us H100)"]
         direction TB
         RDMA["GPUDirect RDMA<br/>HBM3 ring buffer"]
         KERNEL["Persistent CUDA Kernels<br/>SM90a always-resident"]
