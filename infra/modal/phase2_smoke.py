@@ -954,6 +954,154 @@ def pack_one_day(job_id: str, day_label: str, split: str):
     return smoke_databento_reuse.local(job_id=job_id, max_files=99)
 
 
+@app.function(
+    cpu=4.0,
+    memory=65536,
+    timeout=7200,
+    volumes={"/shards": shard_volume},
+)
+def repack_one_day_v2(job_id: str):
+    """Phase-6 v1 re-pack: reads already-downloaded DBN files from
+    /shards/databento_reuse/{job_id}/ and re-tokenizes them with the
+    enriched 10-feature spec (original 7 + ofi + mid_accel + spread_vel).
+
+    Output goes to /shards/databento_v2_packed/{job_id}/ — a sibling to
+    the existing v1 packed shards. Both can coexist; the multiday baseline
+    can point at either.
+
+    No download cost — DBN files are persisted from the original ingest.
+    Pack cost is just the tokenizer-fit + tokenize + parquet-write pass.
+    """
+    import os, sys, time
+    sys.path.insert(0, "/root/repo")
+
+    raw_dir = Path(f"/shards/databento_reuse/{job_id}")
+    if not raw_dir.exists():
+        raise RuntimeError(f"no DBN files at {raw_dir}; run pack_one_day first")
+    dbn_files = sorted(raw_dir.glob("*.dbn*"))
+    if not dbn_files:
+        raise RuntimeError(f"no .dbn / .dbn.zst files under {raw_dir}")
+    print(f"[repack-v2] {job_id}: {len(dbn_files)} DBN files",
+          flush=True)
+
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    from odte.data.databento_pack import iter_dbn_chunks, prepare_features
+    from odte.data.datashop_pack import (
+        DataShopPacker, default_feature_spec_v2,
+    )
+    from odte.data.streaming_quantiles import fit_hybrid_from_chunks
+    from odte.tokenizer import HybridBinTokenizer
+    import pandas as pd
+
+    out_dir = Path(f"/shards/databento_v2_packed/{job_id}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    packer = DataShopPacker(
+        out_dir=out_dir, n_buckets=64, shard_rows=1_000_000,
+        feature_spec=default_feature_spec_v2(),
+    )
+    print(f"[repack-v2] feature_spec ({len(packer.feature_spec)}): "
+          f"{list(packer.feature_spec)}", flush=True)
+
+    # Two-pass: fit tokenizer streaming, then tokenize + write shards.
+    n_chunks = [0]; n_rows = [0]
+    def _all_chunks():
+        t0 = time.time()
+        for p in dbn_files:
+            print(f"[repack-v2] fit pass: opening {p.name}", flush=True)
+            for ch in iter_dbn_chunks(p):
+                ch_feat = prepare_features(ch)
+                n_chunks[0] += 1
+                n_rows[0] += len(ch_feat)
+                if n_chunks[0] % 50 == 0:
+                    rate = n_rows[0] / max(1e-3, time.time() - t0)
+                    print(f"[repack-v2] fit chunk {n_chunks[0]}  "
+                          f"rows={n_rows[0]:,}  ({rate/1000:.0f}k rows/s)",
+                          flush=True)
+                yield ch_feat
+
+    print("[repack-v2] fitting tokenizer…", flush=True)
+    t0 = time.time()
+    edges = fit_hybrid_from_chunks(_all_chunks(), packer.feature_spec,
+                                   n_buckets=packer.n_buckets)
+    tok = HybridBinTokenizer(n_buckets=packer.n_buckets,
+                             feature_spec=packer.feature_spec)
+    tok.edges = edges
+    packer.tokenizer = tok
+    print(f"[repack-v2] tokenizer fit in {time.time()-t0:.1f}s "
+          f"({n_rows[0]:,} rows scanned)", flush=True)
+
+    # Write pass.
+    print("[repack-v2] writing shards…", flush=True)
+    t0 = time.time(); n_written = [0]
+    shard_idx = 0
+    buf_tokens: list[list[int]] = []
+    buf_meta: list[dict] = []
+    for p in dbn_files:
+        print(f"[repack-v2] write pass: {p.name}", flush=True)
+        for ch in iter_dbn_chunks(p):
+            feats = prepare_features(ch)
+            toks = tok.tokenize_batch(
+                feats, feature_order=list(packer.feature_spec))
+            for i, tok_row in enumerate(toks):
+                buf_tokens.append(tok_row.tolist())
+                buf_meta.append({
+                    "ts": int(feats.iloc[i]["ts_ms"]),
+                    "underlying": "SPX",
+                    "expiry": "0DTE",
+                    "day": str(feats.iloc[i]["quote_datetime"].date()),
+                })
+            while len(buf_tokens) >= packer.shard_rows:
+                shard_path = out_dir / f"opra_{shard_idx:06d}.parquet"
+                df_out = pd.DataFrame({
+                    "ts": [m["ts"] for m in buf_meta[:packer.shard_rows]],
+                    "tokens": buf_tokens[:packer.shard_rows],
+                    "underlying": [m["underlying"] for m in buf_meta[:packer.shard_rows]],
+                    "expiry": [m["expiry"] for m in buf_meta[:packer.shard_rows]],
+                    "day": [m["day"] for m in buf_meta[:packer.shard_rows]],
+                })
+                df_out.to_parquet(shard_path, compression="zstd")
+                n_written[0] += packer.shard_rows
+                shard_idx += 1
+                buf_tokens = buf_tokens[packer.shard_rows:]
+                buf_meta = buf_meta[packer.shard_rows:]
+                if shard_idx % 5 == 0:
+                    rate = n_written[0] / max(1e-3, time.time() - t0)
+                    print(f"[repack-v2] wrote {shard_idx} shards  "
+                          f"({n_written[0]:,} rows  "
+                          f"{rate/1000:.0f}k rows/s)", flush=True)
+    # Final partial shard.
+    if buf_tokens:
+        shard_path = out_dir / f"opra_{shard_idx:06d}.parquet"
+        df_out = pd.DataFrame({
+            "ts": [m["ts"] for m in buf_meta],
+            "tokens": buf_tokens,
+            "underlying": [m["underlying"] for m in buf_meta],
+            "expiry": [m["expiry"] for m in buf_meta],
+            "day": [m["day"] for m in buf_meta],
+        })
+        df_out.to_parquet(shard_path, compression="zstd")
+        n_written[0] += len(buf_tokens)
+        shard_idx += 1
+    print(f"[repack-v2] done: {shard_idx} shards, {n_written[0]:,} rows  "
+          f"in {time.time()-t0:.1f}s", flush=True)
+    return {"job_id": job_id, "shards": shard_idx, "rows": n_written[0],
+            "n_features": len(packer.feature_spec)}
+
+
+@app.local_entrypoint()
+def dryrun_repack_v2(job_id: str = "OPRA-20260420-CTDQCTDCGX"):
+    """Re-pack one day of OPRA data with the Phase-6 v1 enriched feature
+    spec (10 features = original 7 + ofi + mid_accel + spread_vel).
+    Writes to /shards/databento_v2_packed/{job_id}/. ~$0.50, ~30 min."""
+    result = repack_one_day_v2.remote(job_id=job_id)
+    print(f"[dryrun_repack_v2] result: {result}")
+
+
 @app.local_entrypoint()
 def dryrun_pack_all():
     """Download + pack every Databento job listed in scripts/databento_jobs.json.

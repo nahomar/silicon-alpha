@@ -66,8 +66,22 @@ def iter_csv_chunks(path: Path, chunksize: int = 100_000,
 def prepare_features(chunk: pd.DataFrame) -> pd.DataFrame:
     """Derive the feature columns HybridBinTokenizer expects.
 
-    Returned columns match odte.tokenizer.default_microstructure_spec():
+    Always-emitted columns:
         ret, mid, micro_dev, spread, bid_sz, ask_sz, last_sz, inter_arrival_ms
+
+    Phase-6 v1 microstructure factor columns (always computed; opt-in via
+    `default_feature_spec_v2()`):
+        ofi          single-level Cont (2014) order-flow imbalance — net of
+                     bid-side and ask-side queue pressure events. Empirically
+                     explains a large fraction of short-horizon mid-price
+                     change in equity LOB; first principled factor to add
+                     when the existing 7-feature set caps at ~AUC 0.64
+                     across multi-day h=10 directional eval.
+        mid_accel    2nd-difference of log-mid (i.e. diff of `ret`).
+                     Captures momentum acceleration / regime shifts the
+                     1st-order return token can't express.
+        spread_vel   1st-difference of spread. Liquidity-regime signal —
+                     widening spread often presages directional moves.
     """
     df = chunk.copy()
     df["quote_datetime"] = pd.to_datetime(df["quote_datetime"], errors="coerce")
@@ -82,25 +96,68 @@ def prepare_features(chunk: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values("ts_ms")
     df["inter_arrival_ms"] = df["ts_ms"].diff().fillna(0.0).clip(lower=1e-3)
     df["ret"] = np.log(df["mid"]).diff().fillna(0.0)
+
+    # ---- Phase-6 v1 factors ----
+    bid = df["bid"].astype(float).values
+    ask = df["ask"].astype(float).values
+    bid_sz = df["bid_sz"].values
+    ask_sz = df["ask_sz"].values
+    bid_prev = np.concatenate([bid[:1], bid[:-1]])
+    ask_prev = np.concatenate([ask[:1], ask[:-1]])
+    bid_sz_prev = np.concatenate([bid_sz[:1], bid_sz[:-1]])
+    ask_sz_prev = np.concatenate([ask_sz[:1], ask_sz[:-1]])
+    # Cont (2014) per-event bid/ask contributions:
+    e_bid = np.where(bid > bid_prev, bid_sz,
+            np.where(bid < bid_prev, -bid_sz_prev, bid_sz - bid_sz_prev))
+    e_ask = np.where(ask < ask_prev, ask_sz,
+            np.where(ask > ask_prev, -ask_sz_prev, ask_sz - ask_sz_prev))
+    df["ofi"] = (e_bid - e_ask).astype(np.float64)
+    df["mid_accel"] = df["ret"].diff().fillna(0.0)
+    df["spread_vel"] = df["spread"].diff().fillna(0.0)
     return df
+
+
+def default_feature_spec_v1() -> Dict[str, str]:
+    """7-feature spec used by all packs prior to Phase 6 (back-compat)."""
+    return {
+        "ret": "quantile", "mid": "quantile",
+        "spread": "log", "bid_sz": "log", "ask_sz": "log",
+        "last_sz": "log", "inter_arrival_ms": "log",
+    }
+
+
+def default_feature_spec_v2() -> Dict[str, str]:
+    """10-feature spec adding Phase-6 v1 microstructure factors.
+
+    The new factors are signed and can have heavy tails on either side, so
+    "quantile" (empirical-bucket) is the right tokenizer kind — "log"
+    would clip the negatives. Order is: original 7 first, then new 3, so
+    feature index 0 (`ret`) is preserved for downstream code that expects
+    "feature 0 = return-token" (e.g. dir_baseline_*.py, eval_loop.py)."""
+    base = default_feature_spec_v1()
+    base.update({
+        "ofi": "quantile",
+        "mid_accel": "quantile",
+        "spread_vel": "quantile",
+    })
+    return base
 
 
 @dataclass
 class DataShopPacker:
     out_dir: Path
+    # Default = v1 spec (7 features, pre-Phase-6) for back-compat. Pass
+    # `feature_spec=default_feature_spec_v2()` to opt into the +3 microstructure
+    # factor columns.
+    # NOTE: "micro_dev" intentionally absent from both v1 and v2 specs until
+    # the full-depth feed lands. prepare_features() still writes the column
+    # as 0.0 (placeholder) but feeding a dead constant into the tokenizer
+    # produces degenerate quantile edges and a wasted feature dimension in
+    # the model.
+    # TODO(phase-2-backfill): restore "micro_dev": "quantile" once the
+    # full-depth feed is wired and prepare_features computes it.
     feature_spec: Dict[str, str] = field(
-        default_factory=lambda: {
-            "ret": "quantile", "mid": "quantile",
-            # NOTE: "micro_dev" intentionally dropped from feature_spec until
-            # the full-depth feed lands. prepare_features() still writes the
-            # column as 0.0 (placeholder) but feeding a dead constant into
-            # the tokenizer produces degenerate quantile edges and a wasted
-            # feature dimension in the model.
-            # TODO(phase-2-backfill): restore "micro_dev": "quantile" once
-            # the full-depth feed is wired and prepare_features computes it.
-            "spread": "log", "bid_sz": "log", "ask_sz": "log",
-            "last_sz": "log", "inter_arrival_ms": "log",
-        }
+        default_factory=default_feature_spec_v1
     )
     n_buckets: int = 64
     shard_rows: int = 1_000_000

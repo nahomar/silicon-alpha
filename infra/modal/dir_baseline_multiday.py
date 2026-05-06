@@ -65,6 +65,7 @@ def run_multiday_baseline(
     n_features: int = 7,
     horizons: list[int] = DEFAULT_HORIZONS,
     train_frac: float = 0.80,
+    shards_root: str = "databento_reuse_packed",
 ):
     """Train LightGBM per-horizon on cross-day eval, reporting AUC + balanced
     accuracy + per-day breakdown."""
@@ -75,8 +76,10 @@ def run_multiday_baseline(
     from sklearn.metrics import roc_auc_score, balanced_accuracy_score
     from numpy.lib.stride_tricks import sliding_window_view
 
-    base = Path("/shards/databento_reuse_packed")
+    base = Path(f"/shards/{shards_root}")
     assert base.exists(), f"no packed shards at {base}"
+    print(f"[multiday] shards_root={shards_root}  n_features={n_features}",
+          flush=True)
 
     day_paths: dict[str, list[Path]] = {}
     for job_dir in sorted(base.iterdir()):
@@ -310,10 +313,17 @@ def run_multiday_baseline(
 @app.local_entrypoint()
 def main(history_rows: int = 16,
          max_shards_per_day: int = 50,
-         train_frac: float = 0.80):
-    """~10-15 min wall-clock, ~$0.40-0.60 on Modal CPU."""
+         train_frac: float = 0.80,
+         shards_root: str = "databento_reuse_packed",
+         n_features: int = 7):
+    """~10-15 min wall-clock, ~$0.40-0.60 on Modal CPU.
+
+    Pass --shards-root databento_v2_packed --n-features 10 to baseline
+    the Phase-6 v1 enriched feature set."""
     run_multiday_baseline.remote(
         history_rows=history_rows,
         max_shards_per_day=max_shards_per_day,
         train_frac=train_frac,
+        shards_root=shards_root,
+        n_features=n_features,
     )
