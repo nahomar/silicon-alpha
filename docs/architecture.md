@@ -20,7 +20,7 @@ flowchart TB
     subgraph DATA["Layer 0 - Real-time Market Ingestion"]
         direction LR
         OPRA["OPRA cmbp-1<br/>SPX/NDX options<br/>(Databento, live)"]
-        ES["ES Futures MBP-1<br/>(GLBX, Phase 2.5)"]
+        ES["ES Futures MBP-1<br/>(GLBX, live since 2026-05-06)"]
         POLY["Polymarket CLOB WSS<br/>(~100ms, Phase 3+)"]
         KAL["Kalshi CLOB WSS<br/>(~100ms, Phase 3+)"]
     end
@@ -41,7 +41,7 @@ flowchart TB
     end
 
     %% ========== LAYER 1: NEURAL FORECASTER ==========
-    subgraph L1["Layer 1 - Neural Forecaster (H100, 4.6-15.8 us)"]
+    subgraph L1["Layer 1 - Neural Forecaster (target: 4.6-15.8 us @ H100)"]
         direction TB
         RDMA["GPUDirect RDMA<br/>HBM3 ring buffer"]
         KERNEL["Persistent CUDA Kernels<br/>SM90a always-resident"]
@@ -183,7 +183,7 @@ phases, warm cream for terminal execution venues.
 |---|---|---|
 | 1 | `notebooks/colab_phase1_tradefm.ipynb` | done |
 | 2 | `infra/gcp/phase2_a3mega.sh`, `odte/train/distributed.py` | pipeline validated, compute-gated |
-| 2.5 | [`cross_asset_fusion.md`](cross_asset_fusion.md) | scaffold (`cme_es_pack.py`, modality embedding) |
+| 2.5 | [`cross_asset_fusion.md`](cross_asset_fusion.md) | **live** — ES + SPY MBP-1 packed, multimodal interleaver functional, training launching on Sol A100 |
 | 3 | `odte/kernels/*.cu` | scaffold |
 | 3.5 | [`fpga_bridge.md`](fpga_bridge.md) | design only |
 | 4 | [`phase4_strategic_layer.md`](phase4_strategic_layer.md) | design only |
@@ -203,17 +203,21 @@ phases, warm cream for terminal execution venues.
 
 ## Critical path today
 
-1. ✅ OPRA ingestion (Databento)
+1. ✅ OPRA ingestion (Databento, 5 days April 2026)
 2. ✅ Streaming tokenizer fit on real MBP-1 tape
 3. ✅ Real-data 40M training smoke (loss 1.97 on 1 day)
-4. ✅ 8-GPU FSDP + NCCL validated on real OPRA
-5. 🔄 5-day 2026-04 Databento corpus (in-flight)
-6. 🔄 524M multi-day pretrain (queued, 8× H100, 10h timeout)
-7. ❌ Phase 3 persistent-kernel live inference — blocked on (6)
-8. ❌ Broker / exchange order submission — blocked on (7)
-9. ❌ Phase 3.5 FPGA bridge — blocked on (8) + $15-30k card + HDL engineer
-10. ❌ Phase 4 strategic layer — blocked on (8) + live trade logs
-11. ❌ Phase 5 agentic governance — blocked on (8) + QP solver live
-12. ❌ Phase 6 alpha factor discovery — blocked on (6) + AUM justifying $250k+/yr data
-13. ❌ Phase 7 alt-data integration — blocked on (12) + AUM justifying $140k+/yr data
-14. ❌ Phase 8 sovereign infrastructure (3FS + Engram + MoE + QRAFTI Quant Dev) — blocked on (6) hitting capacity ceiling + capex for 3FS pool ($200k-$1M)
+4. ✅ 8-GPU FSDP + NCCL validated on real OPRA (Modal)
+5. ✅ Multi-node FSDP + InfiniBand validated on Sol (2026-05-05)
+6. ✅ ES + SPY (NBBO + NASDAQ L3) acquired and packed (2026-05-06)
+7. ✅ Multimodal interleaver — 510M-row corpus (~3.6B tokens) merged
+8. 🔄 524M multimodal pretrain — launching on Sol A100, single-GPU (queued)
+9. 🔄 Full 6-day OPRA download from Modal (Mac, background)
+10. ❌ 524M multi-day multimodal retrain on full corpus — blocked on (9)
+11. ❌ Phase 3 persistent-kernel live inference — blocked on (8)
+12. ❌ Broker / exchange order submission — blocked on (11)
+13. ❌ Phase 3.5 FPGA bridge — blocked on (12) + $15-30k card + HDL engineer
+14. ❌ Phase 4 strategic layer — blocked on (12) + live trade logs
+15. ❌ Phase 5 agentic governance — blocked on (12) + QP solver live
+16. ❌ Phase 6 alpha factor discovery — blocked on (8) + AUM justifying $250k+/yr data
+17. ❌ Phase 7 alt-data integration — blocked on (16) + AUM justifying $140k+/yr data
+18. ❌ Phase 8 sovereign infrastructure (3FS + Engram + MoE + QRAFTI Quant Dev) — blocked on (8) hitting capacity ceiling + capex for 3FS pool ($200k-$1M)
