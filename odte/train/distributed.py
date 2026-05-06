@@ -72,7 +72,8 @@ class ShardedTokenDataset(ShardTokenDataset):
     def __init__(self, shard_paths, ctx_len, rank: int, world_size: int,
                  shuffle_buffer: int = 64, seed: int = 0,
                  n_features: int = 7,
-                 with_feature_offset: bool = False):
+                 with_feature_offset: bool = False,
+                 with_modality_ids: bool = False):
         all_shards = sorted(Path(p) for p in shard_paths)
         # Shared-seed shuffle so every rank agrees on the global shard order.
         perm_rng = np.random.default_rng(seed)
@@ -83,7 +84,8 @@ class ShardedTokenDataset(ShardTokenDataset):
         # Parent uses seed+rank for per-rank within-shard row shuffle.
         super().__init__(my_shards, ctx_len, shuffle_buffer=shuffle_buffer,
                          seed=seed + rank, n_features=n_features,
-                         with_feature_offset=with_feature_offset)
+                         with_feature_offset=with_feature_offset,
+                         with_modality_ids=with_modality_ids)
         self.rank = rank
         self.world_size = world_size
 
