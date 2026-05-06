@@ -68,14 +68,23 @@ class ShardTokenDataset(IterableDataset):
     cycles through [0, n_features) as windows slide forward by ctx_len:
     feature_offset = (yield_count * ctx_len) % n_features.
 
-    Backward-compatible: with_feature_offset=False (default) yields the
-    legacy tokens-only tensor used by the training loop.
+    When `with_modality_ids=True`, the dataset also reads each row's
+    `modality_id` column from the shards (added by the multimodal pack
+    pipeline; OPRA=0, ES=1, SPY=2). Each token in the yielded context
+    inherits the modality_id of its source row — so a 7-feature row with
+    modality_id=1 contributes 7 consecutive positions all tagged 1.
+    Yields (tokens, modality_ids) when offset is off, or
+    (tokens, feature_offset, modality_ids) when both are on.
+
+    Backward-compatible: both flags off (default) yields the legacy
+    tokens-only tensor used by the LM-only training loop.
     """
 
     def __init__(self, shard_paths: Iterable[Path], ctx_len: int,
                  shuffle_buffer: int = 64, seed: int = 0,
                  n_features: int = 7,
-                 with_feature_offset: bool = False):
+                 with_feature_offset: bool = False,
+                 with_modality_ids: bool = False):
         super().__init__()
         self.shards = sorted(Path(p) for p in shard_paths)
         self.ctx_len = ctx_len
@@ -83,24 +92,40 @@ class ShardTokenDataset(IterableDataset):
         self.seed = seed
         self.n_features = n_features
         self.with_feature_offset = with_feature_offset
+        self.with_modality_ids = with_modality_ids
 
     def _iter_rows(self):
+        """Yield either tokens-only ndarray or (tokens, modality_id) tuple
+        per source row, depending on `with_modality_ids`. Tokens are int32
+        ndarray of length n_features; modality_id is a single int."""
         rng = np.random.default_rng(self.seed)
         order = list(self.shards)
         rng.shuffle(order)
+        cols = (["tokens", "modality_id"] if self.with_modality_ids
+                else ["tokens"])
         for shard in order:
-            df = pd.read_parquet(shard, columns=["tokens"])
+            df = pd.read_parquet(shard, columns=cols)
             buf = []
             idx = list(range(len(df)))
             rng.shuffle(idx)
             for i in idx:
-                buf.append(np.asarray(df.iloc[i]["tokens"], dtype=np.int32))
+                arr = np.asarray(df.iloc[i]["tokens"], dtype=np.int32)
+                if self.with_modality_ids:
+                    buf.append((arr, int(df.iloc[i]["modality_id"])))
+                else:
+                    buf.append(arr)
                 if len(buf) >= self.shuffle_buffer:
                     yield from buf
                     buf = []
             yield from buf
 
     def __iter__(self):
+        if self.with_modality_ids:
+            yield from self._iter_modality()
+        else:
+            yield from self._iter_legacy()
+
+    def _iter_legacy(self):
         pack = np.empty(0, dtype=np.int32)
         consumed = 0
         for arr in self._iter_rows():
@@ -114,6 +139,34 @@ class ShardTokenDataset(IterableDataset):
                 else:
                     yield tokens
                 pack = pack[self.ctx_len:]
+                consumed += self.ctx_len
+
+    def _iter_modality(self):
+        """Track per-token modality_id alongside the packed token stream.
+        Each source row's n_features tokens inherit its modality_id.
+        Yields (tokens, modality_ids) with both shape (ctx_len + 1,) for
+        teacher-forced LM training, or appends feature_offset when
+        `with_feature_offset=True`."""
+        pack = np.empty(0, dtype=np.int32)
+        mod_pack = np.empty(0, dtype=np.int8)
+        consumed = 0
+        for arr, mod in self._iter_rows():
+            mod_arr = np.full(arr.shape[0], mod, dtype=np.int8)
+            pack = np.concatenate([pack, arr]) if len(pack) else arr
+            mod_pack = (np.concatenate([mod_pack, mod_arr])
+                        if len(mod_pack) else mod_arr)
+            while len(pack) >= self.ctx_len + 1:
+                tokens = torch.as_tensor(pack[: self.ctx_len + 1],
+                                         dtype=torch.long)
+                mids = torch.as_tensor(mod_pack[: self.ctx_len + 1],
+                                       dtype=torch.long)
+                if self.with_feature_offset:
+                    feat_off = consumed % max(self.n_features, 1)
+                    yield tokens, feat_off, mids
+                else:
+                    yield tokens, mids
+                pack = pack[self.ctx_len:]
+                mod_pack = mod_pack[self.ctx_len:]
                 consumed += self.ctx_len
 
 
