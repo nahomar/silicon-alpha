@@ -32,7 +32,7 @@ flowchart TB
     subgraph DATA["Layer 0 - Real-time Market Ingestion"]
         direction LR
         OPRA["OPRA cmbp-1<br/>SPX/NDX options<br/>(Databento, live)"]
-        ES["ES Futures MBP-1<br/>(GLBX, Phase 2.5)"]
+        ES["ES Futures MBP-1<br/>(GLBX, live since 2026-05-06)"]
         POLY["Polymarket CLOB WSS<br/>(~100ms, Phase 3+)"]
         KAL["Kalshi CLOB WSS<br/>(~100ms, Phase 3+)"]
     end
@@ -53,7 +53,7 @@ flowchart TB
     end
 
     %% ========== LAYER 1: NEURAL FORECASTER ==========
-    subgraph L1["Layer 1 - Neural Forecaster (H100, 4.6-15.8 us)"]
+    subgraph L1["Layer 1 - Neural Forecaster (target: 4.6-15.8 us @ H100)"]
         direction TB
         RDMA["GPUDirect RDMA<br/>HBM3 ring buffer"]
         KERNEL["Persistent CUDA Kernels<br/>SM90a always-resident"]
@@ -181,9 +181,9 @@ critical-path tracker also lives at [`docs/architecture.md`](docs/architecture.m
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | 40M TradeFM Colab pretrain | ✅ done ([`notebooks/colab_phase1_tradefm.ipynb`](notebooks/colab_phase1_tradefm.ipynb)) |
-| 2 | 524M multi-node H100 pretrain on OPRA | 🔄 pipeline validated on Modal; multi-node compute gated |
-| 2.5 | Cross-asset fusion (ES futures modality) | 📝 design ([`docs/cross_asset_fusion.md`](docs/cross_asset_fusion.md)) + opt-in scaffold |
-| 3 | Persistent-kernel live inference (4.6–15.8 µs) | 📝 kernels scaffolded, not live |
+| 2 | 524M multi-node H100 pretrain on OPRA | ✅ multi-node FSDP+InfiniBand validated on Sol (2026-05-05); training launching |
+| 2.5 | Cross-asset fusion (ES + SPY modalities) | ✅ live — ES `ES.c.0` + SPY `EQUS.MINI` + SPY NASDAQ L3 packed; multimodal interleaver functional; 510M-row corpus |
+| 3 | Persistent-kernel live inference (target 4.6–15.8 µs @ H100) | 📝 kernels scaffolded, not live |
 | 3.5 | FPGA P2P DMA bridge — tick-to-trade <450 ns (OUCH/FIX + hardware kill-switch) | 📝 design only ([`docs/fpga_bridge.md`](docs/fpga_bridge.md)) |
 | 4 | Hierarchical RL + MORL (IS reward) + POW-dTS strategic layer | 📝 design only ([`docs/phase4_strategic_layer.md`](docs/phase4_strategic_layer.md)) |
 | 5 | Agentic governance (Research + Risk + Compliance agents) | 📝 design only ([`docs/agentic_governance.md`](docs/agentic_governance.md)) |
@@ -205,7 +205,8 @@ infra/
   modal/              phase2_smoke.py (single-node validation suite)
 odte/
   data/               databento_pack.py, polygon_pack.py, streaming_quantiles.py,
-                      cme_es_pack.py (Phase 2.5 scaffold)
+                      cme_es_pack.py (Phase 2.5 ES/SPY DBN packer, live)
+                      multimodal_interleave.py (k-way time-merger, live)
   kernels/            fused_bin.cu, persistent_decode.cu, rdma_ingest.cu (Phase 3)
   train/              distributed.py (FSDP), checkpoint.py, pretrain_tradefm.py
   transformer_tradefm.py  (TradeFM model; optional modality embedding for 2.5)
