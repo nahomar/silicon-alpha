@@ -134,49 +134,68 @@ def pack_dbn_dir(
              time.time() - t0, n_rows[0])
 
     # ---- Pass 2: tokenize + write ----
+    # Critical: vectorize the per-row buffer construction. Earlier version
+    # did `for row in toks: buf.append(row.tolist())` which is Python-level
+    # per-row work — measured at ~9k rows/s on Sol vs ~330k rows/s for the
+    # fit pass. Now we keep ts/modality_id as concatenable numpy arrays
+    # and only convert the tokens 2-D array to a list-of-lists once per
+    # chunk via numpy's C-level .tolist().
     log.info("writing shards...")
     t0 = time.time()
     shard_idx = 0
     n_written = 0
-    buf_tokens: list[list[int]] = []
-    buf_meta: list[dict] = []
+    # Buffer pieces: list of (ts_array, tokens_list_of_lists, modality_array)
+    # tuples; concat at flush time.
+    buf_ts: list[np.ndarray] = []
+    buf_tok: list[list] = []  # accumulated tokens list-of-lists
+    buf_mod: list[np.ndarray] = []
+    buf_count = 0  # total rows currently in buffers
+
+    def _flush(n_to_flush: int):
+        """Write the first n_to_flush rows of the buffers as one parquet shard."""
+        nonlocal shard_idx, n_written, buf_ts, buf_tok, buf_mod, buf_count
+        # Concat the leading metadata arrays until we have ≥n_to_flush rows.
+        ts_concat = np.concatenate(buf_ts)
+        mod_concat = np.concatenate(buf_mod)
+        # buf_tok already a flat list-of-lists.
+        ts_out = ts_concat[:n_to_flush]
+        mod_out = mod_concat[:n_to_flush]
+        tok_out = buf_tok[:n_to_flush]
+        shard_path = out_dir / f"shard_{shard_idx:06d}.parquet"
+        pd.DataFrame({
+            "ts": ts_out, "tokens": tok_out, "modality_id": mod_out,
+        }).to_parquet(shard_path, compression="zstd")
+        # Reset buffers to the carry-over.
+        carry_ts = ts_concat[n_to_flush:]
+        carry_mod = mod_concat[n_to_flush:]
+        carry_tok = buf_tok[n_to_flush:]
+        buf_ts = [carry_ts] if carry_ts.size else []
+        buf_mod = [carry_mod] if carry_mod.size else []
+        buf_tok = carry_tok
+        buf_count -= n_to_flush
+        n_written += n_to_flush
+        shard_idx += 1
 
     for p in dbn_files:
         log.info("write pass: %s", p.name)
         for ch in iter_dbn_chunks(p):
             feats = prepare_features(ch)
             toks = tok.tokenize_batch(feats, feature_order=list(spec))
-            for i, tok_row in enumerate(toks):
-                buf_tokens.append(tok_row.tolist())
-                buf_meta.append({
-                    "ts": int(feats.iloc[i]["ts_ms"]),
-                    "modality_id": int(modality_id),
-                })
-            while len(buf_tokens) >= shard_rows:
-                shard_path = out_dir / f"shard_{shard_idx:06d}.parquet"
-                pd.DataFrame({
-                    "ts": [m["ts"] for m in buf_meta[:shard_rows]],
-                    "tokens": buf_tokens[:shard_rows],
-                    "modality_id": [m["modality_id"] for m in buf_meta[:shard_rows]],
-                }).to_parquet(shard_path, compression="zstd")
-                n_written += shard_rows
-                shard_idx += 1
-                buf_tokens = buf_tokens[shard_rows:]
-                buf_meta = buf_meta[shard_rows:]
+            n_chunk = toks.shape[0]
+            buf_ts.append(feats["ts_ms"].values.astype(np.int64))
+            buf_tok.extend(toks.tolist())  # one C-level call for the whole 2-D array
+            buf_mod.append(np.full(n_chunk, modality_id, dtype=np.int8))
+            buf_count += n_chunk
+
+            while buf_count >= shard_rows:
+                _flush(shard_rows)
                 if shard_idx % 5 == 0:
                     rate = n_written / max(1e-3, time.time() - t0)
                     log.info("  wrote %d shards  rows=%d  (%.0fk rows/s)",
                              shard_idx, n_written, rate / 1000)
 
-    if buf_tokens:
-        shard_path = out_dir / f"shard_{shard_idx:06d}.parquet"
-        pd.DataFrame({
-            "ts": [m["ts"] for m in buf_meta],
-            "tokens": buf_tokens,
-            "modality_id": [m["modality_id"] for m in buf_meta],
-        }).to_parquet(shard_path, compression="zstd")
-        n_written += len(buf_tokens)
-        shard_idx += 1
+    if buf_count > 0:
+        _flush(buf_count)
 
     log.info("wrote %d shards (%d rows) in %.1fs",
              shard_idx, n_written, time.time() - t0)
