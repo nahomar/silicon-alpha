@@ -41,21 +41,52 @@ log = logging.getLogger(__name__)
 
 
 def load_checkpoint(ckpt_path: Path, device: torch.device) -> TradeFM:
-    """Load a CheckpointManager-style ckpt: dict with state, cfg, step.
-    Returns a TradeFM in eval mode on `device`.
+    """Load a CheckpointManager-style ckpt. Two formats supported:
+
+    1. Directory format (new): step_NNNNNNNN/ containing
+         - meta.json (cfg + step + best_loss)
+         - rank_0.pt (model state for world_size=1)
+         - opt_rank_0.pt (optimizer state — ignored at eval)
+       Pass the directory path or its parent (latest step picked).
+
+    2. Single-file format (legacy): one .pt with {state, cfg, step}.
     """
-    raw = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-    cfg_dict = raw["cfg"]
+    import json
+    p = Path(ckpt_path).expanduser()
+    if p.is_dir():
+        # Directory format. If user passed the parent dir, drill into the
+        # latest step_NNNNNNNN/ subdir.
+        step_dirs = sorted(p.glob("step_*"))
+        if step_dirs:
+            p = step_dirs[-1]
+        meta_path = p / "meta.json"
+        rank0_path = p / "rank_0.pt"
+        if not meta_path.exists() or not rank0_path.exists():
+            raise RuntimeError(f"checkpoint dir {p} missing meta.json/rank_0.pt")
+        log.info("loading dir ckpt: %s", p)
+        with open(meta_path) as f:
+            meta = json.load(f)
+        cfg_dict = meta["cfg"]
+        step = meta.get("step", -1)
+        state = torch.load(rank0_path, map_location="cpu", weights_only=False)
+        # rank_0.pt may contain just a state_dict OR a wrapper dict.
+        if isinstance(state, dict) and "state" in state:
+            state = state["state"]
+    else:
+        log.info("loading file ckpt: %s", p)
+        raw = torch.load(p, map_location="cpu", weights_only=False)
+        cfg_dict = raw["cfg"]
+        step = raw.get("step", -1)
+        state = raw["state"]
+
     cfg = TradeFMConfig(**cfg_dict)
     log.info("ckpt cfg: d_model=%d n_layers=%d ctx_len=%d "
              "modality_vocab=%d dir_head=%s step=%d",
              cfg.d_model, cfg.n_layers, cfg.ctx_len,
              cfg.modality_vocab,
              getattr(cfg, "dir_head_enabled", False),
-             raw.get("step", -1))
+             step)
     model = TradeFM(cfg)
-    state = raw["state"]
-    # Strip FSDP prefixes if any.
     cleaned = {}
     for k, v in state.items():
         new_k = k
