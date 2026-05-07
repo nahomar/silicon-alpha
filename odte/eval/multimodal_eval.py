@@ -145,6 +145,7 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
     dir_logits_all: list[torch.Tensor] = []
     dir_targets_all: list[torch.Tensor] = []
     dir_modality_all: list[torch.Tensor] = []  # for per-modality split
+    dir_target_tokens_all: list[torch.Tensor] = []  # for magnitude P&L
 
     win_iter = _build_eval_windows(shard_paths, cfg.ctx_len,
                                    eval_frac=eval_frac,
@@ -192,9 +193,13 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
         # Take the in-window modality_ids for masked positions.
         # mid[:, :-1] aligns with dir_logits / dir_tgt / dir_mask.
         mid_in = mid[:, :-1]
+        # Raw target tokens at the same masked positions — needed for the
+        # magnitude-weighted P&L backtest (bin-index proxy for return size).
+        # `target` is shape (B, T-1); dir_mask is shape (B, T-1).
         dir_logits_all.append(dir_logits[dir_mask].float().cpu())
         dir_targets_all.append(dir_tgt[dir_mask].float().cpu())
         dir_modality_all.append(mid_in[dir_mask].cpu())
+        dir_target_tokens_all.append(target[dir_mask].cpu())
 
     # ---- Aggregate metrics ----
     out: dict = {
@@ -210,6 +215,8 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
         proba = 1.0 / (1.0 + np.exp(-logits))
         targets = torch.cat(dir_targets_all).numpy().astype(np.int8)
         modalities = torch.cat(dir_modality_all).numpy().astype(np.int8)
+        target_tokens = (torch.cat(dir_target_tokens_all).numpy().astype(np.int32)
+                         if dir_target_tokens_all else None)
         preds = (proba >= 0.5).astype(np.int8)
 
         try:
@@ -222,6 +229,65 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
             out["dir_bal_acc"] = float("nan")
         out["dir_n"] = int(len(targets))
         out["dir_pos_rate"] = float(targets.mean())
+
+        # ---- Magnitude-weighted P&L backtest (synthetic) ----
+        # We don't have the raw prices in packed shards, so we use the bin
+        # index as a proxy for return magnitude:
+        #   centered_token = target_token - median(target_token)
+        #   magnitude ∝ |centered_token|
+        # This is "bin-units" P&L — directionally correct, magnitude-aware,
+        # but NOT in dollars. For real dollar P&L we'd need to re-pack with
+        # the tokenizer's edges saved so we can inverse-bin back to log-return.
+        if target_tokens is not None and len(target_tokens) > 0:
+            tok_med = float(np.median(target_tokens))
+            centered = (target_tokens - tok_med).astype(np.float64)
+            # Normalize: divide by the scale so per-trade P&L is in [-1, 1].
+            scale = float(np.abs(centered).max() + 1e-9)
+            ret_proxy = centered / scale  # signed magnitude in [-1, 1]
+
+            # Trade rule: confident long if proba > thr_long, short if < thr_short.
+            thr_long = 0.55
+            thr_short = 0.45
+            # round-trip cost per trade in units of `ret_proxy` (default 0.05
+            # = 5% of max bin range — rough proxy for retail-level spread+fee).
+            cost = 0.05
+
+            position = np.where(proba > thr_long, 1.0,
+                                np.where(proba < thr_short, -1.0, 0.0))
+            traded = position != 0
+            pnl_per_trade = position * ret_proxy - traded * cost
+            cum_pnl = np.cumsum(pnl_per_trade)
+
+            n_trades = int(traded.sum())
+            n_wins = int(((position * ret_proxy) > cost)[traded].sum()) if n_trades else 0
+            mean_pnl = float(pnl_per_trade.mean()) if len(pnl_per_trade) else 0.0
+            std_pnl = float(pnl_per_trade.std() + 1e-12)
+            sharpe = mean_pnl / std_pnl * np.sqrt(252)  # annualized assuming daily samples (rough)
+            running_max = np.maximum.accumulate(cum_pnl)
+            drawdown = (cum_pnl - running_max).min() if len(cum_pnl) else 0.0
+
+            # Magnitude split: average win vs average loss
+            wins_mag = pnl_per_trade[traded & (pnl_per_trade > 0)]
+            losses_mag = pnl_per_trade[traded & (pnl_per_trade < 0)]
+
+            out["bt"] = {
+                "thr_long": thr_long, "thr_short": thr_short,
+                "cost_per_round_trip": cost,
+                "n_predictions": int(len(proba)),
+                "n_trades": n_trades,
+                "trade_rate": float(n_trades / max(1, len(proba))),
+                "n_wins": n_wins,
+                "win_rate": float(n_wins / max(1, n_trades)),
+                "total_pnl_proxy": float(cum_pnl[-1]) if len(cum_pnl) else 0.0,
+                "mean_pnl_per_obs": mean_pnl,
+                "sharpe_annualized": float(sharpe),
+                "max_drawdown_proxy": float(drawdown),
+                "avg_win_size": float(wins_mag.mean()) if len(wins_mag) else 0.0,
+                "avg_loss_size": float(losses_mag.mean()) if len(losses_mag) else 0.0,
+                "win_loss_ratio": (float(abs(wins_mag.mean() / losses_mag.mean()))
+                                   if len(wins_mag) and len(losses_mag) and losses_mag.mean() != 0
+                                   else float("nan")),
+            }
 
         # Per-modality AUC.
         per_mod: dict[int, dict] = {}
@@ -288,3 +354,37 @@ if __name__ == "__main__":
                    ("MARGINAL" if res['dir_auc'] >= 0.64 else
                     "FAIL"))
         print(f"VERDICT vs LightGBM 0.64 ceiling: {verdict}")
+
+        # Magnitude-weighted backtest (bin-units, NOT dollars)
+        bt = res.get("bt")
+        if bt:
+            print()
+            print("===== MAGNITUDE-WEIGHTED BACKTEST (bin-units, synthetic) =====")
+            print(f"trade rule        : LONG if proba > {bt['thr_long']}, "
+                  f"SHORT if proba < {bt['thr_short']}, else FLAT")
+            print(f"cost/round-trip   : {bt['cost_per_round_trip']:.3f} "
+                  f"(in [-1,1] bin-units)")
+            print(f"predictions       : {bt['n_predictions']:,}")
+            print(f"trades taken      : {bt['n_trades']:,}  "
+                  f"({bt['trade_rate']*100:.2f}%)")
+            print(f"wins              : {bt['n_wins']:,}  "
+                  f"({bt['win_rate']*100:.2f}% of trades)")
+            print(f"avg win size      : {bt['avg_win_size']:+.4f}")
+            print(f"avg loss size     : {bt['avg_loss_size']:+.4f}")
+            print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
+            print(f"total P&L (proxy) : {bt['total_pnl_proxy']:+.4f}")
+            print(f"Sharpe (annualized, rough proxy): {bt['sharpe_annualized']:+.3f}")
+            print(f"max drawdown      : {bt['max_drawdown_proxy']:+.4f}")
+            print()
+            print("Caveats:")
+            print("  - P&L is in arbitrary bin-units, NOT dollars. To get")
+            print("    dollar P&L we'd need to inverse-tokenize using the")
+            print("    saved tokenizer edges, which our packer doesn't yet")
+            print("    persist. Action item: re-pack with tokenizer save")
+            print("    + add price reconstruction → real backtest in V2.")
+            print("  - Sharpe is annualized assuming daily-frequency samples;")
+            print("    the actual sample frequency depends on the modality")
+            print("    mix, so this number is rough comparative-only.")
+            print("  - Cost = 0.05 of [-1,1] bin range is a guess at retail")
+            print("    spread+fee; tune to match the actual bid-ask of your")
+            print("    target instrument before drawing any conclusions.")
