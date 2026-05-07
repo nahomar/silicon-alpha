@@ -164,7 +164,9 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
              batch: int = 4,
              tokenizer_json: Path | None = None,
              notional_per_trade: float = 1000.0,
-             cost_pct_round_trip: float = 0.01) -> dict:
+             cost_pct_round_trip: float = 0.01,
+             commission_per_trade: float = 1.30,
+             slippage_bins: int = 2) -> dict:
     """Run held-out eval and return a result dict."""
     import glob as _glob
     shard_paths = sorted(Path(p) for p in _glob.glob(shard_glob))
@@ -281,23 +283,35 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
             edges_data = (_load_tokenizer_edges(tokenizer_json)
                           if tokenizer_json else None)
             if edges_data and "ret" in edges_data["edges"]:
-                # Real % P&L via inverse tokenization
+                # Real % P&L via inverse tokenization. Quantile bins are
+                # narrower at the median + wider in the tails, so this
+                # naturally captures the tail-magnitude weighting that
+                # ordinal bin-index alone misses (i.e. a 5-bin move near
+                # bin 30 is much less return than a 5-bin move near bin 60).
                 ret_edges = edges_data["edges"]["ret"]
                 decoded_logret = np.array([
                     _decode_return_token(int(t), ret_edges)
                     for t in target_tokens
                 ], dtype=np.float64)
                 # log-return → simple return ≈ log-return for small values
-                ret_pct = decoded_logret  # already in fractional units
+                ret_pct = decoded_logret
                 pnl_unit = "%"
-                cost = float(cost_pct_round_trip)
-                pnl_label = "real %"
+                # Slippage: 2 bins = 2 average bin-widths' worth of price
+                # impact. Use median bin width near the BBO as the proxy.
+                ret_bin_widths = np.diff(ret_edges)
+                ret_bin_widths = ret_bin_widths[np.isfinite(ret_bin_widths)]
+                med_bin_width = float(np.median(ret_bin_widths)) if len(ret_bin_widths) else 1e-4
+                slippage_pct = slippage_bins * med_bin_width
+                cost_pct_total = float(cost_pct_round_trip) + slippage_pct
+                cost = cost_pct_total
+                pnl_label = (f"real % (inverse-decoded; spread+slip={cost*100:.3f}%, "
+                             f"+ ${commission_per_trade:.2f} commission)")
             else:
                 # Fallback to bin-unit proxy
                 tok_med = float(np.median(target_tokens))
                 centered = (target_tokens - tok_med).astype(np.float64)
                 scale = float(np.abs(centered).max() + 1e-9)
-                ret_pct = centered / scale  # signed [-1, 1]
+                ret_pct = centered / scale
                 pnl_unit = "bin"
                 cost = 0.05
                 pnl_label = "bin-units (synthetic; pass --tokenizer-json for real %)"
@@ -340,9 +354,17 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
                                    else float("nan")),
             }
             if pnl_unit == "%":
-                # Dollarize on a fixed notional position size.
+                # Dollarize on a fixed notional + deduct flat commission.
+                # The commission is per-trade, not per-prediction.
+                gross_usd = cum_pnl[-1] * notional_per_trade
+                commission_usd = n_trades * commission_per_trade
+                net_usd = gross_usd - commission_usd
                 out["bt"]["notional_per_trade"] = float(notional_per_trade)
-                out["bt"]["total_pnl_usd"] = float(cum_pnl[-1] * notional_per_trade)
+                out["bt"]["commission_per_trade"] = float(commission_per_trade)
+                out["bt"]["slippage_bins"] = int(slippage_bins)
+                out["bt"]["gross_pnl_usd"] = float(gross_usd)
+                out["bt"]["commission_total_usd"] = float(commission_usd)
+                out["bt"]["net_pnl_usd"] = float(net_usd)
                 out["bt"]["max_drawdown_usd"] = float(drawdown * notional_per_trade)
 
         # Per-modality AUC.
@@ -380,7 +402,11 @@ if __name__ == "__main__":
     ap.add_argument("--notional", type=float, default=1000.0,
                     help="$ per trade (for dollar P&L when tokenizer JSON given)")
     ap.add_argument("--cost-pct", type=float, default=0.01,
-                    help="round-trip cost as fraction (default 0.01 = 1%%)")
+                    help="round-trip spread cost as fraction (default 0.01 = 1%%)")
+    ap.add_argument("--commission", type=float, default=1.30,
+                    help="flat $/round-trip retail commission (default $1.30)")
+    ap.add_argument("--slippage-bins", type=int, default=2,
+                    help="extra cost in bin-widths to model retail latency (default 2)")
     args = ap.parse_args()
     res = evaluate(args.ckpt, args.shards,
                    eval_frac=args.eval_frac,
@@ -389,7 +415,9 @@ if __name__ == "__main__":
                    batch=args.batch,
                    tokenizer_json=args.tokenizer_json,
                    notional_per_trade=args.notional,
-                   cost_pct_round_trip=args.cost_pct)
+                   cost_pct_round_trip=args.cost_pct,
+                   commission_per_trade=args.commission,
+                   slippage_bins=args.slippage_bins)
     print()
     print("===== HELD-OUT MULTIMODAL EVAL =====")
     print(f"loss              : {res['loss']:.4f}")
@@ -419,6 +447,13 @@ if __name__ == "__main__":
                    ("MARGINAL" if res['dir_auc'] >= 0.64 else
                     "FAIL"))
         print(f"VERDICT vs LightGBM 0.64 ceiling: {verdict}")
+        # Sanity check on suspiciously-high AUC
+        if res['dir_auc'] > 0.75:
+            print()
+            print("⚠ AUC > 0.75 is suspicious for short-horizon financial data —")
+            print("  audit for look-ahead bias, train/eval overlap, or feature-rotation")
+            print("  leakage before celebrating. The 2026 efficiency ceiling for h=10")
+            print("  HFT directional models is ~0.65-0.70.")
 
         # Backtest section
         bt = res.get("bt")
@@ -441,10 +476,17 @@ if __name__ == "__main__":
             if bt["pnl_unit"] == "%":
                 print(f"avg win  / trade  : {bt['avg_win_size']*100:+.3f}%")
                 print(f"avg loss / trade  : {bt['avg_loss_size']*100:+.3f}%")
-                print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
+                # Payoff ratio = avg_win / avg_loss in absolute terms
+                print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}  "
+                      f"(ORB benchmark: 41% WR × 2.0 ratio = profitable)")
                 print(f"total P&L (%)     : {bt['total_pnl']*100:+.3f}%")
-                print(f"total P&L ($, on ${bt['notional_per_trade']:.0f}/trade): "
-                      f"${bt['total_pnl_usd']:+.2f}")
+                print(f"gross P&L ($)     : ${bt['gross_pnl_usd']:+.2f}  "
+                      f"(on ${bt['notional_per_trade']:.0f}/trade)")
+                print(f"commission ($)    : ${bt['commission_total_usd']:.2f}  "
+                      f"(${bt['commission_per_trade']:.2f}/trade × "
+                      f"{bt['n_trades']:,} trades)")
+                print(f"net P&L ($)       : ${bt['net_pnl_usd']:+.2f}  "
+                      f"← THE NUMBER")
                 print(f"max drawdown ($)  : ${bt['max_drawdown_usd']:+.2f}")
             else:
                 print(f"avg win  / trade  : {bt['avg_win_size']:+.4f}")
@@ -452,7 +494,14 @@ if __name__ == "__main__":
                 print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
                 print(f"total P&L (bin)   : {bt['total_pnl']:+.4f}")
                 print(f"max drawdown      : {bt['max_drawdown']:+.4f}")
-            print(f"Sharpe (annualized, rough): {bt['sharpe_annualized']:+.3f}")
+            sh = bt['sharpe_annualized']
+            sh_band = ("RUIN" if sh < 0 else
+                       "noise" if sh < 1.0 else
+                       "edge" if sh < 1.645 else
+                       "edge+95%CI" if sh < 2.5 else
+                       "institutional")
+            print(f"Sharpe (annualized): {sh:+.3f}  [{sh_band}]")
+            print(f"  benchmarks: 1.0=institutional min, 1.645=95% CI of edge, 2.5+=top-tier")
             print()
             if bt["pnl_unit"] == "%":
                 print("Caveats:")
