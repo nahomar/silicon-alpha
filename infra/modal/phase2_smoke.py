@@ -936,6 +936,79 @@ def dryrun_8gpu(
 @app.function(
     cpu=4.0,
     memory=65536,
+    timeout=14400,  # 4 hours per day — usually finishes in <1
+    volumes={"/shards": shard_volume},
+)
+def repack_opra_v1_realts(job_id: str):
+    """Re-pack one OPRA day from already-downloaded DBN files using the
+    Phase-2.5 cme_es_pack pipeline — which preserves the real `ts` column
+    that the original Phase-1 smoke_databento_reuse packer dropped.
+
+    This unblocks the V2 multi-modal corpus: the original OPRA shards on
+    /shards/databento_reuse_packed/<job_id>/ have tokens but no ts, so
+    the multimodal interleaver had to assign synthetic ts and OPRA always
+    sorted to the head of the merged stream (per the V1 eval finding).
+
+    Output goes to /shards/databento_opra_v1_realts/<job_id>/ with the
+    same v1 feature spec ES/SPY use, so a single multi-modal merge can
+    interleave all four modalities by real timestamp.
+    """
+    import os, sys
+    sys.path.insert(0, "/root/repo")
+
+    raw_dir = Path(f"/shards/databento_reuse/{job_id}")
+    if not raw_dir.exists():
+        raise RuntimeError(f"no DBN files at {raw_dir}; was {job_id} ever downloaded?")
+    dbn_files = sorted(raw_dir.glob("*.dbn*"))
+    if not dbn_files:
+        raise RuntimeError(f"no .dbn / .dbn.zst files under {raw_dir}")
+    print(f"[opra-realts] {job_id}: {len(dbn_files)} DBN files",
+          flush=True)
+
+    import logging
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    from odte.data.cme_es_pack import pack_dbn_dir, MODALITY_OPRA
+    from odte.data.datashop_pack import default_feature_spec_v1
+
+    out_dir = Path(f"/shards/databento_opra_v1_realts/{job_id}")
+    return pack_dbn_dir(
+        dbn_dir=raw_dir,
+        out_dir=out_dir,
+        modality_id=MODALITY_OPRA,
+        feature_spec=default_feature_spec_v1(),
+    )
+
+
+@app.local_entrypoint()
+def dryrun_repack_opra_all_realts():
+    """Re-pack every OPRA day on the Modal volume with the new packer
+    (real ts + modality_id stamping). Spawns one container per day in
+    parallel. Reads the manifest from scripts/databento_jobs.json.
+    """
+    import json as _json
+    from pathlib import Path as _P
+    manifest_path = _P(__file__).resolve().parents[2] / "scripts" / "databento_jobs.json"
+    rows = _json.loads(manifest_path.read_text())
+    runnable = [r for r in rows if r.get("job_id")]
+    print(f"[opra-realts] dispatching {len(runnable)} parallel re-pack containers")
+    handles = [
+        repack_opra_v1_realts.spawn(r["job_id"])
+        for r in runnable
+    ]
+    for h, r in zip(handles, runnable):
+        try:
+            res = h.get()
+            print(f"[opra-realts] PASS {r['day']} ({r['job_id']}): {res}")
+        except Exception as e:
+            print(f"[opra-realts] FAIL {r['day']} ({r['job_id']}): {e}")
+    print("[opra-realts] done.")
+
+
+@app.function(
+    cpu=4.0,
+    memory=65536,
     # 10 hours — even the biggest 200+ GB days pack in ~6 hrs; 10 gives margin.
     timeout=36000,
     volumes={"/shards": shard_volume},
