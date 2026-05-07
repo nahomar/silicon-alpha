@@ -119,11 +119,52 @@ def _build_eval_windows(shard_paths: list[Path], ctx_len: int,
                 return
 
 
+def _load_tokenizer_edges(json_path: Path) -> dict | None:
+    """Load saved tokenizer edges (per-modality JSON file from
+    extract_tokenizer_edges.py). Returns dict {feature: edges_array} or None
+    if path doesn't exist.
+
+    Edges format: edges[feature] is an array of n_buckets+1 boundaries.
+    For quantile binning, the K-th bin's *midpoint* in real units is
+    (edges[K] + edges[K+1]) / 2. For log binning, geometric midpoint.
+    """
+    import json
+    p = Path(json_path).expanduser()
+    if not p.exists():
+        return None
+    with open(p) as f:
+        data = json.load(f)
+    return {
+        "n_buckets": data["n_buckets"],
+        "feature_spec": data["feature_spec"],
+        "edges": {col: np.array(e, dtype=np.float64)
+                  for col, e in data["edges"].items()},
+    }
+
+
+def _decode_return_token(token: int, ret_edges: np.ndarray) -> float:
+    """Inverse-bin a single return-token bin index to its real log-return
+    midpoint. token in [0, n_buckets); edges has length n_buckets+1.
+    Edges might contain ±inf at the boundaries (quantile fit pads them);
+    clip to neighbors for midpoint."""
+    n = len(ret_edges) - 1
+    k = int(np.clip(token, 0, n - 1))
+    lo, hi = float(ret_edges[k]), float(ret_edges[k + 1])
+    if not np.isfinite(lo):
+        lo = float(ret_edges[k + 1]) - 1e-6
+    if not np.isfinite(hi):
+        hi = float(ret_edges[k]) + 1e-6
+    return 0.5 * (lo + hi)
+
+
 @torch.no_grad()
 def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
              max_shards: int | None = None,
              max_windows: int | None = 200,
-             batch: int = 4) -> dict:
+             batch: int = 4,
+             tokenizer_json: Path | None = None,
+             notional_per_trade: float = 1000.0,
+             cost_pct_round_trip: float = 0.01) -> dict:
     """Run held-out eval and return a result dict."""
     import glob as _glob
     shard_paths = sorted(Path(p) for p in _glob.glob(shard_glob))
@@ -230,47 +271,57 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
         out["dir_n"] = int(len(targets))
         out["dir_pos_rate"] = float(targets.mean())
 
-        # ---- Magnitude-weighted P&L backtest (synthetic) ----
-        # We don't have the raw prices in packed shards, so we use the bin
-        # index as a proxy for return magnitude:
-        #   centered_token = target_token - median(target_token)
-        #   magnitude ∝ |centered_token|
-        # This is "bin-units" P&L — directionally correct, magnitude-aware,
-        # but NOT in dollars. For real dollar P&L we'd need to re-pack with
-        # the tokenizer's edges saved so we can inverse-bin back to log-return.
+        # ---- P&L backtest ----
+        # Two modes:
+        #   1. With tokenizer edges (real %): inverse-bin each target token to
+        #      its return-feature log-return midpoint, then compute % P&L per
+        #      trade using configurable round-trip cost (default 1%).
+        #   2. Without edges (bin-units fallback): rough synthetic.
         if target_tokens is not None and len(target_tokens) > 0:
-            tok_med = float(np.median(target_tokens))
-            centered = (target_tokens - tok_med).astype(np.float64)
-            # Normalize: divide by the scale so per-trade P&L is in [-1, 1].
-            scale = float(np.abs(centered).max() + 1e-9)
-            ret_proxy = centered / scale  # signed magnitude in [-1, 1]
+            edges_data = (_load_tokenizer_edges(tokenizer_json)
+                          if tokenizer_json else None)
+            if edges_data and "ret" in edges_data["edges"]:
+                # Real % P&L via inverse tokenization
+                ret_edges = edges_data["edges"]["ret"]
+                decoded_logret = np.array([
+                    _decode_return_token(int(t), ret_edges)
+                    for t in target_tokens
+                ], dtype=np.float64)
+                # log-return → simple return ≈ log-return for small values
+                ret_pct = decoded_logret  # already in fractional units
+                pnl_unit = "%"
+                cost = float(cost_pct_round_trip)
+                pnl_label = "real %"
+            else:
+                # Fallback to bin-unit proxy
+                tok_med = float(np.median(target_tokens))
+                centered = (target_tokens - tok_med).astype(np.float64)
+                scale = float(np.abs(centered).max() + 1e-9)
+                ret_pct = centered / scale  # signed [-1, 1]
+                pnl_unit = "bin"
+                cost = 0.05
+                pnl_label = "bin-units (synthetic; pass --tokenizer-json for real %)"
 
-            # Trade rule: confident long if proba > thr_long, short if < thr_short.
             thr_long = 0.55
             thr_short = 0.45
-            # round-trip cost per trade in units of `ret_proxy` (default 0.05
-            # = 5% of max bin range — rough proxy for retail-level spread+fee).
-            cost = 0.05
-
             position = np.where(proba > thr_long, 1.0,
                                 np.where(proba < thr_short, -1.0, 0.0))
             traded = position != 0
-            pnl_per_trade = position * ret_proxy - traded * cost
+            pnl_per_trade = position * ret_pct - traded * cost
             cum_pnl = np.cumsum(pnl_per_trade)
 
             n_trades = int(traded.sum())
-            n_wins = int(((position * ret_proxy) > cost)[traded].sum()) if n_trades else 0
+            n_wins = int(((position * ret_pct) > cost)[traded].sum()) if n_trades else 0
             mean_pnl = float(pnl_per_trade.mean()) if len(pnl_per_trade) else 0.0
             std_pnl = float(pnl_per_trade.std() + 1e-12)
-            sharpe = mean_pnl / std_pnl * np.sqrt(252)  # annualized assuming daily samples (rough)
+            sharpe = mean_pnl / std_pnl * np.sqrt(252)
             running_max = np.maximum.accumulate(cum_pnl)
             drawdown = (cum_pnl - running_max).min() if len(cum_pnl) else 0.0
-
-            # Magnitude split: average win vs average loss
             wins_mag = pnl_per_trade[traded & (pnl_per_trade > 0)]
             losses_mag = pnl_per_trade[traded & (pnl_per_trade < 0)]
 
             out["bt"] = {
+                "pnl_unit": pnl_unit, "pnl_label": pnl_label,
                 "thr_long": thr_long, "thr_short": thr_short,
                 "cost_per_round_trip": cost,
                 "n_predictions": int(len(proba)),
@@ -278,16 +329,21 @@ def evaluate(ckpt_path: Path, shard_glob: str, eval_frac: float = 0.2,
                 "trade_rate": float(n_trades / max(1, len(proba))),
                 "n_wins": n_wins,
                 "win_rate": float(n_wins / max(1, n_trades)),
-                "total_pnl_proxy": float(cum_pnl[-1]) if len(cum_pnl) else 0.0,
+                "total_pnl": float(cum_pnl[-1]) if len(cum_pnl) else 0.0,
                 "mean_pnl_per_obs": mean_pnl,
                 "sharpe_annualized": float(sharpe),
-                "max_drawdown_proxy": float(drawdown),
+                "max_drawdown": float(drawdown),
                 "avg_win_size": float(wins_mag.mean()) if len(wins_mag) else 0.0,
                 "avg_loss_size": float(losses_mag.mean()) if len(losses_mag) else 0.0,
                 "win_loss_ratio": (float(abs(wins_mag.mean() / losses_mag.mean()))
                                    if len(wins_mag) and len(losses_mag) and losses_mag.mean() != 0
                                    else float("nan")),
             }
+            if pnl_unit == "%":
+                # Dollarize on a fixed notional position size.
+                out["bt"]["notional_per_trade"] = float(notional_per_trade)
+                out["bt"]["total_pnl_usd"] = float(cum_pnl[-1] * notional_per_trade)
+                out["bt"]["max_drawdown_usd"] = float(drawdown * notional_per_trade)
 
         # Per-modality AUC.
         per_mod: dict[int, dict] = {}
@@ -319,12 +375,21 @@ if __name__ == "__main__":
     ap.add_argument("--max-shards", type=int, default=None)
     ap.add_argument("--max-windows", type=int, default=200)
     ap.add_argument("--batch", type=int, default=4)
+    ap.add_argument("--tokenizer-json", type=Path, default=None,
+                    help="path to saved tokenizer edges JSON for real %% P&L")
+    ap.add_argument("--notional", type=float, default=1000.0,
+                    help="$ per trade (for dollar P&L when tokenizer JSON given)")
+    ap.add_argument("--cost-pct", type=float, default=0.01,
+                    help="round-trip cost as fraction (default 0.01 = 1%%)")
     args = ap.parse_args()
     res = evaluate(args.ckpt, args.shards,
                    eval_frac=args.eval_frac,
                    max_shards=args.max_shards,
                    max_windows=args.max_windows,
-                   batch=args.batch)
+                   batch=args.batch,
+                   tokenizer_json=args.tokenizer_json,
+                   notional_per_trade=args.notional,
+                   cost_pct_round_trip=args.cost_pct)
     print()
     print("===== HELD-OUT MULTIMODAL EVAL =====")
     print(f"loss              : {res['loss']:.4f}")
@@ -355,36 +420,52 @@ if __name__ == "__main__":
                     "FAIL"))
         print(f"VERDICT vs LightGBM 0.64 ceiling: {verdict}")
 
-        # Magnitude-weighted backtest (bin-units, NOT dollars)
+        # Backtest section
         bt = res.get("bt")
         if bt:
             print()
-            print("===== MAGNITUDE-WEIGHTED BACKTEST (bin-units, synthetic) =====")
+            unit_label = "REAL %" if bt["pnl_unit"] == "%" else "BIN-UNITS"
+            print(f"===== BACKTEST ({unit_label}) =====")
+            print(f"P&L unit          : {bt['pnl_label']}")
             print(f"trade rule        : LONG if proba > {bt['thr_long']}, "
                   f"SHORT if proba < {bt['thr_short']}, else FLAT")
-            print(f"cost/round-trip   : {bt['cost_per_round_trip']:.3f} "
-                  f"(in [-1,1] bin-units)")
+            cost_str = (f"{bt['cost_per_round_trip']*100:.2f}%"
+                        if bt["pnl_unit"] == "%"
+                        else f"{bt['cost_per_round_trip']:.3f} bin")
+            print(f"cost/round-trip   : {cost_str}")
             print(f"predictions       : {bt['n_predictions']:,}")
             print(f"trades taken      : {bt['n_trades']:,}  "
                   f"({bt['trade_rate']*100:.2f}%)")
             print(f"wins              : {bt['n_wins']:,}  "
                   f"({bt['win_rate']*100:.2f}% of trades)")
-            print(f"avg win size      : {bt['avg_win_size']:+.4f}")
-            print(f"avg loss size     : {bt['avg_loss_size']:+.4f}")
-            print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
-            print(f"total P&L (proxy) : {bt['total_pnl_proxy']:+.4f}")
-            print(f"Sharpe (annualized, rough proxy): {bt['sharpe_annualized']:+.3f}")
-            print(f"max drawdown      : {bt['max_drawdown_proxy']:+.4f}")
+            if bt["pnl_unit"] == "%":
+                print(f"avg win  / trade  : {bt['avg_win_size']*100:+.3f}%")
+                print(f"avg loss / trade  : {bt['avg_loss_size']*100:+.3f}%")
+                print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
+                print(f"total P&L (%)     : {bt['total_pnl']*100:+.3f}%")
+                print(f"total P&L ($, on ${bt['notional_per_trade']:.0f}/trade): "
+                      f"${bt['total_pnl_usd']:+.2f}")
+                print(f"max drawdown ($)  : ${bt['max_drawdown_usd']:+.2f}")
+            else:
+                print(f"avg win  / trade  : {bt['avg_win_size']:+.4f}")
+                print(f"avg loss / trade  : {bt['avg_loss_size']:+.4f}")
+                print(f"win/loss ratio    : {bt['win_loss_ratio']:.3f}")
+                print(f"total P&L (bin)   : {bt['total_pnl']:+.4f}")
+                print(f"max drawdown      : {bt['max_drawdown']:+.4f}")
+            print(f"Sharpe (annualized, rough): {bt['sharpe_annualized']:+.3f}")
             print()
-            print("Caveats:")
-            print("  - P&L is in arbitrary bin-units, NOT dollars. To get")
-            print("    dollar P&L we'd need to inverse-tokenize using the")
-            print("    saved tokenizer edges, which our packer doesn't yet")
-            print("    persist. Action item: re-pack with tokenizer save")
-            print("    + add price reconstruction → real backtest in V2.")
-            print("  - Sharpe is annualized assuming daily-frequency samples;")
-            print("    the actual sample frequency depends on the modality")
-            print("    mix, so this number is rough comparative-only.")
-            print("  - Cost = 0.05 of [-1,1] bin range is a guess at retail")
-            print("    spread+fee; tune to match the actual bid-ask of your")
-            print("    target instrument before drawing any conclusions.")
+            if bt["pnl_unit"] == "%":
+                print("Caveats:")
+                print("  - 'real %' assumes inverse-decoded log-return per bin")
+                print("    midpoint approximates the actual return. Bin discretization")
+                print("    introduces ±half-bin-width error per trade.")
+                print(f"  - cost = {bt['cost_per_round_trip']*100:.2f}% covers "
+                      "spread + fees roughly; calibrate to your actual instrument.")
+                print("  - Sharpe annualization assumes daily samples — adjust for")
+                print("    actual sample frequency before comparing across studies.")
+            else:
+                print("Caveats:")
+                print("  - P&L is in arbitrary bin-units, NOT dollars. To get")
+                print("    real % P&L: run extract_tokenizer_edges.py first,")
+                print("    then re-eval with --tokenizer-json <path>.")
+                print("  - Cost = 0.05 of [-1,1] bin range is a guess.")
