@@ -1,0 +1,42 @@
+# TradeFM 524M — multimodal V2 (post V1 negative result).
+#
+# V1 finding (run 52316905): AUC 0.5795 vs LightGBM baseline 0.64. Lost
+# to the LightGBM. Per-modality breakdown showed ONLY OPRA appearing in
+# eval windows — synthetic-ts on legacy OPRA shards pushed all OPRA rows
+# to the head of the merged corpus, so cross-asset interleaving never
+# manifested in any context window.
+#
+# V2 changes from V1:
+#   - 5 modalities (was 3): OPRA(0), ES(1), SPY(2), crypto(3), factor_eq(4)
+#   - All packed with real `ts` columns (V1 had synthetic-ts OPRA bug)
+#   - ctx_len 1024 → 2048: lets attention span more cross-asset history
+#   - 10k steps (was 5k): more gradient updates on the new corpus
+#   - dir_horizon stays at 10 — same target the LightGBM beats us on
+#
+# Architecture unchanged from V1 (~1.227B params built):
+#   d_model=2048, n_heads=16, n_layers=24, vocab=4096
+
+d_model: 2048
+n_heads: 16
+n_layers: 24
+vocab: 4096
+ctx_len: 2048
+dropout: 0.0
+
+fp8: false             # A100 path; flip to true on H100 with TE
+rotary: true
+use_flash_attn: false
+
+# Five modalities now: OPRA=0, ES=1, SPY=2, crypto=3, factor_equity=4.
+modality_vocab: 5
+
+# Joint loss with directional head — same as V1.
+dir_head_enabled: true
+dir_alpha: 1.0
+dir_beta: 0.5
+dir_horizon: 10
+dir_n_features: 7
+
+lr: 3.0e-4
+weight_decay: 0.1
+warmup_steps: 2000
