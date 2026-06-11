@@ -81,11 +81,17 @@ def finetune_heston(model: DMLPricer, steps: int = 500, batch: int = 128,
                     device: str = "cpu", S_ref: float = 5500.0,
                     heston_params: Optional[HestonParams] = None,
                     n_mc_paths: int = 2000, n_mc_steps: int = 32,
-                    lr: float = 1e-4) -> dict:
+                    lr: float = 1e-4,
+                    tau_lo: float = 1 / (365 * 24), tau_hi: float = 3 / 365) -> dict:
     """Generate Heston MC targets on-the-fly; train the residual to match.
 
     Greek targets stay BS-based (no closed-form Greeks for Heston at the
     batch level on a laptop); the residual is shaped by price alone.
+
+    tau_lo / tau_hi (in YEARS) bound the maturity sampling. Defaults are the
+    0DTE band (1h .. 3d) used by the production pricer; widen them to validate
+    that the residual learns Heston corrections at maturities where stochastic
+    vol materially separates Heston from Black-Scholes.
     """
     log.info("=== DML fine-tune on Heston MC (%d steps, paths=%d) ===",
              steps, n_mc_paths)
@@ -98,7 +104,7 @@ def finetune_heston(model: DMLPricer, steps: int = 500, batch: int = 128,
         # Sample a small batch of option specs from the 0DTE-ish range.
         S = np.random.uniform(0.95 * S_ref, 1.05 * S_ref, size=batch)
         K = np.random.uniform(0.97 * S_ref, 1.03 * S_ref, size=batch)
-        tau = np.random.uniform(1 / (365 * 24), 3 / 365, size=batch)   # 1h..3d
+        tau = np.random.uniform(tau_lo, tau_hi, size=batch)
         sigma = np.random.uniform(0.1, 0.6, size=batch)
         r = np.zeros(batch)
 
