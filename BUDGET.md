@@ -6,7 +6,7 @@ Every piece the HRT-scale plan called for has a cheaper equivalent wired in.
 ## One-command run (zero paid subscriptions)
 
 ```bash
-cd ~/market-pattern-bot && source .venv/bin/activate
+cd ~/silicon-alpha && source .venv/bin/activate
 pip install -r requirements.txt
 pip install numba                    # optional; unlocks 50-400× on hot paths
 python odte_budget.py --device mps   # or --device cuda on an A100 spot

@@ -43,10 +43,10 @@ gcloud compute ssh "$INSTANCE" --zone "$ZONE" --project "$PROJECT" -- \
 sudo apt-get update -qq
 sudo apt-get install -y git-lfs zstd
 
-if [[ ! -d ~/market-pattern-bot ]]; then
-    git clone --depth=1 '$REPO_URL' ~/market-pattern-bot
+if [[ ! -d ~/silicon-alpha ]]; then
+    git clone --depth=1 '$REPO_URL' ~/silicon-alpha
 fi
-cd ~/market-pattern-bot
+cd ~/silicon-alpha
 python -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip

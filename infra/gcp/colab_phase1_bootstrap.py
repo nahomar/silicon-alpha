@@ -5,13 +5,13 @@ access to A100 (sometimes 40GB, sometimes 80GB) and ~24h continuous
 runtime — enough for a 40M smoke run but NOT the full 524M.
 
 Usage (in a Colab cell):
-    !wget -q https://raw.githubusercontent.com/<you>/market-pattern-bot/main/infra/gcp/colab_phase1_bootstrap.py -O /content/bootstrap.py
+    !wget -q https://raw.githubusercontent.com/<you>/silicon-alpha/main/infra/gcp/colab_phase1_bootstrap.py -O /content/bootstrap.py
     %run /content/bootstrap.py
 
 Then in subsequent cells run:
-    !cd /content/market-pattern-bot && python -m odte.train.pretrain_tradefm \
+    !cd /content/silicon-alpha && python -m odte.train.pretrain_tradefm \
         --config configs/tradefm_40m.yml \
-        --shards '/content/market-pattern-bot/reports/odte_shards/opra_*.parquet' \
+        --shards '/content/silicon-alpha/reports/odte_shards/opra_*.parquet' \
         --steps 5000 --batch 32 --grad-accum 2 --device cuda
 
 Honest caveats:
@@ -50,8 +50,8 @@ def main():
 
     # 2. Pull repo
     repo_url = os.environ.get("REPO_URL",
-                              "https://github.com/YOURUSER/market-pattern-bot")
-    dst = Path("/content/market-pattern-bot")
+                              "https://github.com/YOURUSER/silicon-alpha")
+    dst = Path("/content/silicon-alpha")
     if not dst.exists():
         sh(f"git clone --depth=1 {repo_url} {dst}")
     os.chdir(dst)
@@ -66,7 +66,7 @@ def main():
         drive.mount("/content/drive")
         os.makedirs("/content/drive/MyDrive/tradefm_ckpts", exist_ok=True)
         os.symlink("/content/drive/MyDrive/tradefm_ckpts",
-                    "/content/market-pattern-bot/checkpoints", target_is_directory=True)
+                    "/content/silicon-alpha/checkpoints", target_is_directory=True)
         print("Checkpoints will land in /content/drive/MyDrive/tradefm_ckpts")
     except ImportError:
         print("Not on Colab — skipping Drive mount")

@@ -1,10 +1,12 @@
-# STATE.md — 0DTE Alpha Engine Project Handoff
+# STATE.md — 0DTE Alpha Engine: project status & engineering log
 
-Last synced: 2026-04-19. Read top-to-bottom; a fresh Claude Code session should be able to resume without prior context.
+Last synced: 2026-04-19. Top-to-bottom status, decisions, and a resume
+checklist so I can pick the project back up after time away without
+re-deriving context.
 
 ## Project Summary
 
-This repo is a 0DTE (zero-days-to-expiry) SPX options alpha engine in active build, spanning a full stack: Differential ML option pricer, a decoder-only transformer (TradeFM) over microstructure tokens, a QP-based deterministic executor with broker-aware margin, paper broker, and post-trade analyzer. Target user is a single operator running the Monday weekly cycle on SPX 0DTE. Current state: Phase 0 (DML pricer) is done on Mac; Phase 1 (40M Mini-TradeFM validation) is actively training on a Colab Pro+ A100 80GB as of minutes ago, ETA ~45-60 min from start. Infrastructure recipes for Phases 2-5 are committed but not yet run. The repo also retains the earlier market-pattern-bot (sentiment scraper) code at the top level (`main.py`, `scrapers/`, `ml/sentiment.py`) — that predates the 0DTE pivot and is orthogonal to it.
+This repo is a 0DTE (zero-days-to-expiry) SPX options alpha engine in active build, spanning a full stack: Differential ML option pricer, a decoder-only transformer (TradeFM) over microstructure tokens, a QP-based deterministic executor with broker-aware margin, paper broker, and post-trade analyzer. Target user is a single operator running the Monday weekly cycle on SPX 0DTE. Current state: Phase 0 (DML pricer) is done on Mac; Phase 1 (40M Mini-TradeFM validation) is actively training on a Colab Pro+ A100 80GB as of minutes ago, ETA ~45-60 min from start. Infrastructure recipes for Phases 2-5 are committed but not yet run. The repo also retains the earlier sentiment-scraper code (this repo's pre-0DTE incarnation) at the top level (`main.py`, `scrapers/`, `ml/sentiment.py`) — that predates the 0DTE pivot and is orthogonal to it.
 
 ## Phase Status Table
 
@@ -112,20 +114,27 @@ All scripts `set -euo pipefail` and read required env vars.
 
 ## Conventions
 
-- **Private repo** at `github.com/nahomar/market-pattern-bot`. Clone with PAT embedded in URL, then immediately scrub from `.git/config` (notebooks already do this).
+- **Private repo** at `github.com/nahomar/silicon-alpha`. Clone with PAT embedded in URL, then immediately scrub from `.git/config` (notebooks already do this).
 - **PAT** stored as Colab Secret named `GITHUB_TOKEN`. `google.colab.userdata.get('GITHUB_TOKEN')` reads it. `getpass` fallback for timeout cases.
 - **No secrets in commits.** `.env` is gitignored. API keys, PATs, and pod IDs never land in source. `.env.example` shows the shape.
 - **Commit messages**: subject line ≤72 chars, blank line, multi-line body explaining the why (not just the what). See c2955fb, d7a7e64, 33fbe83 for the style.
 - **Python env**: `python3 -m venv .venv`, `source .venv/bin/activate`, `pip install -r requirements.txt`. User-level default is `python3` (not `python`).
 - **Platform**: Apple Silicon Mac (Darwin arm64) for local Phase 0. CUDA is Colab / GCE / RunPod only.
 
-## If I'm a Fresh Claude Code Session Reading This, My First Action Is:
+## Resume checklist (when picking the project back up)
 
-1. **`cd /Users/nahom/market-pattern-bot && git fetch origin && git log --oneline -10 && git status`** — reconcile local `c2955fb` vs reported remote `7f22aa7`, see if there's an untracked `infra/cloud/runpod_a100_phase1.sh` still pending, and confirm working tree is clean.
-2. **Check the Colab run.** Ask the user to open `notebooks/colab_phase1_tradefm.ipynb`, jump to Cell 7, and share the GO/NO-GO verdict plus the `reasons` list from `reports/migration_decision.md`. If the run hasn't finished yet, wait or poll.
-3. **Check the RunPod pod.** Ask the user to visit https://www.runpod.io/console/pods and confirm pod `i7wndt4y3bjpsq` is either terminated or intentionally still running. If terminated, remind them to rotate the RunPod API key.
+1. **`git fetch origin && git log --oneline -10 && git status`** — reconcile
+   local vs remote HEAD and confirm the working tree is clean.
+2. **Check the latest Colab/Modal run.** Open
+   `notebooks/colab_phase1_tradefm.ipynb`, jump to the migration-gate cell, and
+   read the GO/NO-GO verdict plus the `reasons` list from
+   `reports/migration_decision.md`.
+3. **Check any live cloud resources** (RunPod / GCE pods) and tear down or
+   confirm-intentional anything still running; rotate API keys if a pod was
+   left exposed.
 
-Only after those three should a fresh session propose next moves (Phase 2 launch, synth iteration, or pod teardown).
+Only after those three is it worth proposing next moves (Phase 2 launch, synth
+iteration, or signal-diagnostic run).
 
 ## Conversation digest (decisions + rationale)
 
@@ -185,25 +194,25 @@ Dense reference of the "why" behind choices that don't survive in commit message
 
 | Concept | Primary file(s) |
 |---|---|
-| Tokenizer | `/Users/nahom/market-pattern-bot/odte/data/datashop_pack.py`, `/Users/nahom/market-pattern-bot/odte/tokenizer.py` |
-| Transformer | `/Users/nahom/market-pattern-bot/odte/transformer_tradefm.py` |
-| DML pricer | `/Users/nahom/market-pattern-bot/odte/dml_pricer.py`, `/Users/nahom/market-pattern-bot/odte/train/train_dml.py` |
-| Migration gate | `/Users/nahom/market-pattern-bot/odte/train/migration_check.py` |
-| Phase 5 exec | `/Users/nahom/market-pattern-bot/odte/exec/*.py` |
-| Colab notebooks | `/Users/nahom/market-pattern-bot/notebooks/colab_phase0_dml.ipynb`, `/Users/nahom/market-pattern-bot/notebooks/colab_phase1_tradefm.ipynb` |
-| GCP provisioning | `/Users/nahom/market-pattern-bot/infra/gcp/*.sh`, `/Users/nahom/market-pattern-bot/infra/gcp/README.md` |
-| Monday deploy | `/Users/nahom/market-pattern-bot/deploy/DEPLOYMENT_CHECKLIST.md`, `/Users/nahom/market-pattern-bot/deploy/monday_go_live.sh` |
-| Budget path | `/Users/nahom/market-pattern-bot/BUDGET.md`, `/Users/nahom/market-pattern-bot/odte_budget.py` |
-| Synth data | `/Users/nahom/market-pattern-bot/odte/synth_options.py` |
-| 40M config | `/Users/nahom/market-pattern-bot/configs/tradefm_40m.yml` |
-| 524M config | `/Users/nahom/market-pattern-bot/configs/tradefm_524m.yml` |
+| Tokenizer | `odte/data/datashop_pack.py`, `odte/tokenizer.py` |
+| Transformer | `odte/transformer_tradefm.py` |
+| DML pricer | `odte/dml_pricer.py`, `odte/train/train_dml.py` |
+| Migration gate | `odte/train/migration_check.py` |
+| Phase 5 exec | `odte/exec/*.py` |
+| Colab notebooks | `notebooks/colab_phase0_dml.ipynb`, `notebooks/colab_phase1_tradefm.ipynb` |
+| GCP provisioning | `infra/gcp/*.sh`, `infra/gcp/README.md` |
+| Monday deploy | `deploy/DEPLOYMENT_CHECKLIST.md`, `deploy/monday_go_live.sh` |
+| Budget path | `BUDGET.md`, `odte_budget.py` |
+| Synth data | `odte/synth_options.py` |
+| 40M config | `configs/tradefm_40m.yml` |
+| 524M config | `configs/tradefm_524m.yml` |
 
 ### If training succeeds, do exactly this next
 
 1. Read `reports/migration_decision.md`; confirm verdict `GO` and dir-acc in [0.53, 0.99).
 2. Verify GCP `a3-megagpu-8g` quota is approved in target project (Quotas console).
-3. Export `GCP_PROJECT`, `GCP_BUCKET`, `REPO_URL` (`github.com/nahomar/market-pattern-bot`).
-4. Run `./infra/gcp/phase2_a3mega.sh` from `/Users/nahom/market-pattern-bot/`.
+3. Export `GCP_PROJECT`, `GCP_BUCKET`, `REPO_URL` (`github.com/nahomar/silicon-alpha`).
+4. Run `./infra/gcp/phase2_a3mega.sh` from ``.
 5. Then `./infra/gcp/launch_torchrun_524m.sh` from inside the provisioned head node.
 
 ---

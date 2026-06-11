@@ -13,7 +13,7 @@ set -euo pipefail
 INSTANCE_TYPE="${LAMBDA_INSTANCE_TYPE:-gpu_1x_a100}"
 REGION="${LAMBDA_REGION:-us-west-1}"
 SSH_KEY="${LAMBDA_SSH_KEY:-$HOME/.ssh/id_rsa}"
-REPO_URL="${REPO_URL:-https://github.com/REPLACE_ME/market-pattern-bot.git}"
+REPO_URL="${REPO_URL:-https://github.com/REPLACE_ME/silicon-alpha.git}"
 
 echo "[lambda] launching $INSTANCE_TYPE in $REGION"
 INSTANCE_ID="$(lambda-cloud instances launch \
@@ -32,8 +32,8 @@ ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@"$IP" <<BOOTSTRAP
 set -euo pipefail
 sudo apt-get update -y
 sudo apt-get install -y git python3-venv zstd htop
-git clone --depth=1 "$REPO_URL" ~/market-pattern-bot
-cd ~/market-pattern-bot
+git clone --depth=1 "$REPO_URL" ~/silicon-alpha
+cd ~/silicon-alpha
 python3 -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip

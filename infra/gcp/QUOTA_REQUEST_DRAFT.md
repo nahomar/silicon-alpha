@@ -52,7 +52,7 @@ and spend commitment clear quickly.
 > The pretrain scaffolding has already been validated end-to-end on a
 > smaller 40M-parameter model on a Colab A100 (5,000 steps, monotone
 > loss curve, clean shard-checkpoint round-trip). Code is open in
-> https://github.com/nahomar/market-pattern-bot — specifically
+> https://github.com/nahomar/silicon-alpha — specifically
 > odte/train/distributed.py for the FSDP launcher and
 > configs/tradefm_524m.yml for the architecture spec.
 >

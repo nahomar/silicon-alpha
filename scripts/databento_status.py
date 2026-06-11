@@ -5,7 +5,7 @@ and prints the current state of each job. Run periodically until all
 are `done`.
 
 Usage:
-    cd /Users/nahom/market-pattern-bot && set -a && . ./.env && set +a && \
+    cd /Users/nahom/silicon-alpha && set -a && . ./.env && set +a && \
     python3 scripts/databento_status.py
 """
 from __future__ import annotations

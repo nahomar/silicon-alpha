@@ -53,13 +53,13 @@ export GCP_SERVICE_ACCOUNT=tradefm-trainer@$GCP_PROJECT.iam.gserviceaccount.com
 export GCP_PROJECT=myproject
 export GCP_ZONE=us-central1-a
 export GCP_BUCKET=gs://my-tradefm
-export REPO_URL=https://github.com/you/market-pattern-bot
+export REPO_URL=https://github.com/nahomar/silicon-alpha
 
 ./infra/gcp/phase1_a100.sh
 
 # SSH in:
 gcloud compute ssh tradefm-phase1 --zone us-central1-a --project $GCP_PROJECT
-cd ~/market-pattern-bot && . .venv/bin/activate
+cd ~/silicon-alpha && . .venv/bin/activate
 
 # Pack DataShop csv.zst → parquet shards on the mounted bucket:
 python -c "from odte.data import pack_folder; pack_folder('~/gcs/cboe_csv', '~/gcs/opra_shards')"
@@ -80,7 +80,7 @@ export GCP_ZONE=us-central1-a          # A3 Mega available in us-central1, europ
 export GCP_N_NODES=3
 export GCP_CLUSTER=tradefm-524m
 export GCP_BUCKET=gs://my-tradefm
-export REPO_URL=https://github.com/you/market-pattern-bot
+export REPO_URL=https://github.com/nahomar/silicon-alpha
 
 ./infra/gcp/phase2_a3mega.sh           # provisions 3× a3-megagpu-8g
 ./infra/gcp/launch_torchrun_524m.sh    # spawns torchrun on every node

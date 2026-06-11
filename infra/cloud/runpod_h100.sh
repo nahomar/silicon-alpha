@@ -5,7 +5,7 @@
 # Usage:
 #   export RUNPOD_API_KEY=...
 #   export RUNPOD_POD_TYPE="H100 PCIe"        # or "H100 SXM"
-#   export REPO_URL="git@github.com:REPLACE_ME/market-pattern-bot.git"
+#   export REPO_URL="git@github.com:REPLACE_ME/silicon-alpha.git"
 #   ./infra/cloud/runpod_h100.sh
 
 set -euo pipefail
@@ -36,8 +36,8 @@ ssh -o StrictHostKeyChecking=no "$SSH_TARGET" <<BOOTSTRAP
 set -euo pipefail
 apt-get update -y
 apt-get install -y git python3-venv zstd
-git clone --depth=1 "$REPO_URL" /root/market-pattern-bot
-cd /root/market-pattern-bot
+git clone --depth=1 "$REPO_URL" /root/silicon-alpha
+cd /root/silicon-alpha
 python3 -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip

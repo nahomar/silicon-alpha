@@ -3,7 +3,7 @@
 Runs cost_estimate() on each (day, symbols) pair — no money spent; just
 prints the estimate. Edit DAYS + SYMBOLS below, run:
 
-    cd /Users/nahom/market-pattern-bot && set -a && . ./.env && set +a && \
+    cd /Users/nahom/silicon-alpha && set -a && . ./.env && set +a && \
     python3 -m scripts.databento_cost_estimate
 
 Output: per-day cost, running total, fit-under-budget check.

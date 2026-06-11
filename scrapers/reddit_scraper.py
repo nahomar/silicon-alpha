@@ -51,7 +51,7 @@ def _praw_client():
         return None
     cid = os.getenv("REDDIT_CLIENT_ID")
     csec = os.getenv("REDDIT_CLIENT_SECRET")
-    ua = os.getenv("REDDIT_USER_AGENT", "market-pattern-bot/0.1")
+    ua = os.getenv("REDDIT_USER_AGENT", "silicon-alpha/0.1")
     if not cid or not csec:
         return None
     return praw.Reddit(client_id=cid, client_secret=csec, user_agent=ua)
@@ -85,7 +85,7 @@ def _scrape_praw(subreddits: Iterable[str], limit: int) -> List[Post]:
 
 
 def _scrape_json(subreddits: Iterable[str], limit: int) -> List[Post]:
-    headers = {"User-Agent": os.getenv("REDDIT_USER_AGENT", "market-pattern-bot/0.1")}
+    headers = {"User-Agent": os.getenv("REDDIT_USER_AGENT", "silicon-alpha/0.1")}
     out: List[Post] = []
     for sub in subreddits:
         url = f"https://www.reddit.com/r/{sub}/hot.json?limit={limit}"

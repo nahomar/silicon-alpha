@@ -11,7 +11,7 @@ Prints a job-id manifest to stdout AND writes it to
 `scripts/databento_jobs.json` so the Modal packer can consume it.
 
 Usage:
-    cd /Users/nahom/market-pattern-bot && set -a && . ./.env && set +a && \
+    cd /Users/nahom/silicon-alpha && set -a && . ./.env && set +a && \
     python3 scripts/databento_submit_all.py
 """
 from __future__ import annotations

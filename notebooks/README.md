@@ -42,7 +42,7 @@ Google Drive/MyDrive/tradefm_ckpts/
 
 ### 0. One-time prep
 
-Repo is already at **`https://github.com/nahomar/market-pattern-bot`** (private).
+Repo is already at **`https://github.com/nahomar/silicon-alpha`** (private).
 Colab needs a PAT to clone it. Set it up once:
 
 1. GitHub → *Settings → Developer settings → Personal access tokens → Tokens (classic)

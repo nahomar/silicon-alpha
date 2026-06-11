@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-ROOT="${ROOT:-/root/market-pattern-bot}"
+ROOT="${ROOT:-/root/silicon-alpha}"
 LOG_DIR="$ROOT/reports/monday_live_$(date -u +%Y%m%dT%H%M%S)"
 mkdir -p "$LOG_DIR"
 

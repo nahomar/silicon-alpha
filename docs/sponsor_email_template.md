@@ -48,7 +48,7 @@ satisfies both programs' grad-student sponsorship requirements.
 >   checkpointing) validated on 8× H100 with `world_size=8`.
 >
 > Code at [https://github.com/nahomar/silicon-alpha] (formerly
-> market-pattern-bot). Full Phase-2/3/4/5 design specs under `docs/`.
+> silicon-alpha). Full Phase-2/3/4/5 design specs under `docs/`.
 >
 > **What I need.** The 524M pretraining run requires multi-node H100
 > (or multi-GPU A100 equivalent) for a week of wall-clock training on

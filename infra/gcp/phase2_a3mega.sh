@@ -77,10 +77,10 @@ fi
 mkdir -p ~/gcs
 gcsfuse --implicit-dirs ${BUCKET#gs://} ~/gcs || true
 
-if [[ ! -d ~/market-pattern-bot ]]; then
-    git clone --depth=1 '$REPO_URL' ~/market-pattern-bot
+if [[ ! -d ~/silicon-alpha ]]; then
+    git clone --depth=1 '$REPO_URL' ~/silicon-alpha
 fi
-cd ~/market-pattern-bot
+cd ~/silicon-alpha
 python -m venv .venv
 . .venv/bin/activate
 pip install --upgrade pip

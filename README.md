@@ -1,22 +1,53 @@
 # silicon-alpha
 
-A µs-latency dual-venue trading engine driven by a 524M decoder-only
-transformer (TradeFM) trained on exchange-message grammar from options,
-futures, and prediction markets.
+A research engine for 0DTE SPX/NDX options and prediction-market arbitrage,
+built around a **differentiable option pricer** and a decoder-only transformer
+(*TradeFM*) over exchange-message microstructure.
 
-Designed to deploy simultaneously across:
+This is an **active research build, not a deployed trading system**, and the
+README is written to keep that distinction unambiguous. One component is
+rigorously validated; one is trained but has not yet shown out-of-sample edge;
+the rest is a phased roadmap with design docs and intentionally-inert scaffolds.
+Any profit/latency figures in the design docs are *targets*, not measured
+results — nothing here has traded real capital.
 
-- **SPX / NDX 0DTE options** (HRT-tier latency, $166–$800 per unit per day
-  target)
-- **Polymarket / Kalshi prediction markets** (bundle + cross-venue arb,
-  0.1–3.0% per cycle)
+## What actually works today
 
-## Architecture
+- **Phase 0 — Differential-ML option pricer** ✅ *validated*. A 50k-parameter
+  twin-network prices SPX options and Greeks (Δ/Γ/𝒱 via automatic adjoint
+  differentiation) in a single forward pass. It reproduces analytic
+  Black-Scholes Greeks to **≤ 2e-5 delta-points / 0.09% gamma / 0.01% vega**
+  across a 0DTE grid; a wide-band control model cuts median **Heston** pricing
+  error **~14% (t = +2.0)** where stochastic vol is material. The write-up is
+  deliberately falsifiable and includes a *negative* result (the Heston
+  fine-tune is net-negative at 0DTE, t = −3.9, because SV barely accumulates
+  over hours): **[docs/phase0_dml.md](docs/phase0_dml.md)**. Reproduce with
+  `pytest tests/odte/test_dml_pricer.py` and
+  `python -m odte.eval.validate_dml --scale full`.
 
-End-to-end flow across all 9 phases. Phases 0-2 are live or in-progress;
-Phases 2.5-7 are design-only with code scaffolds where appropriate.
-HRT-inspired palette: near-black ingestion, warm orange neural + execution
-tiers, peach (dashed) for design-only phases, cream for terminal venues.
+- **TradeFM transformer** 🔄 *trained; no 0DTE directional alpha yet*. A 524M
+  decoder-only model trained on 5 days of OPRA reaches 39% top-1 next-token
+  (strong message-grammar) but **49% held-out return-direction — i.e. no
+  directional edge**. Rather than burn $20+ retraining on a hunch, a $0
+  CPU-only LightGBM signal-presence diagnostic
+  ([`infra/modal/dir_baseline.py`](infra/modal/dir_baseline.py)) gates whether
+  a directional-head retrain is worth it: if a tree can't beat 53% on the same
+  tokens, the signal isn't extractable at this granularity.
+
+- **Phase-2 training pipeline** 🔄 *validated on Modal* (FSDP sharding, fp8,
+  checkpoint I/O, real-OPRA tokenizer fit) at $0.25–$3/run. The $38–50k
+  multi-node production run is gated behind a GO from the diagnostic above.
+
+Everything below Phase 2 in the diagram is **design + scaffold**.
+
+## Architecture (roadmap)
+
+End-to-end **target** flow across all 9 phases — a research roadmap, not a
+deployed topology. Only Phase 0 is validated; Phases 1–2 are partially
+built/validated; Phases 2.5–8 are design-only with inert code scaffolds where
+a clean opt-in guard keeps them dormant. HRT-inspired palette: near-black
+ingestion, warm orange neural + execution tiers, peach (dashed) for
+design-only phases, cream for terminal venues.
 
 ```mermaid
 flowchart TB
@@ -180,7 +211,8 @@ critical-path tracker also lives at [`docs/architecture.md`](docs/architecture.m
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | 40M TradeFM Colab pretrain | ✅ done ([`notebooks/colab_phase1_tradefm.ipynb`](notebooks/colab_phase1_tradefm.ipynb)) |
+| 0 | Differential-ML option pricer (Greeks via autograd; BS + Heston) | ✅ **validated** ([`docs/phase0_dml.md`](docs/phase0_dml.md), gate test passing) |
+| 1 | 40M / 524M TradeFM pretrain on OPRA microstructure | ✅ trained — strong message-grammar (39% top-1) but **no 0DTE directional alpha (49% held-out)**; retrain gated on signal diagnostic |
 | 2 | 524M multi-node H100 pretrain on OPRA | 🔄 pipeline validated on Modal; multi-node compute gated |
 | 2.5 | Cross-asset fusion (ES futures modality) | 📝 design ([`docs/cross_asset_fusion.md`](docs/cross_asset_fusion.md)) + opt-in scaffold |
 | 3 | Persistent-kernel live inference (4.6–15.8 µs) | 📝 kernels scaffolded, not live |
@@ -245,7 +277,7 @@ python3 -m modal run infra/modal/phase2_smoke.py::dryrun_8gpu
 ## Phase 2 production launch (needs GCP quota + billing + $38–50k)
 
 ```bash
-export GCP_PROJECT=... GCP_BUCKET=gs://... REPO_URL=https://github.com/nahomar/market-pattern-bot.git
+export GCP_PROJECT=... GCP_BUCKET=gs://... REPO_URL=https://github.com/nahomar/silicon-alpha.git
 ./infra/gcp/phase2_a3mega.sh          # provision 3× A3 Mega (24× H100)
 ./infra/gcp/launch_torchrun_524m.sh   # launch distributed training
 ```

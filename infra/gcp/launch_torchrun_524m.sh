@@ -30,7 +30,7 @@ for i in $(seq 0 $((N_NODES-1))); do
     echo "[launch] starting node_rank=$i on $NAME"
     gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" -- "
 set -euo pipefail
-cd ~/market-pattern-bot
+cd ~/silicon-alpha
 . .venv/bin/activate
 source infra/gcp/tcpx_nccl_env.sh
 nohup torchrun \
