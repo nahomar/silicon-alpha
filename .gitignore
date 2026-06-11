@@ -53,3 +53,7 @@ mmlive.*.log
 
 # OS
 Thumbs.db
+
+# compiled C++ binaries
+cpp/heston_mc
+*.o
