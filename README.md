@@ -1,5 +1,7 @@
 # silicon-alpha
 
+[![CI](https://github.com/nahomar/silicon-alpha/actions/workflows/ci.yml/badge.svg)](https://github.com/nahomar/silicon-alpha/actions/workflows/ci.yml)
+
 A research engine for 0DTE SPX/NDX options and prediction-market arbitrage,
 built around a **differentiable option pricer** and a decoder-only transformer
 (*TradeFM*) over exchange-message microstructure.
