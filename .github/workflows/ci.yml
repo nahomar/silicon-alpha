@@ -20,7 +20,7 @@ jobs:
           pip install numpy scipy pandas pytest
           pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Run tests
-        run: PYTHONPATH=. pytest tests/odte/test_quantile_parity.py tests/odte/test_dml_pricer.py -q
+        run: PYTHONPATH=. pytest tests/odte/test_quantile_parity.py tests/odte/test_dml_pricer.py tests/odte/test_feature_prep.py -q
 
   cpp-heston:
     name: C++ Heston engine (build + self-test)

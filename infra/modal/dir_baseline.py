@@ -1,5 +1,15 @@
 """Tiny directional-baseline diagnostic — does any model see signal?
 
+⚠️  PREREQUISITE — READ docs/data_integrity_finding.md FIRST.
+    This diagnostic predicts the `ret` token. On shards packed before the
+    per-instrument return fix, `ret` is a cross-contract log-ratio (corrupted
+    target), so the verdict here is MEANINGLESS. Re-pack the OPRA data with the
+    corrected odte.data.datashop_pack.prepare_features (instrument_id retained,
+    returns grouped per contract) before trusting any GO / NO-GO from this run,
+    and build the sliding windows per `instrument_id`, not across the global
+    stream.
+
+
 Before spending $20 on a 524M retrain with a directional head, run this
 $0 (CPU-only) sanity check: a small LightGBM classifier trained on
 raw tokenized OPRA features predicting next-return direction.

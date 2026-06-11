@@ -427,6 +427,12 @@ def pack_databento(start: str, end: str, symbols: List[str],
                 buffer.append({
                     "ts": int(row["ts_ms"]),
                     "underlying": str(symbols[0]),  # parent sym
+                    # Retain the child-contract id so downstream can rebuild
+                    # per-instrument sequences (returns were grouped by it in
+                    # prepare_features; without it, sequence models and the
+                    # directional diagnostic cannot separate contracts).
+                    "instrument_id": int(row["instrument_id"]) if "instrument_id" in row
+                    and pd.notna(row["instrument_id"]) else -1,
                     "expiry": "",  # populate via instrument_id->definition later
                     "day": pd.Timestamp(row["quote_datetime"]).strftime("%Y-%m-%d"),
                     "tokens": toks[i].tolist(),

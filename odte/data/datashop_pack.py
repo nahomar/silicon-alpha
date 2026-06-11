@@ -63,11 +63,40 @@ def iter_csv_chunks(path: Path, chunksize: int = 100_000,
             yield chunk
 
 
+# Candidate columns that identify a single tradeable contract. The first one
+# present is used to group per-instrument temporal features (returns,
+# inter-arrival). Databento MBP-1 carries `instrument_id`; DataShop CSVs carry a
+# per-contract `symbol`.
+_INSTRUMENT_COLS = ("instrument_id", "symbol", "ticker", "raw_symbol")
+
+
+def _detect_instrument_col(df: pd.DataFrame):
+    for c in _INSTRUMENT_COLS:
+        if c in df.columns and df[c].nunique(dropna=True) > 1:
+            return c
+    return None
+
+
 def prepare_features(chunk: pd.DataFrame) -> pd.DataFrame:
     """Derive the feature columns HybridBinTokenizer expects.
 
     Returned columns match odte.tokenizer.default_microstructure_spec():
         ret, mid, micro_dev, spread, bid_sz, ask_sz, last_sz, inter_arrival_ms
+
+    Per-instrument correctness: ``ret`` and ``inter_arrival_ms`` are temporal
+    diffs and MUST be computed within a single contract. The OPRA feed under
+    parent symbology (SPX.OPT) is a time-ordered stream interleaving *every*
+    child contract, so a naive global ``diff()`` would compute
+    ``log(mid of contract A) - log(mid of contract B)`` -- a cross-contract
+    log-ratio, not a return. When an instrument column is present we group by
+    it (mirroring ``polygon_pack``); otherwise we fall back to a global diff and
+    emit a warning, because a silent cross-instrument return corrupts the model
+    target.
+
+    Caveat: features are computed per streamed chunk, so an instrument's first
+    quote in each chunk gets a 0 return at the chunk boundary. That is a
+    second-order effect; full correctness would carry the last mid per
+    instrument across chunks (or pack per-instrument).
     """
     df = chunk.copy()
     df["quote_datetime"] = pd.to_datetime(df["quote_datetime"], errors="coerce")
@@ -79,9 +108,22 @@ def prepare_features(chunk: pd.DataFrame) -> pd.DataFrame:
     df["ask_sz"] = df["ask_size"].astype(float).fillna(0.0)
     df["last_sz"] = df["trade_volume"].astype(float).fillna(0.0)
     df["micro_dev"] = 0.0                          # placeholder until full-depth feed
-    df = df.sort_values("ts_ms")
-    df["inter_arrival_ms"] = df["ts_ms"].diff().fillna(0.0).clip(lower=1e-3)
-    df["ret"] = np.log(df["mid"]).diff().fillna(0.0)
+
+    inst = _detect_instrument_col(df)
+    if inst is not None:
+        df = df.sort_values([inst, "ts_ms"], kind="mergesort")
+        g = df.groupby(inst, sort=False)
+        df["inter_arrival_ms"] = g["ts_ms"].diff().fillna(0.0).clip(lower=1e-3)
+        df["ret"] = (np.log(df["mid"]) - np.log(g["mid"].shift(1))).fillna(0.0)
+    else:
+        log.warning("prepare_features: no instrument column %s found; computing "
+                    "ret/inter_arrival on the GLOBAL stream. If this data "
+                    "interleaves multiple contracts, `ret` is a cross-contract "
+                    "log-ratio (corrupted target). Carry a per-contract id.",
+                    _INSTRUMENT_COLS)
+        df = df.sort_values("ts_ms", kind="mergesort")
+        df["inter_arrival_ms"] = df["ts_ms"].diff().fillna(0.0).clip(lower=1e-3)
+        df["ret"] = np.log(df["mid"]).diff().fillna(0.0)
     return df
 
 
