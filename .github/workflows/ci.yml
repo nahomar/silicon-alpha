@@ -17,7 +17,7 @@ jobs:
       - name: Install deps (CPU torch)
         run: |
           python -m pip install --upgrade pip
-          pip install numpy scipy pytest
+          pip install numpy scipy pandas pytest
           pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Run tests
         run: PYTHONPATH=. pytest tests/odte/test_quantile_parity.py tests/odte/test_dml_pricer.py -q
