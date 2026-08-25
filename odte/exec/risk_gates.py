@@ -124,10 +124,25 @@ class RiskGates:
               equity: float,
               strikes: np.ndarray,
               spot: float,
-              minute_of_day: int = 0,
-              minutes_to_expiry: float = 9999.0,
+              minute_of_day: Optional[int] = None,
+              minutes_to_expiry: Optional[float] = None,
               open_interest: Optional[np.ndarray] = None,
               symbols: Optional[List[str]] = None) -> GateResult:
+        """Veto a candidate order. Missing clock inputs fail *closed*.
+
+        `minute_of_day` and `minutes_to_expiry` both default to None, and None
+        is treated as the most restrictive value -- the gamma cap drops
+        straight to its end-of-day floor and pin risk is scored as if expiry
+        were imminent.
+
+        This matters because the previous defaults (minute 0, 9999 minutes to
+        expiry) were the *loosest* possible: a dropped or mis-keyed field
+        silently restored the full opening-bell gamma cap during exactly the
+        last ninety minutes when it should have been ten times tighter, and
+        silently zeroed the pin score. A risk gate that disables itself when
+        its input goes missing is worse than no gate, because the logs still
+        show a gate passing.
+        """
         failed: List[str] = []
         det: Dict[str, float] = {}
         aw = np.abs(w)
@@ -143,11 +158,15 @@ class RiskGates:
         if dd > self.delta_dollar_cap: failed.append("delta_dollar_cap")
         if vg > self.vega_cap: failed.append("vega_cap")
 
-        # Time-decaying gamma cap
-        g_scale = gamma_cap_scale(minute_of_day,
-                                   self.gamma_tighten_start_min,
-                                   self.gamma_tighten_end_min,
-                                   self.gamma_floor_scale)
+        # Time-decaying gamma cap. No clock -> assume the worst (EOD floor).
+        det["clock_missing"] = float(minute_of_day is None)
+        if minute_of_day is None:
+            g_scale = self.gamma_floor_scale
+        else:
+            g_scale = gamma_cap_scale(minute_of_day,
+                                      self.gamma_tighten_start_min,
+                                      self.gamma_tighten_end_min,
+                                      self.gamma_floor_scale)
         dyn_gamma_cap = self.gamma_dollar_cap * g_scale
         det["gamma_cap_scale"] = g_scale
         det["gamma_cap_dynamic"] = dyn_gamma_cap
@@ -171,9 +190,12 @@ class RiskGates:
             if dists.min() < self.pin_dist_cap:
                 failed.append("pin_dist")
             if open_interest is not None and len(open_interest) == len(w):
+                # No time-to-expiry -> score as if expiry were imminent, which
+                # maximizes the amplifier rather than zeroing the score.
+                mte = 0.0 if minutes_to_expiry is None else minutes_to_expiry
                 score = pin_score(spot, np.asarray(strikes)[active],
                                    np.asarray(open_interest)[active],
-                                   minutes_to_expiry, self.pin_window_min)
+                                   mte, self.pin_window_min)
                 det["pin_score"] = score
                 if score > self.pin_score_block:
                     failed.append("pin_score_block")

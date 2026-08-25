@@ -33,7 +33,7 @@ from odte.tokenizer import HybridBinTokenizer
 from odte.transformer_tradefm import MiniTradeFM, TradeFM, wrap_fp8_autocast
 from odte.dml_pricer import DMLPricer, train_dml_bs, greek_error_on_atm
 from odte.world_sim import WorldSim
-from odte.executor import DeterministicExecutor, RiskGates
+from odte.executor import DeterministicExecutor, LegacyRiskGates
 from models.config import DMLConfig, WorldSimConfig
 
 logging.basicConfig(level=logging.INFO,
@@ -172,7 +172,7 @@ def main():
     strat = _strategy_pnl(world_df, executor, n_opts=21)
     log.info("strategy: %s", strat)
 
-    risk = RiskGates()
+    risk = LegacyRiskGates()
     # Fake greeks/strikes for the smoke risk check:
     fake_greeks = {"gamma": np.linspace(0.01, 0.05, 21),
                    "vega":  np.linspace(0.5, 2.0, 21)}

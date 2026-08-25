@@ -22,7 +22,7 @@ are authoritative. Use this module to:
   2. Size positions under a self-imposed cap
   3. Decide when to flatten before margin call
 
-Integrated with odte.executor.RiskGates through compute_account_exposure.
+Integrated with odte.exec.risk_gates.RiskGates through compute_account_exposure.
 """
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ class DynamicIntradayMargin:
 
 
 # ---------------------------------------------------------------------------
-# Convenience: hook into odte.executor.RiskGates
+# Convenience: hook into odte.exec.risk_gates.RiskGates
 # ---------------------------------------------------------------------------
 
 def compute_account_exposure(
