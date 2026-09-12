@@ -17,7 +17,10 @@ jobs:
       - name: Install deps (CPU torch)
         run: |
           python -m pip install --upgrade pip
-          pip install numpy scipy pandas pytest
+          # scikit-learn / vaderSentiment are imported lazily inside nlpalpha
+          # functions, so a missing one breaks only at call time -- i.e. in a
+          # test, not at collection. Installed here so CI exercises those paths.
+          pip install numpy scipy pandas pytest scikit-learn vaderSentiment
           pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Run tests
         # Whole tree rather than a hand-maintained file list: the list was
