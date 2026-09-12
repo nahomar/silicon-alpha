@@ -109,8 +109,25 @@ def _project_l1_ball(v: np.ndarray, b: float) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class RiskGates:
-    """Post-solve checks. All thresholds are GROSS exposures."""
+class LegacyRiskGates:
+    """Superseded post-solve checks. Use `odte.exec.risk_gates.RiskGates`.
+
+    Kept only because `odte_smoke.py` still calls this signature. Do not wire
+    it into anything new, and do not compare its thresholds to the canonical
+    gate's -- they are different physical quantities:
+
+        here                gamma_cap  vs  sum(|w * gamma|)          -- raw gamma
+        exec/risk_gates.py  gamma_dollar_cap vs sum(|w|*|g|*S^2*mult) -- gamma dollars
+
+    For SPX near 5500 those differ by roughly S^2*multiplier, i.e. about ten
+    orders of magnitude, so the numbers are not interchangeable in either
+    direction. This class also has no end-of-day gamma tightening and no
+    OI-weighted pin score, which is the whole point of the replacement.
+
+    It was previously named `RiskGates`, colliding with the canonical class of
+    the same name; an import from the wrong module silently selected a weaker
+    risk model with incompatible units.
+    """
     gamma_cap: float = 1e4
     vega_cap: float = 1e4
     pin_dist_cap: float = 0.002     # min |S-K|/S at EOD

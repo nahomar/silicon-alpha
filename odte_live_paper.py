@@ -317,8 +317,15 @@ async def run(args) -> dict:
             res.w, g, res.required_margin, equity,
             strikes=np.array([ev["strike"]]),
             spot=spot,
-            minute_of_day=int(ev.get("minute_of_day", 0)),
-            minutes_to_expiry=float(ev.get("minutes_to_expiry", 9999)),
+            # Pass None through when the field is absent so the gate applies
+            # its fail-closed path. Defaulting to 0 / 9999 here would restore
+            # the loosest gamma cap and a zero pin score at exactly the moment
+            # a dropped field is most dangerous.
+            minute_of_day=(int(ev["minute_of_day"])
+                           if ev.get("minute_of_day") is not None else None),
+            minutes_to_expiry=(float(ev["minutes_to_expiry"])
+                               if ev.get("minutes_to_expiry") is not None
+                               else None),
             open_interest=np.array([ev.get("open_interest", 0)]),
             symbols=[key],
         )
