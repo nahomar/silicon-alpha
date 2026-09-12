@@ -20,7 +20,11 @@ jobs:
           pip install numpy scipy pandas pytest
           pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Run tests
-        run: PYTHONPATH=. pytest tests/odte/test_quantile_parity.py tests/odte/test_dml_pricer.py tests/odte/test_feature_prep.py tests/odte/test_risk_gates.py -q
+        # Whole tree rather than a hand-maintained file list: the list was
+        # conflicting on every branch that added a test, and silently omitting
+        # a new suite is the failure it invites. test_heston_cpp is excluded
+        # because it needs the C++ binary, which the cpp-heston job builds.
+        run: PYTHONPATH=. pytest tests/ --ignore=tests/odte/test_heston_cpp.py -q
 
   cpp-heston:
     name: C++ Heston engine (build + self-test)
