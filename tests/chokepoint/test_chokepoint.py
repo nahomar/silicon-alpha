@@ -105,6 +105,45 @@ def test_monthly_source_refuses_a_daily_signal():
     comexstat.require_horizon(90)  # within reach — must not raise
 
 
+def test_european_numbers_parse_correctly():
+    """'88.950' is eighty-eight thousand, not 88.95."""
+    from chokepoint.data.cochilco import _euro_number
+
+    assert _euro_number("88.950") == 88950.0
+    assert _euro_number("1.414,4") == pytest.approx(1414.4)
+    assert _euro_number("-19.000") == -19000.0
+    assert _euro_number("-25") == -25.0
+
+
+def test_missing_values_are_none_not_zero():
+    """Zero inventory is a market event; missing data is not.
+
+    Reading a blank as 0.0 would print an empty warehouse into the series.
+    """
+    from chokepoint.data.cochilco import _euro_number
+
+    for blank in ("", "   ", "-", "n/d", "s/i"):
+        assert _euro_number(blank) is None
+
+
+def test_period_parsing_handles_years_and_spanish_months():
+    from chokepoint.data.cochilco import _parse_period
+
+    assert _parse_period("2021") == pd.Timestamp("2021-12-31")
+    assert _parse_period("ENE/JAN 2024") == pd.Timestamp("2024-01-31")
+    assert _parse_period("DIC/DEC 2023") == pd.Timestamp("2023-12-31")
+    assert _parse_period("not a period") is None
+
+
+def test_br_split_cells_align_positionally():
+    """A <td> is a column fragment, not a value — the core parsing assumption."""
+    from chokepoint.data.cochilco import _rows_from_html
+
+    html = "<tr><td>2021<br>2022</td><td>88.950<br>88.925</td></tr>"
+    rows = _rows_from_html(html)
+    assert rows == [[["2021", "2022"], ["88.950", "88.925"]]]
+
+
 def test_ncm_codes_are_unique_ints():
     """A duplicated code would silently make two commodities the same series."""
     from chokepoint.data import comexstat

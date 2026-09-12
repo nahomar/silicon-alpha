@@ -194,8 +194,12 @@ SOURCES: dict[str, Source] = {
                 "absorbed, visible daily and long before customs statistics. "
                 "It is NOT country-attributable — you see the world balance "
                 "tightening, not which government caused it — so it pairs with "
-                "a country source rather than replacing one. Free tier is "
-                "day-delayed; real-time is a paid LME licence."
+                "a country source rather than replacing one.\n"
+                "ACCESS: direct requests return HTTP 403 (Akamai); this is not "
+                "fetchable from here. Copper inventories ARE obtainable monthly "
+                "via `cochilco_cl`, which republishes LME/COMEX/SHFE stocks. "
+                "For daily granularity or non-copper metals, this needs either "
+                "a browser session or a paid LME licence."
             ),
         ),
         Source(
@@ -284,13 +288,28 @@ SOURCES: dict[str, Source] = {
             cost=Cost.FREE,
             frequency=Frequency.MONTHLY,
             publication_lag=timedelta(days=30),
-            coverage="Chile: copper + molybdenum production by company, exports",
+            coverage=(
+                "Chile: copper production, prices, exports; AND republished "
+                "LME/COMEX/SHFE copper inventories"
+            ),
             supports_claim="(c) signal",
             notes=(
-                "Production BY COMPANY is the useful part — it maps a national "
-                "statistic onto listed equities (Antofagasta, BHP Escondida), "
-                "which is what a divergence trade needs. Excel/web bulletin, "
-                "no API; scraping required."
+                "LOADER BUILT: chokepoint/data/cochilco.py. Plain HTML at a "
+                "predictable URL, no bot protection.\n"
+                "Its most valuable table is not Chilean at all: table 4_1 "
+                "republishes exchange copper inventories for LME, COMEX and "
+                "SHFE with month-on-month changes. That is the series the "
+                "exchanges themselves refuse us (403/404), available from a "
+                "government agency that does not block. Generalisable lesson: "
+                "when a primary source is bot-walled, a national statistics "
+                "agency consuming the same data is often open — at the cost of "
+                "latency and of reading their transcription rather than the "
+                "exchange's own print.\n"
+                "CORRECTION: this entry previously claimed the bulletin carries "
+                "production by individual company, which would have let us map "
+                "national output onto listed equities. It does not — that lives "
+                "in Cochilco's separate Excel database. The claim came from a "
+                "search summary and was not verified against the bulletin."
             ),
         ),
         Source(
