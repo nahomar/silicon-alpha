@@ -62,12 +62,27 @@ def test_supply_at_risk_can_exceed_one():
 
 
 def test_actionable_requires_both_leverage_and_visibility():
-    df = _shares([("cobalt", "DR Congo", 70)])
-    drc = countries.build_from(df)[0]
-    assert drc.is_chokepoint
-    # Falls back to USGS annual -> huge leverage, but invisible.
-    assert not drc.is_watchable
-    assert not drc.actionable, "leverage without visibility is not actionable"
+    """Uses a country with no registered source, deliberately.
+
+    An earlier version asserted DR Congo was unwatchable. That was true until
+    CME cobalt futures were registered, and then this test failed — correctly,
+    because it had pinned a fact about the world rather than the rule. Which
+    countries are visible changes every time a source is added; that 'leverage
+    without visibility is not actionable' does not.
+    """
+    df = _shares([("unobtainium", "Ruritania", 70)])
+    country = countries.build_from(df)[0]
+    assert country.is_chokepoint
+    # No registered source -> falls back to USGS annual -> invisible.
+    assert not country.is_watchable
+    assert not country.actionable, "leverage without visibility is not actionable"
+
+
+def test_registered_fast_source_makes_a_country_watchable():
+    """The other half of the rule, pinned against the registry's own contents."""
+    df = _shares([("platinum", "South Africa", 70)])
+    sa = countries.build_from(df)[0]
+    assert sa.is_watchable and sa.actionable
 
 
 def test_low_share_country_is_not_a_chokepoint():

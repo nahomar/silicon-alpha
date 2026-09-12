@@ -55,9 +55,10 @@ MATERIAL_SHARE = 0.20
 # At or above this, the country is a single point of failure for that commodity.
 CHOKEHOLD_SHARE = 0.40
 
-# Fastest data that still counts as "we could see it coming". Monthly data with
-# a 2-month lag does not let you act ahead of a price move.
-WATCHABLE_HORIZON = timedelta(days=31)
+# Fastest data that still counts as "we could see it coming". Tied to the
+# registry's own definition so the two cannot drift apart — the horizon the
+# track trades is the horizon that decides whether a country is watchable.
+WATCHABLE_HORIZON = sources.TRADEABLE_HORIZON
 
 
 @dataclass
@@ -93,23 +94,35 @@ class CountryProfile:
         return f"{s.frequency.name.lower()} (+{s.publication_lag.days}d)"
 
 
-def _country_sources() -> dict[str, sources.Source]:
-    """Fastest known source per country, from the registry.
+# Country names as they appear in the share table, matched against the free-text
+# `coverage` field of each registered source. Listed explicitly rather than
+# inferred so that adding a source without wiring it to a country is a visible
+# omission rather than a silent one.
+_COUNTRY_NAMES = (
+    "south africa", "brazil", "chile", "china", "indonesia", "dr congo",
+    "russia", "australia", "kazakhstan", "peru", "guinea", "zambia",
+    "zimbabwe", "canada", "morocco", "gabon",
+)
 
-    The registry stores coverage as free text, so this matches on country name.
-    Everything unmatched falls back to the best *global* source — USGS annual —
-    which is the honest default: for most countries, annual production data
-    published a year late is genuinely all we have.
+
+def _country_sources() -> dict[str, sources.Source]:
+    """Fastest registered source per country.
+
+    Sources record coverage as free text, so this matches country names against
+    it. Anything unmatched falls back to the best *global* source — USGS annual
+    — which is the honest default: for most producing countries, annual
+    production data published a year in arrears is genuinely all we hold.
     """
     out: dict[str, sources.Source] = {}
     for s in sources.SOURCES.values():
         cov = s.coverage.lower()
-        for name in ("south africa",):
-            if name in cov:
-                key = name.title()
-                prev = out.get(key)
-                if prev is None or s.min_signal_horizon < prev.min_signal_horizon:
-                    out[key] = s
+        for name in _COUNTRY_NAMES:
+            if name not in cov:
+                continue
+            key = "DR Congo" if name == "dr congo" else name.title()
+            prev = out.get(key)
+            if prev is None or s.min_signal_horizon < prev.min_signal_horizon:
+                out[key] = s
     return out
 
 
@@ -175,10 +188,12 @@ def report(profiles: list[CountryProfile]) -> None:
     blind = [p for p in chokes if not p.is_watchable]
 
     print("\n" + "=" * 78)
-    print(f"ACTIONABLE (leverage AND faster-than-monthly data): {len(actionable)}")
+    print(f"ACTIONABLE (leverage AND data inside the "
+          f"{WATCHABLE_HORIZON.days}d horizon): {len(actionable)}")
     for p in actionable:
         print(f"  {p.country} — {p.visibility}")
-    print(f"\nBLIND (real leverage, nothing faster than annual): {len(blind)}")
+    print(f"\nBLIND (real leverage, nothing inside the "
+          f"{WATCHABLE_HORIZON.days}d horizon): {len(blind)}")
     print("  " + ", ".join(p.country for p in blind))
     print("=" * 78)
 

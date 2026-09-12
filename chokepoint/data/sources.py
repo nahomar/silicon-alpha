@@ -58,7 +58,18 @@ class SourceUnusableError(RuntimeError):
 # This constant is what makes `is_signal_capable` mean something. Without it,
 # "can this support a signal?" is trivially true for every non-snapshot source
 # — annual data "supports" a two-year-horizon signal, which is true and useless.
-TRADEABLE_HORIZON = timedelta(days=30)
+#
+# Raised 30d -> 90d when the track pivoted. The original value was set for the
+# Eskom test, which asked whether a grid event moved PGM miners the NEXT DAY;
+# that question died with an honest null (chokepoint_eskom_probe_result.md).
+# The live question is now whether a supply dislocation is mispriced over weeks
+# to months, so monthly customs data published four days after month-end is a
+# legitimate signal input for it where it was not for the daily test.
+#
+# This is a real loosening of a standard and is recorded as such: it is
+# justified by the horizon of the strategy, NOT by wanting more sources to
+# qualify. If the horizon tightens again, this must come back down.
+TRADEABLE_HORIZON = timedelta(days=90)
 
 
 @dataclass(frozen=True)
@@ -169,6 +180,120 @@ SOURCES: dict[str, Source] = {
             ),
         ),
         Source(
+            key="lme_stocks",
+            name="LME warehouse stocks + stock movements",
+            url="https://www.lme.com/en/market-data/reports-and-data",
+            cost=Cost.FREE,
+            frequency=Frequency.DAILY,
+            publication_lag=timedelta(days=1),
+            coverage="global: copper, nickel, aluminium, zinc, lead, tin, cobalt",
+            supports_claim="(c) signal",
+            notes=(
+                "Exchange inventory is the fastest honest read on physical "
+                "tightness: metal leaving warehouses is a supply shock being "
+                "absorbed, visible daily and long before customs statistics. "
+                "It is NOT country-attributable — you see the world balance "
+                "tightening, not which government caused it — so it pairs with "
+                "a country source rather than replacing one. Free tier is "
+                "day-delayed; real-time is a paid LME licence."
+            ),
+        ),
+        Source(
+            key="shfe_stocks",
+            name="Shanghai Futures Exchange inventory",
+            url="https://www.shfe.com.cn",
+            cost=Cost.FREE,
+            frequency=Frequency.DAILY,
+            publication_lag=timedelta(days=1),
+            coverage="China: copper, nickel, zinc, lead, tin, aluminium",
+            supports_claim="(c) signal",
+            notes=(
+                "Published after the Shanghai close (07:00 UTC). The closest "
+                "thing to a daily window into Chinese metal balances, which "
+                "matters because China is the largest chokepoint on this map "
+                "(9 commodities) and is otherwise invisible. Weekly stock "
+                "reports are the more-cited series; daily is available."
+            ),
+        ),
+        Source(
+            key="cme_cobalt",
+            name="CME cobalt futures settlements (Fastmarkets-settled)",
+            url="https://www.cmegroup.com/markets/metals/battery-metals/cobalt-metal-fastmarkets.settlements.html",
+            cost=Cost.FREE,
+            frequency=Frequency.DAILY,
+            publication_lag=timedelta(days=1),
+            coverage="global cobalt (DR Congo ~70% of mine supply)",
+            supports_claim="(c) signal",
+            notes=(
+                "CME lists BOTH Cobalt Metal and Cobalt Hydroxide CIF China "
+                "futures, settling against daily Fastmarkets assessments. "
+                "Settlement prices are published free.\n"
+                "This corrects an earlier claim in this track that cobalt has "
+                "no tradeable instrument because nobody mines it on purpose. "
+                "That is true of EQUITIES and false of futures: the exposure is "
+                "directly expressible. Caveat is liquidity, not existence — "
+                "these contracts are thin, so check volume and open interest "
+                "before assuming a position can be entered or exited.\n"
+                "Like LME stocks this is a world price, not a DRC statistic; "
+                "but at ~70% mine share the two are close to the same thing."
+            ),
+        ),
+        Source(
+            key="esdm_hpm_id",
+            name="Indonesia ESDM benchmark mineral price (HPM)",
+            url="https://www.esdm.go.id",
+            cost=Cost.FREE,
+            frequency=Frequency.MONTHLY,
+            publication_lag=timedelta(days=5),
+            coverage="Indonesia: nickel ore benchmark price by grade",
+            supports_claim="(c) signal",
+            notes=(
+                "Official government benchmark price published monthly, used "
+                "as the tax basis for nickel ore. It is a POLICY price, not a "
+                "market-clearing one — which makes it unusually informative "
+                "here, because changes to it are deliberate government acts "
+                "that reprice the whole Indonesian cost curve. The April 2026 "
+                "formula revision more than doubled the effective benchmark on "
+                "1.6% ore.\n"
+                "Pairs with RKAB annual production quotas (also ESDM), which "
+                "are the quantity lever to HPM's price lever."
+            ),
+        ),
+        Source(
+            key="comexstat_br",
+            name="Brazil ComexStat foreign-trade statistics",
+            url="https://api-comexstat.mdic.gov.br/docs",
+            cost=Cost.FREE,
+            frequency=Frequency.MONTHLY,
+            publication_lag=timedelta(days=5),
+            coverage="Brazil: exports/imports by HS code, value and tonnage",
+            supports_claim="(c) signal",
+            notes=(
+                "Official government API, no key, no registration. VERIFIED "
+                "LIVE: on 2026-09-12 it reported data updated 2026-09-04 "
+                "covering month 08 — a four-day lag on monthly customs data, "
+                "not the year-plus that USGS carries. Brazil is 90% of world "
+                "niobium, so this is direct visibility into the single most "
+                "concentrated chokepoint on the map."
+            ),
+        ),
+        Source(
+            key="cochilco_cl",
+            name="Cochilco (Chilean Copper Commission) monthly bulletin",
+            url="https://boletin.cochilco.cl/estadisticas/boletin.asp",
+            cost=Cost.FREE,
+            frequency=Frequency.MONTHLY,
+            publication_lag=timedelta(days=30),
+            coverage="Chile: copper + molybdenum production by company, exports",
+            supports_claim="(c) signal",
+            notes=(
+                "Production BY COMPANY is the useful part — it maps a national "
+                "statistic onto listed equities (Antofagasta, BHP Escondida), "
+                "which is what a divergence trade needs. Excel/web bulletin, "
+                "no API; scraping required."
+            ),
+        ),
+        Source(
             key="comtrade",
             name="UN Comtrade trade flows",
             url="https://comtradeplus.un.org",
@@ -176,12 +301,19 @@ SOURCES: dict[str, Source] = {
             frequency=Frequency.MONTHLY,
             publication_lag=timedelta(days=60),
             coverage="bilateral commodity trade, most countries, HS codes",
-            supports_claim="(a) research",
+            supports_claim="(a) research + (c) signal, marginally",
             notes=(
-                "Monthly with ~2mo lag, and African reporting is frequently "
-                "late or absent — mirror-statistics (partner-reported) are "
-                "often more complete than direct reports. Good for value-capture "
-                "analysis; too slow and too revised for signal."
+                "Sits exactly on the 90d boundary (monthly + 60d lag), so it "
+                "qualifies as a signal input by arithmetic rather than by "
+                "merit. Reclassified from research-only when TRADEABLE_HORIZON "
+                "rose to 90d — the invariant check forced the relabel, which is "
+                "what it is for.\n"
+                "Treat it as the weakest signal source here: reporting from "
+                "several African producers is late or absent, and mirror "
+                "statistics (partner-reported) are often more complete than "
+                "direct reports. Where a national source exists — ComexStat for "
+                "Brazil, Cochilco for Chile — prefer it; those are both faster "
+                "and more reliable."
             ),
         ),
         Source(
@@ -313,21 +445,33 @@ def summary() -> str:
         f"{TRADEABLE_HORIZON.days}d horizon this track would trade: {sig}"
     )
     out.append(
-        "  The other "
-        f"{len(SOURCES) - len(sig)} are research-only (claim (a)). Annual "
-        "reserve data cannot"
+        f"  The other {len(SOURCES) - len(sig)} are research-only (claim (a)): "
+        f"annual reserve data cannot"
     )
     out.append(
-        "  answer a days-horizon question, no matter how many countries it "
-        "covers — and"
+        "  answer a weeks-horizon question, no matter how many countries it "
+        "covers."
+    )
+    out.append("")
+    out.append(
+        "  NOTE: an earlier version of this summary asserted that the event "
+        "side of the"
     )
     out.append(
-        "  the event side of the thesis rests on exactly one source. That "
-        "scarcity is the"
+        "  thesis rested on a single source and called that scarcity the "
+        "finding. That"
     )
     out.append(
-        "  finding: it is why the track gates on one probe instead of building "
-        "ingestion."
+        "  was true when only Eskom was registered. It stopped being true "
+        "after a"
+    )
+    out.append(
+        "  deliberate search turned up exchange inventories, national customs "
+        "APIs and"
+    )
+    out.append(
+        "  government benchmark prices. The scarcity was in the looking, not "
+        "in the world."
     )
     return "\n".join(out)
 
