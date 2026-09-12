@@ -85,6 +85,35 @@ def test_registered_fast_source_makes_a_country_watchable():
     assert sa.is_watchable and sa.actionable
 
 
+# ---------------------------------------------------------------------------
+# ComexStat (offline parts only — the network path is not in CI)
+# ---------------------------------------------------------------------------
+
+def test_unknown_commodity_raises_before_any_network_call():
+    from chokepoint.data import comexstat
+
+    with pytest.raises(KeyError, match="unknown commodity"):
+        comexstat.fetch("unobtainium", "2024-01", "2024-06")
+
+
+def test_monthly_source_refuses_a_daily_signal():
+    """The horizon guard has to hold through the wrapper, not just the registry."""
+    from chokepoint.data import comexstat
+
+    with pytest.raises(sources.SourceUnusableError, match="predicting the past"):
+        comexstat.require_horizon(1)
+    comexstat.require_horizon(90)  # within reach — must not raise
+
+
+def test_ncm_codes_are_unique_ints():
+    """A duplicated code would silently make two commodities the same series."""
+    from chokepoint.data import comexstat
+
+    codes = list(comexstat.NCM.values())
+    assert all(isinstance(c, int) for c in codes)
+    assert len(set(codes)) == len(codes)
+
+
 def test_low_share_country_is_not_a_chokepoint():
     df = _shares([("gold", "Mali", 2), ("gold", "Ghana", 4)])
     assert not any(p.is_chokepoint for p in countries.build_from(df))
