@@ -150,7 +150,7 @@ SOURCES: dict[str, Source] = {
                 "supply signal identified so far, and the reason the decisive "
                 "probe is built on it. Free tier is oriented to CURRENT and "
                 "near-term schedules; deep history is the unmet dependency and "
-                "must be supplied as CSV. See afrimin/data/eskom.py."
+                "must be supplied as CSV. See chokepoint/data/eskom.py."
             ),
         ),
         Source(
@@ -286,7 +286,7 @@ _check_registry_invariant()
 
 
 def summary() -> str:
-    """Human-readable table. `python -m afrimin.data.sources`."""
+    """Human-readable table. `python -m chokepoint.data.sources`."""
     rows = [
         (
             s.key,

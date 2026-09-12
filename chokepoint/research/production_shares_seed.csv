@@ -1,0 +1,139 @@
+# SEED TABLE — approximate, widely-cited shares of global MINED production (%).
+#
+# Provenance: round figures consistent with USGS Mineral Commodity Summaries
+# (recent editions) and standard industry references. They are adequate for
+# exercising the concentration computation and for ordering countries and
+# commodities by structure. They are NOT research-grade and carry no vintage.
+#
+# BEFORE CITING ANY NUMBER DERIVED FROM THIS FILE: replace it with a table
+# parsed from a specific USGS MCS edition and record that edition here.
+# Production shares move year to year; cobalt, nickel, lithium, graphite and
+# bauxite in particular have shifted materially with Indonesian, Guinean and
+# Chinese capacity.
+#
+# Shares need not sum to 100 — concentration.py sums only the listed producers
+# and treats the result as a LOWER BOUND on true HHI. See the note in profile()
+# for why a "rest of world" residual would be worse than omitting the tail.
+#
+# MINE SHARE ONLY. Where a commodity's real chokepoint is in REFINING rather
+# than mining — cobalt refining, rare-earth separation, graphite anode coating,
+# all heavily Chinese — that chokepoint is tighter than the mine share shown
+# here and is NOT captured. Documented gap, not an oversight.
+commodity,country,share_pct
+cobalt,DR Congo,70
+cobalt,Indonesia,10
+cobalt,Russia,4
+cobalt,Australia,3
+cobalt,Philippines,3
+cobalt,Canada,3
+platinum,South Africa,70
+platinum,Russia,10
+platinum,Zimbabwe,8
+platinum,Canada,3
+platinum,United States,2
+palladium,Russia,40
+palladium,South Africa,35
+palladium,Canada,9
+palladium,United States,5
+palladium,Zimbabwe,5
+chromium,South Africa,45
+chromium,Turkey,20
+chromium,Kazakhstan,15
+chromium,India,10
+manganese,South Africa,35
+manganese,Gabon,20
+manganese,Australia,15
+manganese,Ghana,5
+manganese,China,5
+bauxite,Australia,28
+bauxite,Guinea,22
+bauxite,China,18
+bauxite,Brazil,9
+bauxite,India,7
+copper,Chile,24
+copper,Peru,10
+copper,DR Congo,10
+copper,China,8
+copper,United States,6
+copper,Zambia,4
+gold,China,10
+gold,Russia,9
+gold,Australia,9
+gold,Canada,6
+gold,United States,5
+gold,Ghana,4
+gold,South Africa,3
+gold,Mali,2
+uranium,Kazakhstan,43
+uranium,Canada,13
+uranium,Namibia,11
+uranium,Australia,9
+uranium,Niger,4
+diamonds,Russia,30
+diamonds,Botswana,20
+diamonds,DR Congo,12
+diamonds,Canada,11
+diamonds,Angola,9
+diamonds,South Africa,7
+nickel,Indonesia,50
+nickel,Philippines,10
+nickel,Russia,5
+nickel,New Caledonia,5
+nickel,Australia,5
+nickel,Canada,4
+lithium,Australia,45
+lithium,Chile,25
+lithium,China,15
+lithium,Argentina,5
+tin,China,30
+tin,Indonesia,20
+tin,Myanmar,10
+tin,Peru,8
+tin,Bolivia,8
+tin,Brazil,5
+tungsten,China,80
+tungsten,Viet Nam,5
+tungsten,Russia,2
+tungsten,Bolivia,2
+antimony,China,50
+antimony,Tajikistan,20
+antimony,Turkey,6
+antimony,Russia,5
+antimony,Myanmar,5
+rare_earths,China,65
+rare_earths,United States,14
+rare_earths,Myanmar,10
+rare_earths,Australia,5
+graphite,China,65
+graphite,Mozambique,10
+graphite,Madagascar,7
+graphite,Brazil,3
+vanadium,China,65
+vanadium,Russia,15
+vanadium,South Africa,10
+vanadium,Brazil,7
+niobium,Brazil,90
+niobium,Canada,8
+tantalum,DR Congo,40
+tantalum,Rwanda,15
+tantalum,Brazil,8
+tantalum,Nigeria,7
+iron_ore,Australia,35
+iron_ore,Brazil,17
+iron_ore,China,14
+iron_ore,India,10
+phosphate,China,40
+phosphate,Morocco,17
+phosphate,United States,9
+phosphate,Russia,6
+potash,Canada,30
+potash,Russia,18
+potash,Belarus,15
+potash,China,12
+zinc,China,33
+zinc,Peru,11
+zinc,Australia,10
+titanium,China,30
+titanium,South Africa,12
+titanium,Australia,11
+titanium,Mozambique,9

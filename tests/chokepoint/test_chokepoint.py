@@ -1,4 +1,4 @@
-"""Offline tests for the AFRIMIN track.
+"""Offline tests for the CHOKEPOINT track.
 
 Deliberately network-free so they can live in CI, unlike the probe itself
 (`odte/eval/signal_probe.py` set the precedent that network-dependent probes
@@ -16,9 +16,63 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from afrimin.data import eskom, sources
-from afrimin.probe.eskom_pgm import ols
-from afrimin.research import concentration
+from chokepoint import countries
+from chokepoint.data import eskom, sources
+from chokepoint.probe.eskom_pgm import ols
+from chokepoint.research import concentration
+
+
+# ---------------------------------------------------------------------------
+# Country dependency map
+# ---------------------------------------------------------------------------
+
+def _shares(rows):
+    return pd.DataFrame(rows, columns=["commodity", "country", "share_pct"])
+
+
+def test_chokehold_is_the_largest_single_commodity_share():
+    df = _shares([
+        ("cobalt", "DR Congo", 70), ("cobalt", "Australia", 3),
+        ("tantalum", "DR Congo", 40),
+    ])
+    drc = next(p for p in countries.build_from(df) if p.country == "DR Congo")
+    assert drc.chokehold == pytest.approx(0.70)
+    assert drc.chokehold_commodity == "cobalt"
+    assert drc.is_chokepoint
+
+
+def test_breadth_counts_only_material_shares():
+    """A 5% share is not leverage — other producers absorb that."""
+    df = _shares([
+        ("a", "X", 60), ("b", "X", 25), ("c", "X", 5), ("d", "X", 1),
+    ])
+    x = countries.build_from(df)[0]
+    assert x.breadth == 2, "only shares >= 20% should count"
+    assert x.supply_at_risk == pytest.approx(0.85)
+
+
+def test_supply_at_risk_can_exceed_one():
+    """It sums across DIFFERENT commodities, so >1.0 is correct, not a bug.
+
+    Guards the formatting fix: this was rendered as '458%' and read as a
+    broken calculation.
+    """
+    df = _shares([("a", "X", 80), ("b", "X", 70), ("c", "X", 60)])
+    assert countries.build_from(df)[0].supply_at_risk > 1.0
+
+
+def test_actionable_requires_both_leverage_and_visibility():
+    df = _shares([("cobalt", "DR Congo", 70)])
+    drc = countries.build_from(df)[0]
+    assert drc.is_chokepoint
+    # Falls back to USGS annual -> huge leverage, but invisible.
+    assert not drc.is_watchable
+    assert not drc.actionable, "leverage without visibility is not actionable"
+
+
+def test_low_share_country_is_not_a_chokepoint():
+    df = _shares([("gold", "Mali", 2), ("gold", "Ghana", 4)])
+    assert not any(p.is_chokepoint for p in countries.build_from(df))
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +228,7 @@ def test_sessions_beyond_stage_record_are_not_forward_filled(tmp_path):
 
 def test_degenerate_eval_split_refuses_to_render_a_verdict():
     """A null is only evidence if the test could have detected an effect."""
-    from afrimin.probe.eskom_pgm import InsufficientPower, _require_power
+    from chokepoint.probe.eskom_pgm import InsufficientPower, _require_power
 
     x = np.concatenate([np.random.default_rng(0).normal(size=200),
                         np.zeros(100)])  # eval split is all zeros
@@ -183,7 +237,7 @@ def test_degenerate_eval_split_refuses_to_render_a_verdict():
 
 
 def test_power_check_passes_when_both_splits_have_variance():
-    from afrimin.probe.eskom_pgm import _require_power
+    from chokepoint.probe.eskom_pgm import _require_power
 
     x = np.random.default_rng(0).normal(size=300)
     _require_power(x, split=200)  # must not raise

@@ -1,6 +1,6 @@
 """Decisive probe: does Eskom loadshedding transmit to PGM miners with a lag?
 
-This is the gate for the entire AFRIMIN track (`docs/afrimin_track.md`). It is
+This is the gate for the entire CHOKEPOINT track (`docs/chokepoint_track.md`). It is
 the direct analogue of `infra/modal/dir_baseline.py` — a $0 diagnostic that
 decides whether a large build is worth starting.
 
@@ -47,7 +47,7 @@ Criteria were declared in the design doc *before* the first run:
 - directional accuracy > 60%             → assume leakage and hunt for it.
 
 Usage:
-    PYTHONPATH=. python -m afrimin.probe.eskom_pgm --stages data/eskom_stages.csv
+    PYTHONPATH=. python -m chokepoint.probe.eskom_pgm --stages data/eskom_stages.csv
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from afrimin.data import eskom, prices
+from chokepoint.data import eskom, prices
 
 log = logging.getLogger(__name__)
 
@@ -309,7 +309,7 @@ def report(results: list[ProbeResult]) -> None:
               "contrarian signal; it means the model is misspecified.")
     elif hits:
         print(f"VERDICT: TRANSMISSION LAG PLAUSIBLE ({len(hits)}/{len(real)} miners).")
-        print("  Per docs/afrimin_track.md this licenses exactly ONE more "
+        print("  Per docs/chokepoint_track.md this licenses exactly ONE more "
               "independent case (DRC cobalt export policy), NOT an ingestion "
               "build and NOT vendor data.")
     else:

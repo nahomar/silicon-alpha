@@ -3,7 +3,7 @@
 **Verdict: no transmission lag detected. Do not build the ingestion layer. Do
 not buy vendor data.**
 
-This is the gate defined in [`afrimin_track.md`](afrimin_track.md), run to
+This is the gate defined in [`chokepoint_track.md`](chokepoint_track.md), run to
 completion. Total cost: **$0**.
 
 ## Question
@@ -23,7 +23,7 @@ to appear in thinner cases.
 The stage history was reconstructed at $0 from the **git history of
 `manually_specified.yaml`** in the open-source `beyarkay/eskom-calendar` project
 (778 revisions, 3,024 unique announcement intervals, each citing an Eskom
-announcement). See [`afrimin/data/build_stage_history.py`](../afrimin/data/build_stage_history.py).
+announcement). See [`chokepoint/data/build_stage_history.py`](../chokepoint/data/build_stage_history.py).
 
 The reconstruction independently reproduces known South African history, which
 is the main reason to trust it:
@@ -99,12 +99,12 @@ nothing is worse than one that crashes.**
 ## Reproduce
 
 ```bash
-PYTHONPATH=. python -m afrimin.data.build_stage_history --out data/eskom_stages.csv
-PYTHONPATH=. python -m afrimin.probe.eskom_pgm --stages data/eskom_stages.csv \
+PYTHONPATH=. python -m chokepoint.data.build_stage_history --out data/eskom_stages.csv
+PYTHONPATH=. python -m chokepoint.probe.eskom_pgm --stages data/eskom_stages.csv \
     --start 2022-07-01 --end 2024-05-01
 ```
 
 Network-dependent (clones a public repo, pulls free price data), so intentionally
 **not in CI** — matching the precedent in
 [`signal_probe_result.md`](signal_probe_result.md). The guards themselves are
-offline and *are* tested: `pytest tests/afrimin`.
+offline and *are* tested: `pytest tests/chokepoint`.

@@ -262,7 +262,7 @@ critical-path tracker also lives at [`docs/architecture.md`](docs/architecture.m
 dependencies; code scaffolds only where a clean opt-in guard keeps them
 inert until the dependency chain is satisfied.
 
-## Separate track — AFRIMIN (African resource flows)
+## Separate track — CHOKEPOINT (African resource flows)
 
 📝 *design + one gating probe*. A **second research program**, not a phase of
 the 0DTE engine: days-to-months horizon, different data, different instruments.
@@ -277,7 +277,7 @@ mirroring how [`dir_baseline.py`](infra/modal/dir_baseline.py) gated the 524M
 retrain. No ingestion layer and no vendor data until that probe transmits.
 
 **The probe has run: no transmission lag, on $0 of data**
-([`docs/afrimin_eskom_probe_result.md`](docs/afrimin_eskom_probe_result.md)).
+([`docs/chokepoint_eskom_probe_result.md`](docs/chokepoint_eskom_probe_result.md)).
 All out-of-sample |t| < 2, with the gold-miner placebo carrying the *largest*
 magnitude. Loadshedding was pre-announced and wall-to-wall in the press for two
 years — a supply constraint everyone can read about in advance is already in the
@@ -288,18 +288,18 @@ Stage history was reconstructed at $0 from 778 git revisions of a file in the
 open-source `eskom-calendar` project, and independently reproduces the known
 record (2023 at 98% of days; the ~10-month suspension from June 2024).
 
-Spec: **[`docs/afrimin_track.md`](docs/afrimin_track.md)**. No tradeable claim is
+Spec: **[`docs/chokepoint_track.md`](docs/chokepoint_track.md)**. No tradeable claim is
 made or implied.
 
 ```bash
-PYTHONPATH=. python -m afrimin.data.sources        # what each source can support
-PYTHONPATH=. python -m afrimin.research.concentration
+PYTHONPATH=. python -m chokepoint.data.sources        # what each source can support
+PYTHONPATH=. python -m chokepoint.research.concentration
 ```
 
 ## Repo layout
 
 ```
-afrimin/              SEPARATE TRACK (see docs/afrimin_track.md)
+chokepoint/              SEPARATE TRACK (see docs/chokepoint_track.md)
   data/               sources.py (frequency/lag registry), eskom.py, prices.py
   probe/              eskom_pgm.py — the $0 gate for the whole track
   research/           concentration.py — Africa supply share + HHI

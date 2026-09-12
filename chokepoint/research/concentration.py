@@ -3,7 +3,7 @@
 This is the *research* half of the track and makes no trading claim. It answers
 "how concentrated is global supply of commodity X, and how much of it is
 African?" — which is the quantitative form of the motivating observation, and is
-appropriately served by annual data (see `afrimin.data.sources`: USGS and BGS
+appropriately served by annual data (see `chokepoint.data.sources`: USGS and BGS
 are research-capable and explicitly NOT signal-capable).
 
 Two measures:

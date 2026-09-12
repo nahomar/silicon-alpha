@@ -1,6 +1,6 @@
 """Reconstruct daily Eskom loadshedding stage history from eskom-calendar.
 
-`afrimin/data/eskom.py` documents the unmet dependency: there is no free
+`chokepoint/data/eskom.py` documents the unmet dependency: there is no free
 official API for *historical* national loadshedding stages. This module resolves
 it without paying anyone.
 
@@ -42,7 +42,7 @@ question: the binding constraint on mine operations is the worst the grid got,
 not its daily average.
 
 Usage:
-    PYTHONPATH=. python -m afrimin.data.build_stage_history --out data/eskom_stages.csv
+    PYTHONPATH=. python -m chokepoint.data.build_stage_history --out data/eskom_stages.csv
 """
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def to_csv(daily: dict[date, int], out_path: Path, n_intervals: int,
         f"# Eskom national loadshedding stage, daily maximum.\n"
         f"# Reconstructed {date.today()} from the git history of "
         f"{TRACKED_FILE} in {REPO}\n"
-        f"# via afrimin.data.build_stage_history. {n_intervals} unique "
+        f"# via chokepoint.data.build_stage_history. {n_intervals} unique "
         f"announcement intervals.\n"
         f"# Convention: daily MAX stage in force; {fill_note}.\n"
         f"# Span {lo} to {hi}. Upstream entries cite Eskom announcements; "

@@ -1,4 +1,4 @@
-# AFRIMIN — African resource flows → global price transmission
+# CHOKEPOINT — African resource flows → global price transmission
 
 **Status: design + one decisive probe. No tradeable claim is made or implied.**
 
@@ -60,7 +60,7 @@ large, clean, well-tested dataset that **cannot answer the question that
 motivated it.** This track is designed to make that failure mode impossible
 rather than merely discouraged:
 
-> `afrimin/data/sources.py` requires every source to declare `frequency` and
+> `chokepoint/data/sources.py` requires every source to declare `frequency` and
 > `publication_lag`, and computes `min_signal_horizon` from them. A source cannot
 > be used to build a signal whose horizon is shorter than it can physically
 > support. The check is mechanical, not a convention.
@@ -125,7 +125,7 @@ The middle row is a licence to run *one more probe*, not to build the platform.
   free official historical API. EskomSePush offers a free-tier token but is
   oriented to current/near-term schedules, not deep history. The loader therefore
   accepts a user-supplied CSV and **refuses to run on absent data rather than
-  fabricating it** (`afrimin/data/eskom.py`). No synthetic stage series is
+  fabricating it** (`chokepoint/data/eskom.py`). No synthetic stage series is
   generated anywhere in this track — given what a corrupted target already cost
   this repo once (`docs/data_integrity_finding.md`), silently plausible fake data
   is the single most expensive thing we could build.
@@ -164,10 +164,10 @@ free sources first, escalate only on demonstrated signal.
 
 ```bash
 # research view (claim (a)) — annual data, no signal claim
-PYTHONPATH=. python -m afrimin.research.concentration
+PYTHONPATH=. python -m chokepoint.research.concentration
 
 # the decisive probe (claim (c)) — requires a loadshedding CSV; see --help
-PYTHONPATH=. python -m afrimin.probe.eskom_pgm --stages data/eskom_stages.csv
+PYTHONPATH=. python -m chokepoint.probe.eskom_pgm --stages data/eskom_stages.csv
 ```
 
 Both are network-dependent (free price data) and therefore **not in CI**, matching

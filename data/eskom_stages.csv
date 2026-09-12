@@ -1,6 +1,6 @@
 # Eskom national loadshedding stage, daily maximum.
 # Reconstructed 2026-09-12 from the git history of manually_specified.yaml in https://github.com/beyarkay/eskom-calendar.git
-# via afrimin.data.build_stage_history. 3024 unique announcement intervals.
+# via chokepoint.data.build_stage_history. 3024 unique announcement intervals.
 # Convention: daily MAX stage in force; days with no announcement zero-filled (continuously-maintained tracker, so absence == no loadshedding).
 # Span 2022-07-13 to 2025-05-15. Upstream entries cite Eskom announcements; verify before publishing.
 date,stage

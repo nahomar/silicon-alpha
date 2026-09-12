@@ -1,7 +1,7 @@
 """Free daily price bars — the price side of the transmission probe.
 
 Deliberately thin. This is not an ingestion layer; it is just enough to
-falsify a hypothesis with $0 of data. Per `docs/afrimin_track.md`, a general
+falsify a hypothesis with $0 of data. Per `docs/chokepoint_track.md`, a general
 ingestion layer is gated on the probe returning signal, not the other way round.
 
 Free price history is revised, and delisted names silently vanish from the
