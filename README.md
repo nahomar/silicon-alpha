@@ -27,18 +27,51 @@ results — nothing here has traded real capital.
   `pytest tests/odte/test_dml_pricer.py` and
   `python -m odte.eval.validate_dml --scale full`.
 
-- **TradeFM transformer** 🔄 *trained; no 0DTE directional alpha yet*. A 524M
-  decoder-only model trained on 5 days of OPRA reaches 39% top-1 next-token
-  (strong message-grammar) but **49% held-out return-direction — i.e. no
-  directional edge**. Rather than burn $20+ retraining on a hunch, a $0
-  CPU-only LightGBM signal-presence diagnostic
+- **TradeFM transformer** 🔄 *trained; directional thesis **untested**, not
+  disproven*. A 524M decoder-only model trained on 5 days of OPRA reaches 39%
+  top-1 next-token — strong message-grammar. Its **49% held-out
+  return-direction should not be read as "no edge"**: that metric was measured
+  against a target corrupted by cross-contract returns
+  ([`docs/data_integrity_finding.md`](docs/data_integrity_finding.md)), and ~50%
+  is the *expected* result of predicting a corrupted target rather than evidence
+  about the market. The fix landed in `c13ac56`; the number above predates it
+  and has not been re-measured.
+
+  Before spending $20k+ on a directional-head retrain, a $0 CPU-only LightGBM
+  signal-presence diagnostic
   ([`infra/modal/dir_baseline.py`](infra/modal/dir_baseline.py)) gates whether
-  a directional-head retrain is worth it: if a tree can't beat 53% on the same
-  tokens, the signal isn't extractable at this granularity.
+  it is worth it: if a tree can't beat 53% on the same tokens, the signal isn't
+  extractable at this granularity. **It must be re-run on re-packed shards** —
+  it reads the same corrupted field, so its verdict on pre-fix data is
+  meaningless too.
 
 - **Phase-2 training pipeline** 🔄 *validated on Modal* (FSDP sharding, fp8,
   checkpoint I/O, real-OPRA tokenizer fit) at $0.25–$3/run. The $38–50k
   multi-node production run is gated behind a GO from the diagnostic above.
+
+- **Risk gates** ✅ *tested, and they were failing open*. `RiskGates.check()`
+  defaulted its clock inputs to the **loosest** possible values, so a dropped
+  field silently restored the full opening-bell gamma cap during the last 90
+  minutes — while the logs still showed a gate passing. A second class of the
+  same name capped raw gamma against the canonical gate's gamma-*dollars*,
+  quantities ~10 orders of magnitude apart, and `odte_smoke.py` imported the
+  weak one. Both fixed; 27 tests where there were zero.
+
+- **Option edge harness** 🔄 *built, never run on market data*. The instrument
+  for the question the whole repo turns on: does any signal predict 0DTE option
+  returns *net of the spread you actually pay*? Prices on the touch rather than
+  assuming bps — on the synthetic session a **perfect** next-bar mid forecast
+  earns +20.3% per trade at mids and +3.7% net, so the spread eats 82% of a
+  flawless signal. Reports breakeven spread capture, not accuracy. No options
+  data is in the repo, so it has produced no result.
+
+- **Text→equity study** ✅ *complete; null*. Text adds no tradeable directional
+  signal (all arms ≤ chance; placebo dAUC −0.029). The reusable finding is
+  methodological: the within-day permutation null *exceeds* observed AUC, so
+  pooled panel AUC measures day-level market timing, not stock selection —
+  which is how AUC 0.586 coexists with gross Sharpe −2.5. Chatter does predict
+  |move|, i.e. it is a volatility signal, tradeable through options rather than
+  long/short. [`nlpalpha/FINDINGS.md`](nlpalpha/FINDINGS.md).
 
 Everything below Phase 2 in the diagram is **design + scaffold**.
 
@@ -214,7 +247,7 @@ critical-path tracker also lives at [`docs/architecture.md`](docs/architecture.m
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Differential-ML option pricer (Greeks via autograd; BS + Heston) | ✅ **validated** ([`docs/phase0_dml.md`](docs/phase0_dml.md), gate test passing) |
-| 1 | 40M / 524M TradeFM pretrain on OPRA microstructure | ✅ trained — strong message-grammar (39% top-1) but **no 0DTE directional alpha (49% held-out)**; retrain gated on signal diagnostic |
+| 1 | 40M / 524M TradeFM pretrain on OPRA microstructure | ✅ trained — strong message-grammar (39% top-1); directional thesis **untested, not disproven** (the 49% was measured against a corrupted target, [`data_integrity_finding.md`](docs/data_integrity_finding.md)). Needs re-packed shards before any verdict |
 | 2 | 524M multi-node H100 pretrain on OPRA | 🔄 pipeline validated on Modal; multi-node compute gated |
 | 2.5 | Cross-asset fusion (ES futures modality) | 📝 design ([`docs/cross_asset_fusion.md`](docs/cross_asset_fusion.md)) + opt-in scaffold |
 | 3 | Persistent-kernel live inference (4.6–15.8 µs) | 📝 kernels scaffolded, not live |
