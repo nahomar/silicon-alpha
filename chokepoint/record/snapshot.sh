@@ -6,7 +6,7 @@
 # shell. If you move the repo, edit REPO below and reload the agent.
 set -uo pipefail   # NOT -e: one failing ticker must not kill the whole run
 
-REPO="/Users/nahom/Downloads/silicon-alpha"
+REPO="/Users/nahom/projects/silicon-alpha"
 LOG_DIR="$REPO/data/market/logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/snapshot-$(date +%Y-%m).log"

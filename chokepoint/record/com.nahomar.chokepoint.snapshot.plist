@@ -27,7 +27,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nahom/Downloads/silicon-alpha/chokepoint/record/snapshot.sh</string>
+        <string>/Users/nahom/projects/silicon-alpha/chokepoint/record/snapshot.sh</string>
     </array>
 
     <key>StartInterval</key>
@@ -37,12 +37,12 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/nahom/Downloads/silicon-alpha/data/market/logs/launchd.out</string>
+    <string>/Users/nahom/projects/silicon-alpha/data/market/logs/launchd.out</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/nahom/Downloads/silicon-alpha/data/market/logs/launchd.err</string>
+    <string>/Users/nahom/projects/silicon-alpha/data/market/logs/launchd.err</string>
 
     <key>WorkingDirectory</key>
-    <string>/Users/nahom/Downloads/silicon-alpha</string>
+    <string>/Users/nahom/projects/silicon-alpha</string>
 </dict>
 </plist>
