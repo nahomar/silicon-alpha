@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Scheduled snapshot agent for the chokepoint market recorder.
+
+  NOT installed automatically. To run it:
+
+    cp chokepoint/record/com.nahomar.chokepoint.snapshot.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.nahomar.chokepoint.snapshot.plist
+
+  To stop it:
+
+    launchctl unload ~/Library/LaunchAgents/com.nahomar.chokepoint.snapshot.plist
+    rm ~/Library/LaunchAgents/com.nahomar.chokepoint.snapshot.plist
+
+  Interval is 2 hours (12 runs/day). That covers the ASX, JSE, EGX, LSE and US
+  sessions across the day without hammering a free vendor that rate-limits
+  silently -- a 429 does not raise, it returns empty, so over-polling degrades
+  the data quietly rather than loudly.
+
+  Paths are absolute because launchd inherits no working directory or PATH.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nahomar.chokepoint.snapshot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/nahom/Downloads/silicon-alpha/chokepoint/record/snapshot.sh</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>7200</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/nahom/Downloads/silicon-alpha/data/market/logs/launchd.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/nahom/Downloads/silicon-alpha/data/market/logs/launchd.err</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/nahom/Downloads/silicon-alpha</string>
+</dict>
+</plist>

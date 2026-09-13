@@ -57,3 +57,17 @@ Thumbs.db
 # compiled C++ binaries
 cpp/heston_mc
 *.o
+
+# Market recorder store (chokepoint/record).
+#
+# history/ is REGENERABLE -- `recorder backfill` rebuilds it from the vendor at
+# any time, and it is ~9MB and growing. Not tracked.
+data/market/history/
+data/market/logs/
+
+# snapshots/ IS TRACKED, deliberately, despite being data.
+#
+# It is the one thing here that cannot be recovered. Free vendors serve
+# ADJUSTED history: every past price is silently restated by later splits and
+# dividends. A point-in-time capture is only available at the point in time, so
+# a snapshot lost is a snapshot gone forever. ~6KB per capture.

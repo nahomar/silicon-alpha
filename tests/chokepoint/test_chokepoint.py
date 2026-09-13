@@ -384,3 +384,71 @@ def test_daily_source_can_serve_a_daily_signal():
 
 def test_registry_invariant_holds():
     sources._check_registry_invariant()
+
+
+# ---------------------------------------------------------------------------
+# Universe audit + recorder
+# ---------------------------------------------------------------------------
+
+def test_subunit_currencies_are_divided_by_one_hundred():
+    """Regression: London quotes pence, Johannesburg quotes cents.
+
+    The first audit ranked AAL.L at "8,319,447,954" against SBSW at
+    "17,953,282" and called the first more liquid. Those were pence and
+    dollars. Without the subunit divisor the entire cross-venue liquidity
+    ranking is meaningless, and two genuinely illiquid names (PDL.L, GEMD.L)
+    passed the screen.
+    """
+    from chokepoint.universe import audit
+
+    assert audit.SUBUNIT["GBp"] == ("GBP", 100.0)
+    assert audit.SUBUNIT["ZAc"] == ("ZAR", 100.0)
+
+
+def test_usd_needs_no_fx_lookup():
+    from chokepoint.universe.audit import fx_rate
+
+    assert fx_rate("USD") == 1.0
+
+
+def test_blank_currency_has_no_rate():
+    """No currency means no USD volume, so the ticker cannot pass the screen."""
+    import numpy as np
+    from chokepoint.universe.audit import fx_rate
+
+    assert np.isnan(fx_rate(""))
+
+
+def test_tradeable_flag_needs_data_liquidity_and_freshness():
+    from chokepoint.universe.audit import TickerAudit
+
+    base = dict(ticker="X", name="X", listing="foreign", country="Ghana",
+                commodity="gold", africa_share=1.0, ok=True, rows=1000,
+                stale_days=1, median_usd_vol=1e6)
+    assert TickerAudit(**base).tradeable
+
+    assert not TickerAudit(**{**base, "median_usd_vol": 1_000.0}).tradeable
+    assert not TickerAudit(**{**base, "rows": 10}).tradeable
+    assert not TickerAudit(**{**base, "stale_days": 400}).tradeable
+    assert not TickerAudit(**{**base, "ok": False}).tradeable
+
+
+def test_recorder_refuses_to_run_without_a_verified_universe(tmp_path):
+    """It must not silently fall back to the candidate list.
+
+    An unverified ticker that returns nothing is indistinguishable, once it is
+    in the store, from a real outage in a ticker that normally works.
+    """
+    from chokepoint.record import recorder
+
+    with pytest.raises(recorder.NoUniverse, match="universe.audit"):
+        recorder.tradeable_universe(tmp_path / "missing.csv")
+
+
+def test_recorder_rejects_an_audit_with_no_survivors(tmp_path):
+    from chokepoint.record import recorder
+
+    p = tmp_path / "audit.csv"
+    pd.DataFrame({"ticker": ["A"], "tradeable": [False]}).to_csv(p, index=False)
+    with pytest.raises(recorder.NoUniverse, match="no tradeable"):
+        recorder.tradeable_universe(p)

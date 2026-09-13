@@ -1,0 +1,72 @@
+# CANDIDATE universe of Africa-exposed tradeable instruments.
+#
+# This is a CANDIDATE list, not a verified one. Membership here means "worth
+# testing for data availability", never "confirmed tradeable". Run
+# `python -m chokepoint.universe.audit` to find out which tickers actually
+# return data; that audit's output is the real universe.
+#
+# Two populations are deliberately mixed, and the `listing` column separates
+# them because they are NOT equivalent for a non-African operator:
+#
+#   local    - listed on an African exchange. Closest to the underlying
+#              economy, but capital controls, thin books and custody make many
+#              of these untradeable in practice from outside.
+#   foreign  - listed in London/Toronto/Sydney/New York with African assets.
+#              Where the liquidity actually is. The exposure is real but
+#              diluted: a global major with one African mine is mostly not an
+#              Africa trade.
+#
+# `africa_share` is a coarse 0-1 guess at how much of the company's value comes
+# from African operations. It is judgement, not accounting -- the honest way to
+# get it is revenue-by-segment from filings, which is not free. Treated as
+# approximate throughout and never used as a weight without saying so.
+ticker,name,listing,country,commodity,africa_share
+SBSW,Sibanye Stillwater,foreign,South Africa,pgm_gold,0.7
+GFI,Gold Fields,foreign,South Africa,gold,0.5
+HMY,Harmony Gold,foreign,South Africa,gold,0.9
+AU,AngloGold Ashanti,foreign,South Africa,gold,0.6
+DRD,DRDGOLD,foreign,South Africa,gold,1.0
+SSL,Sasol,foreign,South Africa,energy_chem,0.8
+IMPUY,Impala Platinum ADR,foreign,South Africa,pgm,0.9
+ANGPY,Anglo American Platinum ADR,foreign,South Africa,pgm,0.9
+NGLOY,Anglo American ADR,foreign,South Africa,diversified,0.4
+GLNCY,Glencore ADR,foreign,DR Congo,copper_cobalt,0.3
+BTG,B2Gold,foreign,Mali,gold,0.6
+IVPAF,Ivanhoe Mines,foreign,DR Congo,copper,0.9
+EDVMF,Endeavour Mining,foreign,Burkina Faso,gold,1.0
+AAL.L,Anglo American,foreign,South Africa,diversified,0.4
+GLEN.L,Glencore,foreign,DR Congo,copper_cobalt,0.3
+EDV.L,Endeavour Mining,foreign,Burkina Faso,gold,1.0
+CEY.L,Centamin,foreign,Egypt,gold,1.0
+PDL.L,Petra Diamonds,foreign,South Africa,diamonds,1.0
+KMR.L,Kenmare Resources,foreign,Mozambique,titanium,1.0
+GEMD.L,Gem Diamonds,foreign,Lesotho,diamonds,1.0
+SLP.L,Sylvania Platinum,foreign,South Africa,pgm,1.0
+THS.L,Tharisa,foreign,South Africa,pgm_chrome,1.0
+IVN.TO,Ivanhoe Mines,foreign,DR Congo,copper,0.9
+ABX.TO,Barrick Mining,foreign,Mali,gold,0.3
+BTO.TO,B2Gold,foreign,Mali,gold,0.6
+PRU.AX,Perseus Mining,foreign,Ghana,gold,1.0
+RSG.AX,Resolute Mining,foreign,Mali,gold,1.0
+WAF.AX,West African Resources,foreign,Burkina Faso,gold,1.0
+AGL.JO,Anglo American,local,South Africa,diversified,0.4
+BHG.JO,BHP Group,local,South Africa,diversified,0.1
+GLN.JO,Glencore,local,DR Congo,copper_cobalt,0.3
+IMP.JO,Impala Platinum,local,South Africa,pgm,0.9
+AMS.JO,Anglo American Platinum,local,South Africa,pgm,0.9
+NPH.JO,Northam Platinum,local,South Africa,pgm,1.0
+SSW.JO,Sibanye Stillwater,local,South Africa,pgm_gold,0.7
+ARI.JO,African Rainbow Minerals,local,South Africa,diversified,1.0
+EXX.JO,Exxaro Resources,local,South Africa,coal,1.0
+KIO.JO,Kumba Iron Ore,local,South Africa,iron_ore,1.0
+SOL.JO,Sasol,local,South Africa,energy_chem,0.8
+GFI.JO,Gold Fields,local,South Africa,gold,0.5
+HAR.JO,Harmony Gold,local,South Africa,gold,0.9
+ANG.JO,AngloGold Ashanti,local,South Africa,gold,0.6
+PAN.JO,Pan African Resources,local,South Africa,gold,1.0
+SGL.JO,Sibanye Stillwater,local,South Africa,pgm_gold,0.7
+COMI.CA,Commercial International Bank,local,Egypt,banking,1.0
+SWDY.CA,Elsewedy Electric,local,Egypt,industrial,1.0
+EAST.CA,Eastern Company,local,Egypt,consumer,1.0
+ETEL.CA,Telecom Egypt,local,Egypt,telecom,1.0
+ABUK.CA,Abu Qir Fertilizers,local,Egypt,fertilizer,1.0
