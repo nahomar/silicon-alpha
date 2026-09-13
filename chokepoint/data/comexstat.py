@@ -57,11 +57,23 @@ TIMEOUT = 90
 # back in every row — `fetch` asserts it matches, so a wrong code fails loudly
 # instead of silently returning someone else's commodity.
 NCM = {
+    # VERIFIED against the API: each returns rows and echoes a description
+    # matching the commodity named here.
     "ferroniobium": 72029300,     # Brazil ~90% of world niobium
-    "niobium_ore": 26159010,      # niobium/tantalum/vanadium ores
     "iron_ore_fines": 26011100,
-    "bauxite": 26060010,
     "manganese_ore": 26020010,
+}
+
+# Codes that were GUESSED and returned nothing. Kept as a record so the same
+# wrong values are not re-guessed, and deliberately NOT in NCM -- a code that
+# silently returns an empty series is worse than an absent one, because the
+# gap later reads as "Brazil exported no bauxite" rather than "we asked wrong".
+#
+# Resolving these needs the NCM tariff schedule rather than more guessing;
+# probing variants against the live API hit HTTP 429 and is not the way.
+UNVERIFIED_NCM = {
+    "niobium_ore": 26159010,
+    "bauxite": 26060010,
     "graphite_natural": 25041010,
 }
 

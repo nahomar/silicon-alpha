@@ -452,3 +452,100 @@ def test_recorder_rejects_an_audit_with_no_survivors(tmp_path):
     pd.DataFrame({"ticker": ["A"], "tradeable": [False]}).to_csv(p, index=False)
     with pytest.raises(recorder.NoUniverse, match="no tradeable"):
         recorder.tradeable_universe(p)
+
+
+# ---------------------------------------------------------------------------
+# Supply vintage store
+# ---------------------------------------------------------------------------
+
+def _obs(rows):
+    return pd.DataFrame(rows, columns=["series", "period", "value"])
+
+
+def test_first_print_is_recorded(tmp_path, monkeypatch):
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    rep = supply.append_observations("t", _obs([("x", "2024-01-31", 100.0)]))
+    assert rep.first_prints == 1 and rep.revisions == 0
+    assert len(supply.load("t")) == 1
+
+
+def test_unchanged_value_writes_nothing(tmp_path, monkeypatch):
+    """Polling a monthly series every day must not grow the store."""
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    o = _obs([("x", "2024-01-31", 100.0)])
+    supply.append_observations("t", o)
+    rep = supply.append_observations("t", o)
+
+    assert rep.unchanged == 1 and rep.first_prints == 0 and rep.revisions == 0
+    assert len(supply.load("t")) == 1, "re-poll duplicated a row"
+
+
+def test_revision_appends_without_destroying_the_first_print(tmp_path, monkeypatch):
+    """The entire reason this store exists.
+
+    Official statistics get restated. If a revision overwrote the original we
+    could never reconstruct what was knowable at the time, and every backtest
+    would quietly use numbers nobody had.
+    """
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    supply.append_observations("t", _obs([("x", "2024-01-31", 100.0)]))
+    rep = supply.append_observations("t", _obs([("x", "2024-01-31", 118.0)]))
+
+    assert rep.revisions == 1
+    df = supply.load("t")
+    assert len(df) == 2, "revision should append, not overwrite"
+    assert sorted(df.value) == [100.0, 118.0], "first print was lost"
+
+
+def test_vintage_lets_you_reconstruct_what_was_known(tmp_path, monkeypatch):
+    """Point-in-time reconstruction: the first vintage is the first print."""
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    supply.append_observations("t", _obs([("x", "2024-01-31", 100.0)]))
+    supply.append_observations("t", _obs([("x", "2024-01-31", 118.0)]))
+
+    df = supply.load("t").sort_values("captured_at")
+    as_first_known = df.iloc[0].value
+    as_known_now = df.iloc[-1].value
+    assert as_first_known == 100.0
+    assert as_known_now == 118.0
+
+
+def test_float_noise_is_not_treated_as_a_revision(tmp_path, monkeypatch):
+    """Otherwise a parquet round-trip appends a row on every single poll."""
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    supply.append_observations("t", _obs([("x", "2024-01-31", 100.0)]))
+    rep = supply.append_observations("t", _obs([("x", "2024-01-31", 100.0 + 1e-13)]))
+    assert rep.unchanged == 1 and rep.revisions == 0
+
+
+def test_empty_poll_is_an_error_not_a_silent_success(tmp_path, monkeypatch):
+    """A source returning nothing must not read as 'nothing happened'."""
+    from chokepoint.record import supply
+
+    monkeypatch.setattr(supply, "STORE", tmp_path)
+    rep = supply.append_observations("t", _obs([]))
+    assert rep.error and "no observations" in rep.error
+
+
+def test_quarantined_ncm_codes_are_not_polled():
+    """Guessed codes that returned nothing must stay out of the live map.
+
+    A code that silently returns an empty series is worse than an absent one:
+    the gap later reads as 'Brazil exported no bauxite' rather than 'we asked
+    the wrong question'.
+    """
+    from chokepoint.data import comexstat
+
+    assert set(comexstat.NCM) & set(comexstat.UNVERIFIED_NCM) == set()
+    assert "bauxite" in comexstat.UNVERIFIED_NCM
+    assert "ferroniobium" in comexstat.NCM
