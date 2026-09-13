@@ -114,6 +114,40 @@ def _parse_period(s: str) -> pd.Timestamp | None:
     return None
 
 
+def _parse_period_column(fragments: list[str]) -> list[pd.Timestamp | None]:
+    """Parse a period column, carrying the year forward across bare months.
+
+    The bulletin writes a monthly row as:
+
+        ENE/JAN 2022 | FEB | MAR | ABR/APR | MAY | ... | DIC/DEC
+
+    The year is stated once, on January, and every later month is bare. Parsing
+    each fragment independently therefore recovers ONE month in twelve and
+    silently discards the rest — which is exactly what happened here: table 4_1
+    yielded 8 sparse periods instead of four years of monthly observations, with
+    no error raised, and very nearly produced a 'not enough history to test'
+    conclusion out of a parsing defect.
+
+    So a bare month inherits the year of the last dated fragment in its own row.
+    Rows that never state a year yield None throughout rather than guessing.
+    """
+    out: list[pd.Timestamp | None] = []
+    year: int | None = None
+    for frag in fragments:
+        dated = _parse_period(frag)
+        if dated is not None:
+            year = dated.year
+            out.append(dated)
+            continue
+        m = re.match(r"([A-Z]{3})", (frag or "").strip().upper())
+        if m and m.group(1) in _MONTHS and year is not None:
+            out.append(pd.Timestamp(year, _MONTHS[m.group(1)], 1)
+                       + pd.offsets.MonthEnd(0))
+        else:
+            out.append(None)
+    return out
+
+
 def _fetch_html(year: int, month: int, table: str) -> str:
     url = f"{BASE}?anio={year}&mes={month:02d}&tabla={table}"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -173,7 +207,7 @@ def fetch(kind: str, year: int, month: int) -> Bulletin:
     for cells in rows:
         if len(cells) < 2:
             continue
-        periods = [_parse_period(p) for p in cells[0]]
+        periods = _parse_period_column(cells[0])
         if not any(p is not None for p in periods):
             continue
         for i, period in enumerate(periods):
@@ -231,6 +265,37 @@ def exchange_inventories(year: int, month: int) -> pd.DataFrame:
                 "may have drifted — verify against the bulletin before use.",
                 len(bad), 100 * bad.max(),
             )
+    return out
+
+
+def inventory_history(bulletins: list[tuple[int, int]] | None = None
+                      ) -> pd.DataFrame:
+    """Stitch several bulletins into one long monthly inventory series.
+
+    Each bulletin's table 4_1 carries roughly four years of monthly history, so
+    a handful of well-spaced issues covers a decade. Where issues overlap the
+    EARLIER bulletin wins: figures are revised, and using the first print keeps
+    the series closer to what was actually observable at the time. That matters
+    for a backtest — a revised number is information you did not have.
+    """
+    if bulletins is None:
+        bulletins = [(2013, 12), (2017, 12), (2021, 12), (2025, 6)]
+
+    frames = []
+    for year, month in bulletins:
+        try:
+            frames.append(exchange_inventories(year, month))
+        except CochilcoError as exc:
+            log.warning("bulletin %d-%02d unusable, skipped: %s",
+                        year, month, exc)
+    if not frames:
+        raise CochilcoError("no bulletin could be parsed")
+
+    # Oldest first, keep='first' -> earliest print survives on overlap.
+    combined = pd.concat(frames).sort_index()
+    out = combined[~combined.index.duplicated(keep="first")]
+    log.info("inventory history: %d months %s → %s from %d bulletin(s)",
+             len(out), out.index[0].date(), out.index[-1].date(), len(frames))
     return out
 
 

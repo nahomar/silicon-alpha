@@ -105,6 +105,44 @@ def test_monthly_source_refuses_a_daily_signal():
     comexstat.require_horizon(90)  # within reach — must not raise
 
 
+def test_firing_placebo_invalidates_the_test_even_with_no_real_hits(capsys):
+    """Regression: the placebo check was gated behind real hits.
+
+    The live run produced FCX/SCCO/TECK all insignificant and the GDX placebo
+    at t=+2.96. Because no real target fired, the verdict skipped the placebo
+    branch entirely and printed "NO PREDICTIVE CONTENT" — blind in exactly the
+    case the placebo exists to catch. A null from an unsound test is not
+    evidence of absence.
+    """
+    from chokepoint.probe.inventory_miners import Result, report
+
+    results = [
+        Result("FCX", t_oos=-0.87, beta_oos=-0.048, t_is=-0.23,
+               n_train=114, n_eval=49),
+        Result("GDX", t_oos=2.96, beta_oos=0.119, t_is=-0.64,
+               n_train=114, n_eval=49, is_placebo=True),
+    ]
+    report(results, n=163)
+    out = capsys.readouterr().out
+    assert "UNSOUND" in out
+    assert "NO PREDICTIVE CONTENT" not in out
+
+
+def test_clean_placebo_allows_a_null_verdict(capsys):
+    from chokepoint.probe.inventory_miners import Result, report
+
+    results = [
+        Result("FCX", t_oos=-0.87, beta_oos=-0.048, t_is=-0.23,
+               n_train=114, n_eval=49),
+        Result("GDX", t_oos=0.40, beta_oos=0.01, t_is=-0.10,
+               n_train=114, n_eval=49, is_placebo=True),
+    ]
+    report(results, n=163)
+    out = capsys.readouterr().out
+    assert "NO PREDICTIVE CONTENT" in out
+    assert "UNSOUND" not in out
+
+
 def test_european_numbers_parse_correctly():
     """'88.950' is eighty-eight thousand, not 88.95."""
     from chokepoint.data.cochilco import _euro_number
