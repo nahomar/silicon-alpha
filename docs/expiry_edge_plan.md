@@ -201,4 +201,21 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - every15 / events versions: small and not significant.
   - Next: replicate the chosen configuration on 2022-05 → 2025-10 (unseen
     for selection), add objective B, and keep the last 2 months locked.
+- 2026-11-08, **4-year run pre-registered (written while it runs, before any
+  output):**
+  - Data: 1,125 sessions (2022-05-16 → 2026-11-06, $12.37). **Final exam:**
+    sessions from 2026-09-08 on are excluded (`--holdout-from`) and stay
+    untouched until the end.
+  - Scoring window = **replication window 2022-07-01 → 2025-11-06**, the
+    years not used to choose any variant. Models train on all earlier days,
+    refit weekly (`--refit-every 5`). Sets: base, +cal, +cal+ctx; the
+    social/NLP/Kalshi layers are left out because their data mostly starts
+    in late 2024–2025.
+  - Objective A: `ml_ridge+cal+ctx` (the 12-month pick, minus layers
+    without history). **PASS** if its paired daily P&L vs always-short-fly
+    has 95% CI > 0 and its Sharpe > 0 at 95%.
+  - Objective B: `danger_logit+cal+ctx skip`. **PASS** if paired daily
+    P&L vs always-short-fly has 95% CI > 0. Drawdown and worst day are
+    reported alongside.
+  - Everything else is exploratory.
 

@@ -203,8 +203,12 @@ def fetch_kalshi(start) -> None:
         rows = []
         for m in markets:
             lo, hi = _utc(m["open_time"]), _utc(m["close_time"])
+            st = m.get("strike_type")
+            if not st:              # some older listings omit it: infer from the bounds
+                fl, cp = m.get("floor_strike"), m.get("cap_strike")
+                st = "between" if fl is not None and cp is not None else ("less" if cp is not None else "greater")
             for ts, b, a in _candles("KXINX", m["ticker"], lo, hi, 60, historical=hist):
-                rows.append((m["ticker"], m["strike_type"], m.get("floor_strike"),
+                rows.append((m["ticker"], st, m.get("floor_strike"),
                              m.get("cap_strike"), ts, b, a))
         pd.DataFrame(rows, columns=["ticker", "strike_type", "floor", "cap", "ts", "bid", "ask"]) \
           .to_parquet(f, index=False)

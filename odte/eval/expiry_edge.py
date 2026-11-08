@@ -526,6 +526,9 @@ def _rule(pred_ratio: np.ndarray, margin: float) -> np.ndarray:
                     np.where(pred_ratio > 1 + margin, -1, 0))
 
 
+REFIT_EVERY = 1   # sessions between refits; the 4-year run uses 5 (weekly)
+
+
 def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
                  margin: float = 0.15, shuffle_labels_seed=None, features=None,
                  collect_gain=None):
@@ -541,20 +544,24 @@ def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
     y_all = ds["ratio"].clip(upper=4.0).to_numpy()
     X_all = ds[list(features or FEATURES)].to_numpy(dtype=float)
     dvals = ds["day"].to_numpy()
+    m = None
     for i, d in enumerate(days):
         if i < min_train_days:
             continue
-        tr = (dvals < d) & np.isfinite(y_all)
         te = dvals == d
-        y = y_all[tr]
-        if shuffle_labels_seed is not None:
-            y = rng.permutation(y)
-        m = _make_model(model)
-        m.fit(X_all[tr], y)
+        if m is None or (i - min_train_days) % REFIT_EVERY == 0:
+            # Refit on everything strictly before day d; between refits the
+            # last model is reused, so every prediction is still out-of-sample.
+            tr = (dvals < d) & np.isfinite(y_all)
+            y = y_all[tr]
+            if shuffle_labels_seed is not None:
+                y = rng.permutation(y)
+            m = _make_model(model)
+            m.fit(X_all[tr], y)
+            if collect_gain is not None and model == "ml_lgbm":
+                g = m.booster_.feature_importance("gain").astype(float)
+                collect_gain.append(g / g.sum() if g.sum() > 0 else g)
         pred[te] = m.predict(X_all[te])
-        if collect_gain is not None and model == "ml_lgbm":
-            g = m.booster_.feature_importance("gain").astype(float)
-            collect_gain.append(g / g.sum() if g.sum() > 0 else g)
     act = np.where(np.isfinite(pred), _rule(np.nan_to_num(pred, nan=1.0), margin), 0)
     return pred, act
 
@@ -588,18 +595,21 @@ def walk_forward_danger(ds: pd.DataFrame, model: str, min_train_days: int = 8,
     X_all = ds[list(features or FEATURES)].to_numpy(dtype=float)
     p = np.full(len(ds), np.nan)
     base = np.full(len(ds), np.nan)
+    m, rate = None, np.nan
     for i, d in enumerate(days):
         if i < min_train_days:
             continue
-        tr = dvals < d
         te = dvals == d
-        y = y_all[tr]
-        if y.min() == y.max():
-            continue
-        m = _make_classifier(model)
-        m.fit(X_all[tr], y)
+        if m is None or (i - min_train_days) % REFIT_EVERY == 0:
+            tr = dvals < d
+            y = y_all[tr]
+            if y.min() == y.max():
+                continue
+            m = _make_classifier(model)
+            m.fit(X_all[tr], y)
+            rate = y.mean()
         p[te] = m.predict_proba(X_all[te])[:, 1]
-        base[te] = y.mean()
+        base[te] = rate
     return p, base
 
 
@@ -755,7 +765,7 @@ def _mode_baselines(mode: str, ds, mask, tested, seed) -> dict:
 def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
               min_days_for_verdict: int = 40, seed: int = 0,
               risk_budget=RISK_BUDGET, feature_sets=None, extra_preds=None,
-              layers=None) -> dict:
+              layers=None, report_window=None, danger_sets=None) -> dict:
     """Train once, score three trading versions from the same predictions.
 
     Models are fit walk-forward on every decision row (grid, event, shock).
@@ -771,6 +781,15 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
     ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
     days = sorted(ds["day"].unique())
     tested = ds["day"].isin(days[min_train_days:]).to_numpy()
+    if report_window:
+        # Score only inside the window (models still train on all earlier days).
+        lo, hi = (pd.Timestamp(x) if x else None for x in report_window)
+        inwin = np.ones(len(ds), bool)
+        if lo is not None:
+            inwin &= (ds["day"] >= lo).to_numpy()
+        if hi is not None:
+            inwin &= (ds["day"] <= hi).to_numpy()
+        tested = tested & inwin
     feature_sets = dict(feature_sets or {})
     feature_sets["base"] = list(FEATURES)
 
@@ -788,8 +807,9 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
 
     # Objective B: danger detector (classifiers), on base and widest features.
     danger = {}
-    for fs_name, cols in (("", list(FEATURES)), ("+all", widest)):
-        if fs_name == "+all" and len(widest) == len(FEATURES):
+    d_sets = danger_sets or {"": list(FEATURES), "+all": widest}
+    for fs_name, cols in d_sets.items():
+        if fs_name and len(cols) == len(FEATURES) and fs_name == "+all":
             continue
         for m in ("danger_logit", "danger_lgbm"):
             danger[f"{m}{fs_name}"] = walk_forward_danger(ds, m, min_train_days, features=cols)
@@ -916,6 +936,7 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
             "verdict": verdict, "modes": modes, "importance": importance,
             "feature_sets": {k: len(v) for k, v in feature_sets.items()},
             "params": {"min_train_days": min_train_days, "margin": margin,
+                       "refit_every": REFIT_EVERY, "report_window": report_window,
                        "strong_margin": STRONG_MARGIN,
                        "event_offsets_min": list(EVENT_OFFSETS_MIN),
                        "shock_quantile": SHOCK_QUANTILE,
@@ -1207,10 +1228,24 @@ def _cli() -> int:
                     help="also run the minute-sequence transformer (slower)")
     ap.add_argument("--fixed6-only", action="store_true",
                     help="only the 6 fixed times (no 15-min grid, events or shocks)")
+    ap.add_argument("--holdout-from", default=None,
+                    help="drop every session on/after this date (locked final exam)")
+    ap.add_argument("--report-from", default=None)
+    ap.add_argument("--report-to", default=None)
+    ap.add_argument("--refit-every", type=int, default=1)
+    ap.add_argument("--sets", nargs="+", default=None,
+                    help="keep only these feature sets (names as printed, e.g. +cal +cal+ctx)")
+    ap.add_argument("--no-importance", action="store_true")
     a = ap.parse_args()
+    global REFIT_EVERY
+    REFIT_EVERY = max(1, a.refit_every)
     if a.selftest:
         return 0 if selftest() else 1
     chains, settles = load_sessions(Path(a.data_dir))
+    if a.holdout_from:
+        cut = pd.Timestamp(a.holdout_from)
+        chains = {d: c for d, c in chains.items() if d < cut}
+        print(f"[holdout] {cut:%Y-%m-%d} onward is locked away; {len(chains)} sessions used")
     if not chains:
         print(f"no sessions in {a.data_dir}; run odte.data.fetch_0dte first")
         return 1
@@ -1250,6 +1285,9 @@ def _cli() -> int:
         static = sets[widest_name] if widest_name else list(FEATURES)
         label = "seq_transformer" + (widest_name or "")
         extra[label] = walk_forward_seq(ds, paths, static, min_train_days=a.min_train_days)
+    if a.sets:
+        sets = {k: v for k, v in sets.items() if k in set(a.sets)}
+        print(f"[sets] {list(sets)}")
     layers = {}
     ordered = sorted(sets.items(), key=lambda kv: len(kv[1]))
     prev = list(FEATURES)
@@ -1258,8 +1296,15 @@ def _cli() -> int:
         if new_cols:
             layers[name.split("+")[-1]] = new_cols
         prev = cols
+    rw = (a.report_from, a.report_to) if (a.report_from or a.report_to) else None
+    dsets = None
+    if a.sets:
+        dsets = {"": list(FEATURES)}
+        dsets.update({k: v for k, v in sets.items()})
     rep = run_study(ds, min_train_days=a.min_train_days, margin=a.margin,
-                    feature_sets=sets, extra_preds=extra, layers=layers or None)
+                    feature_sets=sets, extra_preds=extra,
+                    layers=(None if a.no_importance else (layers or None)),
+                    report_window=rw, danger_sets=dsets)
     rep["skipped_features"] = skipped
     print_report(rep)
     if a.write:
