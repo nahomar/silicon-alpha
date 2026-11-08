@@ -88,6 +88,11 @@ STRONG_MARGIN = 0.30
 EVENT_OFFSETS_MIN = (5, 30)
 SHOCK_QUANTILE, SHOCK_LOOKBACK, MAX_SHOCKS, SHOCK_GAP_MIN = 0.999, 20, 2, 30
 EVENT_FEATURES = ["min_since_event", "move_since_event", "ivchg_since_event", "is_event_row"]
+# Objective B ("danger detector"), pre-registered 2026-11-08 before any result:
+# a day-move counts as danger when realized/implied >= DANGER_RATIO. Default
+# is to sell the fly; skip when P(danger) > SKIP_X x the training base rate,
+# flip to buying when > FLIP_X x (flip variant only).
+DANGER_RATIO, SKIP_X, FLIP_X = 1.25, 2.0, 3.0
 PRIMARY_MODEL = "ml_ridge"   # pre-registered: tiny samples favour a linear model
 RISK_BUDGET = 1000.0         # $ max loss per trade; each trade is sized to it
 _EPS = 1e-12
@@ -554,6 +559,59 @@ def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
     return pred, act
 
 
+def _make_classifier(name: str):
+    if name == "danger_lgbm":
+        from lightgbm import LGBMClassifier
+        return LGBMClassifier(n_estimators=200, learning_rate=0.03, num_leaves=4,
+                              min_child_samples=20, subsample=0.8, subsample_freq=1,
+                              colsample_bytree=0.8, reg_lambda=1.0, random_state=0, verbose=-1)
+    if name == "danger_logit":
+        from sklearn.impute import SimpleImputer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        return make_pipeline(SimpleImputer(strategy="median"), StandardScaler(),
+                             LogisticRegression(C=0.1, max_iter=2000))
+    raise ValueError(name)
+
+
+def walk_forward_danger(ds: pd.DataFrame, model: str, min_train_days: int = 8,
+                        features=None):
+    """P(danger) per row and the training base rate in force that day.
+
+    Same walk-forward discipline as `walk_forward`: the model for day d is
+    fit only on days before d.
+    """
+    days = np.array(sorted(ds["day"].unique()), dtype="datetime64[ns]")
+    dvals = ds["day"].to_numpy(dtype="datetime64[ns]")
+    y_all = (ds["ratio"].to_numpy() >= DANGER_RATIO).astype(int)
+    X_all = ds[list(features or FEATURES)].to_numpy(dtype=float)
+    p = np.full(len(ds), np.nan)
+    base = np.full(len(ds), np.nan)
+    for i, d in enumerate(days):
+        if i < min_train_days:
+            continue
+        tr = dvals < d
+        te = dvals == d
+        y = y_all[tr]
+        if y.min() == y.max():
+            continue
+        m = _make_classifier(model)
+        m.fit(X_all[tr], y)
+        p[te] = m.predict_proba(X_all[te])[:, 1]
+        base[te] = y.mean()
+    return p, base
+
+
+def danger_actions(p, base, mask, tested, flip: bool) -> np.ndarray:
+    ok = mask & tested & np.isfinite(p) & np.isfinite(base)
+    act = np.where(ok, 1, 0)                                   # default: sell the fly
+    act = np.where(ok & (p > SKIP_X * base), 0, act)           # danger: sit out
+    if flip:
+        act = np.where(ok & (p > FLIP_X * base), -1, act)      # big danger: buy the fly
+    return act
+
+
 def baseline_actions(ds: pd.DataFrame, tested: np.ndarray, seed: int = 0) -> dict:
     """Simple strategies the model has to beat, on the same rows."""
     n = len(ds)
@@ -728,10 +786,22 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
                               shuffle_labels_seed=seed + 7, features=widest)
     model_preds = dict(preds, placebo_shuffled_labels=placebo)
 
+    # Objective B: danger detector (classifiers), on base and widest features.
+    danger = {}
+    for fs_name, cols in (("", list(FEATURES)), ("+all", widest)):
+        if fs_name == "+all" and len(widest) == len(FEATURES):
+            continue
+        for m in ("danger_logit", "danger_lgbm"):
+            danger[f"{m}{fs_name}"] = walk_forward_danger(ds, m, min_train_days, features=cols)
+
     modes = {}
     for mode, mask in _mode_masks(ds).items():
         strategies = {k: _mode_actions(mode, ds, p, mask, tested, margin)
                       for k, p in model_preds.items()}
+        if mode != "every15":
+            for k, (pd_, base_) in danger.items():
+                strategies[f"{k} skip"] = danger_actions(pd_, base_, mask, tested, flip=False)
+                strategies[f"{k} skip+flip"] = danger_actions(pd_, base_, mask, tested, flip=True)
         baselines = _mode_baselines(mode, ds, mask, tested, seed)
         strategies.update(baselines)
         res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
@@ -739,7 +809,7 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
                         key=lambda b: res[b]["total_pnl"])
         ref = "short_once_at_10" if mode == "every15" else "always_short_fly"
         comparisons = {}
-        for m in model_preds:
+        for m in list(model_preds) + [k for k in strategies if k.startswith("danger_")]:
             targets = [ref, best_base]
             base_m = m.split("+")[0]
             if m.startswith("seq_transformer"):
@@ -751,6 +821,14 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         rows = mask & tested
         forecast_ic = {m: spearman_ic(p[rows], ds.loc[rows, "ratio"].to_numpy())
                        for m, p in preds.items()}
+        # Danger detectors: how well P(danger) ranks actual blow-ups (AUC).
+        from sklearn.metrics import roc_auc_score
+        y_d = (ds["ratio"].to_numpy() >= DANGER_RATIO).astype(int)
+        danger_auc = {}
+        for k, (pd_, _) in danger.items():
+            r = rows & np.isfinite(pd_)
+            if r.sum() > 20 and 0 < y_d[r].mean() < 1:
+                danger_auc[k] = float(roc_auc_score(y_d[r], pd_[r]))
         from .portfolio import money_view
         ml_names = [k for k in preds if k != PRIMARY_MODEL]
         best_ml = max(ml_names, key=lambda k: res[k]["total_pnl"]) if ml_names else None
@@ -766,6 +844,8 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         modes[mode] = {"strategies": res, "comparisons": comparisons,
                        "best_baseline": best_base, "reference": ref,
                        "forecast_ic": forecast_ic, "n_rows_tested": int(rows.sum()),
+                       "danger_auc": danger_auc,
+                       "danger_base_rate": float(y_d[rows].mean()) if rows.any() else float("nan"),
                        "money": money}
 
     importance = None
@@ -1056,6 +1136,21 @@ def print_report(rep: dict) -> None:
             if k in c:
                 v = c[k]
                 print(f"  {m:28s} {v['mean']:+8.1f} $/day  CI [{v['ci'][0]:+.1f}, {v['ci'][1]:+.1f}]")
+    md = rep.get("modes", {}).get("fixed6", {})
+    dk = [k for k in md.get("strategies", {}) if k.startswith("danger_")]
+    if dk:
+        print(f"\n=== OBJECTIVE B - danger detector (version 1 times; danger = move >= "
+              f"{DANGER_RATIO:.2f}x priced, base rate {md.get('danger_base_rate', float('nan')):.0%}) ===")
+        print("  AUC (0.5 = coin flip): " + ", ".join(f"{k} {v:.3f}" for k, v in md.get("danger_auc", {}).items()))
+        ref = md["strategies"]["always_short_fly"]
+        print(f"  {'always_short_fly (benchmark)':38s} total {ref['total_pnl']:9.0f}  worst day {ref['worst_day']:7.0f}  "
+              f"max DD {ref['max_drawdown']:9.0f}  sharpe {ref['sharpe']:+.2f}")
+        for k in dk:
+            r = md["strategies"][k]
+            c = md["comparisons"].get(k, {}).get("vs_always_short_fly", {})
+            print(f"  {k:38s} total {r['total_pnl']:9.0f}  worst day {r['worst_day']:7.0f}  "
+                  f"max DD {r['max_drawdown']:9.0f}  sharpe {r['sharpe']:+.2f}  "
+                  f"vs always-sell {c.get('mean', float('nan')):+7.1f}/day")
     titles = {"every15": "VERSION 2 - check every 15 min, 1 trade/day on a strong signal",
               "events": "VERSION 3 - decide after scheduled events and market shocks"}
     for mode, title in titles.items():

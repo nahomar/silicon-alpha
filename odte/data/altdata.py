@@ -281,7 +281,7 @@ def fetch_gdelt(start, end=None) -> pd.DataFrame:
     return old
 
 
-def fetch_gdelt_bq(csv_path=None) -> pd.DataFrame:
+def fetch_gdelt_bq(csv_path=None, start="2022-04-25", end=None) -> pd.DataFrame:
     """GDELT via Google BigQuery, GDELT's own route for bulk use.
 
     Runs odte/data/gdelt_bq.sql with the `bq` CLI under the signed-in Google
@@ -291,8 +291,9 @@ def fetch_gdelt_bq(csv_path=None) -> pd.DataFrame:
     after that stamp, which is conservative.
     """
     import subprocess
+    end = end or (pd.Timestamp.utcnow().tz_localize(None).normalize() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     sql = "\n".join(l for l in (ROOT / "odte" / "data" / "gdelt_bq.sql").read_text().splitlines()
-                    if not l.startswith("--"))
+                    if not l.startswith("--")).format(start=start, end=end)
     csv_path = Path(csv_path or ALT / "gdelt_gkg.csv")
     if not csv_path.exists():
         out = subprocess.run(["bq", "query", "--use_legacy_sql=false", "--format=csv",

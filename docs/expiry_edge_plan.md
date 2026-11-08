@@ -172,4 +172,16 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   Each 15-min batch counts as known 15 min after its stamp. Using another
   machine's IP to get around the DOC API (and Stocktwits) rate limits was
   considered and rejected.
+- 2026-11-08, **Objective B pre-registered (before any result):** the
+  user wants both objectives tested, A first.
+  - A (existing): forecast realized/implied for every decision and
+    sell/buy on it.
+  - B, "danger detector": classify danger = realized/implied >= 1.25. The
+    default is to sell the fly; skip when P(danger) > 2x the training base
+    rate. The flip variant also buys the fly when P(danger) > 3x.
+  - B models: logistic (C=0.1) and LightGBM classifiers, on base and all
+    features, walk-forward daily. Reported as AUC plus P&L, worst day and
+    drawdown vs always-short.
+  - The 4-year run (2022-05 → 2026-11) tests both objectives. The last 2
+    months stay a locked final exam.
 

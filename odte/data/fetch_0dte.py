@@ -242,26 +242,29 @@ def main() -> int:
             return (out / f"{d:%Y-%m-%d}.{a.schema}.dbn.zst").exists()
         return (out / f"{d:%Y-%m-%d}.parquet").exists()
 
-    for d in days:
-        if done(d):
-            continue
+    def price(d):
         s, e = session_window(d)
         sym, st = (syms[d], "raw_symbol") if d in syms else ([parent], "parent")
         try:
-            c = float(_retry(lambda: client.metadata.get_cost(
+            return d, float(_retry(lambda: client.metadata.get_cost(
                 dataset=DATASET, schema=a.schema, symbols=sym,
                 stype_in=st, start=s, end=e), f"{d:%Y-%m-%d} price"))
         except db.BentoClientError as ex:
-            # On a market holiday no SPXW contract is listed for the window,
-            # so the parent symbol does not resolve: 422, not a $0 quote.
+            # On a market holiday nothing is listed for the window, so the
+            # symbols do not resolve: 422, not a $0 quote.
             if "symbology_invalid_request" in str(ex):
-                print(f"{d:%Y-%m-%d}  no listed contracts (holiday) -- skipped")
-                continue
+                return d, 0.0
             raise
-        if c <= 0:
-            print(f"{d:%Y-%m-%d}  no data (holiday?) -- skipped")
+
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+    pending = [d for d in days if not done(d)]
+    with _TPE(max_workers=max(1, a.workers if a.fast else 1)) as ex:
+        priced = dict(ex.map(price, pending))      # free metadata calls, in parallel
+    for d in pending:
+        if priced[d] <= 0:
+            print(f"{d:%Y-%m-%d}  no listed contracts / no data (holiday) -- skipped")
             continue
-        costs[d] = c
+        costs[d] = priced[d]
         todo.append(d)
     total = sum(costs.values())
     print(f"{len(todo)} sessions to fetch, estimated ${total:.2f} (cap ${a.max_usd:.2f})")

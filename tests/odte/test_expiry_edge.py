@@ -119,3 +119,22 @@ def test_early_close_drops_decisions_after_the_bell():
     assert ds["hhmm"].max() < "13:00"
     r = ds[ds["hhmm"] == "12:00"].iloc[0]
     assert r["minutes_to_close"] == 60
+
+
+def test_danger_actions_default_sell_then_skip_then_flip():
+    p = np.array([0.10, 0.45, 0.70, np.nan])
+    base = np.array([0.2, 0.2, 0.2, 0.2])
+    ok = np.array([True, True, True, True])
+    assert ee.danger_actions(p, base, ok, ok, flip=False).tolist() == [1, 0, 0, 0]
+    assert ee.danger_actions(p, base, ok, ok, flip=True).tolist() == [1, 0, -1, 0]
+
+
+def test_danger_walk_forward_uses_only_earlier_days():
+    ds = ee.build_dataset(*ee.synthetic_world(n_days=30, informed=True, seed=8))
+    ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
+    p1, b1 = ee.walk_forward_danger(ds, "danger_logit", min_train_days=10)
+    ds2 = ds.copy()
+    last = ds2["day"] == ds2["day"].max()
+    ds2.loc[last, "ratio"] = 9.0                          # rewrite the last day's outcome
+    p2, b2 = ee.walk_forward_danger(ds2, "danger_logit", min_train_days=10)
+    assert np.allclose(p1, p2, equal_nan=True) and np.allclose(b1, b2, equal_nan=True)

@@ -1,4 +1,11 @@
 date,close_et,source
+2022-11-25,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2023-07-03,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2023-11-24,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2024-07-03,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2024-11-29,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2024-12-24,13:00,NYSE holiday schedule (pre-dates Kalshi H1300 naming)
+2025-07-03,13:00,Kalshi KXINX H1300 settlement event
 2025-11-28,13:00,Kalshi KXINX H1300 settlement event
 2025-12-24,13:00,Kalshi KXINX H1300 settlement event
 2026-07-02,13:00,Kalshi KXINX H1300 settlement event
