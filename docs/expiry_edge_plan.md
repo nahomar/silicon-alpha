@@ -82,4 +82,83 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   (they scrape X, which X's terms forbid); Stocktwits' public symbol stream
   works free (tested: 30 msgs/call, optional user-tagged Bullish/Bearish),
   history depth untested.
+- 2026-11-08, **Stage 2 under way.** 224 more sessions (2025-11-07 →
+  2026-09-30) priced at $232.50 and downloading, which gives 251 sessions in
+  total. Built alongside it, as cumulative feature sets tested against the
+  same model on base features:
+  - `+cal` (`odte/data/calendar.py`): CPI, NFP, PPI and JOLTS at their
+    *actual* dates (the shutdown moved or cancelled several), FOMC with and
+    without projections, FOMC minutes, the 2026 midterm, mega-cap earnings,
+    10/20/30y auctions, claims, ISM, opex, quad witching, VIX expiry, month
+    and quarter end, sessions next to holidays. Also "event still ahead of
+    t" flags (FOMC 14:00, auctions 13:00).
+  - `+ctx` (`odte/data/context.py`): VIX1D/9D/30D/3M, VVIX and SKEW at the
+    prior close, the 10y yield, dollar, crude, gold, HYG, BTC, SPX realized
+    vol, and today's straddle vol vs yesterday's VIX1D.
+  - `+soc` (`social/features.py`): hourly Reddit activity (Arctic Shift
+    aggregates: WSB, r/options, r/thetagang), plus Stocktwits volume and
+    bull/bear lean for SPX, ES and VIX. Each is a z-score against the same
+    time slot over the prior 20 sessions.
+  - Gaps: GDP and PCE release dates (BEA's archive renders client-side; FRED
+    needs a key), and Fed speeches.
+  - Caution: with 8 model variants, about 0.4 of them should look
+    significant by luck. The pre-registered ml_ridge decides the verdict;
+    a variant has to repeat on new data.
+- 2026-11-08, **Pre-registration for the 12-month run** (written before any
+  12-month result):
+  - Sessions: 2025-11-07 → 2026-11-06. Walk-forward with
+    `--min-train-days 40` for every model, so the transformer is not starved,
+    and margin 0.15. Decisions at 10:00 … 15:00, iron fly held to the close,
+    sized to $1,000 max loss.
+  - Primary verdict: `ml_ridge` on base features vs the best non-ML baseline
+    (paired day-bootstrap 95% CI > 0) and Sharpe > 0 at 95%.
+  - Secondary, exploratory with the multiple-comparisons caution printed:
+    ridge and LightGBM on cumulative sets +cal → +ctx → +soc → +nlp, plus
+    `seq_transformer` (minute-path transformer, ~30k params, monthly refits,
+    2 seeds, widest static set) vs LightGBM on the same features.
+  - NLP: cardiffnlp twitter-roberta sentiment plus MiniLM similarity to the
+    fixed FEAR/GREED phrases in `social/nlp.py`. Text is Stocktwits
+    SPX/ES/VIX and WSB posts; Reddit comments enter as counts only. No news
+    headlines yet (gap).
+  - Command: `python3 -m odte.eval.expiry_edge --seq --min-train-days 40 --write`
+- 2026-11-08, **Pre-registration amended before any 12-month result:** the
+  user asked for 15-minute checks and event reactions. All models now train
+  on every decision row; three trading versions are scored from the same
+  predictions:
+  1. `fixed6`: 10:00 … 15:00 hourly, margin 0.15. **Decides the verdict**
+     (unchanged).
+  2. `every15`: checks at 10:00, 10:15, … 15:00 (21 a day). Trades only on
+     a strong signal (margin 0.30), at most 1 trade a day (the first).
+     Compared with short- or long-once-at-10:00 and random-once-a-day.
+  3. `events`: decisions 5 and 30 min after scheduled intraday events (FOMC
+     14:00, minutes 14:00, 10/20/30y auctions 13:00, 10:00 JOLTS/ISM), plus
+     5 min after a market shock. A shock is a 5-min move above the 99.9th
+     percentile of the previous 20 sessions' 5-min moves, at most 2 a day,
+     30 min apart. (4x the median was tried first and rejected in testing,
+     before any real result: it fired ~twice a day on noise.) New inputs:
+     minutes since the event, move since it, and change in implied vol
+     since just before it (`+evt` layer).
+  Versions 2 and 3 are exploratory. Command:
+  `python3 -m odte.eval.expiry_edge --seq --min-train-days 40 --write`
+- 2026-11-08, **Money view added** (`odte/eval/portfolio.py`), house config
+  pre-registered before any 12-month result:
+  - Iron fly. Rest at mid for 5 min, filled only if the market trades
+    through mid by a tick, else cross at t+5. Quarter-Kelly sizing, fit
+    walk-forward on each strategy's own past out-of-sample trades, base 0.5%
+    until 40 trades exist.
+  - Limits: <= 2% of equity per trade, <= 6% opened per day (the hard daily
+    loss limit for defined-risk trades held to expiry), and a 10-session
+    pause after a 15% drawdown. Whole lots, capped at displayed touch size.
+  - Sensitivity: cross / mid_or_skip execution, fixed sizing, iron condor
+    (shorts at +/-0.75x straddle, wings 1x beyond). Reported at $100k, $1M,
+    $10M and $100M.
+  - First read (55 test days, noise): displayed liquidity caps 72-95% of
+    trades at $10M and 100% at $100M. A single SPX 0DTE fly cannot absorb
+    size, so scaling needs more underlyings, structures and real liquidity
+    beyond the touch. At $100k a 0.5% bet is smaller than one SPX fly; small
+    accounts would need XSP (1/10 size).
+  - Next underlyings, regular hours, priced 2026-11-08: NDXP ~$0.70/day and
+    RUTW ~$0.54/day, so ~$300 for a year of both. Both cash-settled like SPX.
+    `fetch_0dte.py --root NDXP|RUTW` is ready. SPY/QQQ are physically
+    settled (exercise risk) and not planned.
 

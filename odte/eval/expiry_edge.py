@@ -74,6 +74,20 @@ FEATURES = [
     "rv_last30", "iv_over_rv", "move_so_far", "range_so_far", "gap",
     "skew", "prev_ratio", "dow",
 ]
+# Every 15 minutes, 10:00 .. 15:00 (21 checks). Mode "every15" trades at
+# most once a day, on the first strong signal (STRONG_MARGIN).
+GRID15 = tuple(f"{h:02d}:{m:02d}" for h in range(10, 16) for m in (0, 15, 30, 45)
+               if h < 15 or m == 0)
+STRONG_MARGIN = 0.30
+# Mode "events": decide EVENT_OFFSETS_MIN after a scheduled intraday event
+# (FOMC 14:00, minutes 14:00, long auctions 13:00, 10:00 releases), and 5 min
+# after a market shock: a 5-minute move above the SHOCK_QUANTILE of all
+# 5-minute moves in the previous SHOCK_LOOKBACK sessions (prior days only).
+# A multiple of the median was tried first and rejected in testing before
+# any real result: at 4x it fires ~twice a day on pure noise.
+EVENT_OFFSETS_MIN = (5, 30)
+SHOCK_QUANTILE, SHOCK_LOOKBACK, MAX_SHOCKS, SHOCK_GAP_MIN = 0.999, 20, 2, 30
+EVENT_FEATURES = ["min_since_event", "move_since_event", "ivchg_since_event", "is_event_row"]
 PRIMARY_MODEL = "ml_ridge"   # pre-registered: tiny samples favour a linear model
 RISK_BUDGET = 1000.0         # $ max loss per trade; each trade is sized to it
 _EPS = 1e-12
@@ -99,7 +113,8 @@ def minute_grid(day_chain: pd.DataFrame, max_stale_min: int = 5) -> dict:
     keys = [t.to_numpy(), c["option_type"].to_numpy(),
             c["strike"].to_numpy(dtype=float)]
     wide = {}
-    for side in ("bid", "ask"):
+    sides = ["bid", "ask"] + [f for f in ("bid_size", "ask_size") if f in day_chain.columns]
+    for side in sides:
         s = pd.Series(c[side].to_numpy(dtype=float),
                       index=pd.MultiIndex.from_arrays(keys))
         s = s[~s.index.duplicated(keep="last")]
@@ -110,6 +125,15 @@ def minute_grid(day_chain: pd.DataFrame, max_stale_min: int = 5) -> dict:
     cols = wide["bid"].columns.union(wide["ask"].columns)
     return {k: v.reindex(columns=cols).sort_index(axis=1)
             for k, v in wide.items()}
+
+
+def _leg(grid: dict, side: str, t: pd.Timestamp, right: str, k: float) -> float:
+    """One quote field for one contract at minute t (NaN if absent)."""
+    try:
+        v = grid[side].at[t, (right, k)]
+    except KeyError:
+        return float("nan")
+    return float(v) if v is not None else float("nan")
 
 
 def _mids(grid: dict) -> pd.DataFrame:
@@ -169,20 +193,44 @@ def _nearest(series_index: pd.Index, target: float):
     return float(arr[np.argmin(np.abs(arr - target))])
 
 
+def _atm_iv(grid: dict, F: pd.Series, t: pd.Timestamp, close_t: pd.Timestamp) -> float:
+    """ATM straddle / F / sqrt(minutes left) at minute t (NaN if unquoted)."""
+    if t not in F.index or not np.isfinite(F.at[t]):
+        return float("nan")
+    q = _two_sided(grid, t)
+    (cb, ca), (pb, pa) = q["C"], q["P"]
+    K = _nearest(cb.index.intersection(pb.index), float(F.at[t]))
+    if K is None:
+        return float("nan")
+    mid = (cb[K] + ca[K] + pb[K] + pa[K]) / 2.0
+    mtc = max((close_t - t).total_seconds() / 60.0, 1.0)
+    return mid / float(F.at[t]) / math.sqrt(mtc)
+
+
 def session_rows(grid: dict, F: pd.Series, settle: float,
                  prev_settle: float = float("nan"),
                  prev_ratio: float = float("nan"),
                  times=DECISION_TIMES, wing_mult: float = 1.5,
-                 fee: float = FEE_PER_CONTRACT) -> list:
-    """One row per decision time: causal features, then settlement P&L."""
+                 fee: float = FEE_PER_CONTRACT, triggers=None,
+                 event_marks=()) -> list:
+    """One row per decision time: causal features, then settlement P&L.
+
+    `triggers` maps hhmm -> "grid" | "event" | "shock" (default: `times`, all
+    "grid"). `event_marks` are today's event times (scheduled or shock); each
+    row gets features relative to the last one at or before its own time.
+    """
+    triggers = triggers or {h: "grid" for h in times}
+    marks = sorted(pd.Timestamp(m) for m in event_marks)
     day = grid["bid"].index[0].normalize()
-    close_t = day + pd.Timedelta(hours=16)
     valid_F = F.dropna()
     if valid_F.empty:
         return []
+    # Early-close sessions (day after Thanksgiving, Christmas Eve) stop
+    # quoting at 13:00; minutes-to-close must count to the real bell.
+    close_t = day + pd.Timedelta(hours=13 if valid_F.index[-1] < day + pd.Timedelta(hours=14) else 16)
     F_open = float(valid_F.iloc[0])
     rows = []
-    for hhmm in times:
+    for hhmm in sorted(triggers):
         t = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
         if t not in F.index or not np.isfinite(F.at[t]):
             continue
@@ -227,13 +275,81 @@ def session_rows(grid: dict, F: pd.Series, settle: float,
         skew = (((pb[kp] + pa[kp]) - (cb[kc] + ca[kc])) / 2.0 / straddle_mid
                 if kp is not None and kc is not None else float("nan"))
 
+        # Post-event features: relative to the last event at or before t.
+        past = [m for m in marks if m <= t]
+        if past:
+            e = past[-1]
+            Fe = F.at[e] if e in F.index else np.nan
+            iv_before = _atm_iv(grid, F, e - pd.Timedelta(minutes=1), close_t)
+            ev = {"min_since_event": (t - e).total_seconds() / 60.0,
+                  "move_since_event": (abs(math.log(Ft / Fe)) * 1e4
+                                       if np.isfinite(Fe) and Fe > 0 else np.nan),
+                  "ivchg_since_event": (iv_rm / iv_before - 1.0
+                                        if np.isfinite(iv_before) and iv_before > 0 else np.nan)}
+        else:
+            ev = {"min_since_event": np.nan, "move_since_event": np.nan,
+                  "ivchg_since_event": np.nan}
+        ev["is_event_row"] = float(triggers[hhmm] != "grid")
+
         move = abs(settle - K)
         intrinsic = min(move, W) if np.isfinite(W) else float("nan")
         fly_ok = np.isfinite(W) and credit > 0 and debit > 0
         fees4 = 4 * fee
+
+        # --- execution: rest at mid for 5 minutes, else cross at t+5 --------
+        # A resting sell at the mid credit L counts as filled only if, at a
+        # later minute, the fly's touch credit reaches L + 0.05: the market
+        # came through our price, not merely to it. Same for buys. Fills
+        # therefore happen when price moved our way, which is the realistic
+        # (adverse-selection) bias rather than an optimistic one.
+        ex = {"fill_mid_short": False, "fill_mid_long": False,
+              "credit_t5": np.nan, "debit_t5": np.nan,
+              "cap_short": np.nan, "cap_long": np.nan}
+        if fly_ok:
+            legs = (("C", K), ("P", K), ("C", K + W), ("P", K - W))
+            for k in range(1, 6):
+                tk = t + pd.Timedelta(minutes=k)
+                b = [_leg(grid, "bid", tk, r_, k_) for r_, k_ in legs]
+                a = [_leg(grid, "ask", tk, r_, k_) for r_, k_ in legs]
+                if not all(np.isfinite(b + a)):
+                    continue
+                c_touch = b[0] + b[1] - a[2] - a[3]
+                d_touch = a[0] + a[1] - b[2] - b[3]
+                if c_touch >= credit_mid + 0.05:
+                    ex["fill_mid_short"] = True
+                if d_touch <= credit_mid - 0.05:
+                    ex["fill_mid_long"] = True
+                if k == 5:
+                    ex["credit_t5"], ex["debit_t5"] = c_touch, d_touch
+            if "bid_size" in grid:
+                bs = [_leg(grid, "bid_size", t, r_, k_) for r_, k_ in legs]
+                as_ = [_leg(grid, "ask_size", t, r_, k_) for r_, k_ in legs]
+                ex["cap_short"] = float(np.nanmin([bs[0], bs[1], as_[2], as_[3]]))
+                ex["cap_long"] = float(np.nanmin([as_[0], as_[1], bs[2], bs[3]]))
+
+        # --- iron condor: shorts at +/-0.75 x straddle, wings 1.0 x beyond ---
+        cd = {"pnl_short_condor": np.nan, "pnl_long_condor": np.nan,
+              "risk_short_condor": np.nan, "risk_long_condor": np.nan}
+        kcs = _nearest(cb.index[cb.index >= K + 0.75 * straddle_mid], K + 0.75 * straddle_mid)
+        kps = _nearest(pb.index[pb.index <= K - 0.75 * straddle_mid], K - 0.75 * straddle_mid)
+        if kcs is not None and kps is not None:
+            kcl = _nearest(cb.index[cb.index > kcs], kcs + straddle_mid)
+            kpl = _nearest(pb.index[pb.index < kps], kps - straddle_mid)
+            if kcl is not None and kpl is not None:
+                c_cr = cb[kcs] + pb[kps] - ca[kcl] - pa[kpl]
+                c_db = ca[kcs] + pa[kps] - cb[kcl] - pb[kpl]
+                wmax = max(kcl - kcs, kps - kpl)
+                intr = (min(max(settle - kcs, 0.0), kcl - kcs)
+                        + min(max(kps - settle, 0.0), kps - kpl))
+                if c_cr > 0 and c_db > 0:
+                    cd = {"pnl_short_condor": (c_cr - intr) * MULT - fees4,
+                          "pnl_long_condor": (intr - c_db) * MULT - fees4,
+                          "risk_short_condor": (wmax - c_cr) * MULT + fees4,
+                          "risk_long_condor": c_db * MULT + fees4}
         rows.append({
             "day": day, "t": t, "hhmm": hhmm, "F": Ft, "K": K, "W": W,
-            "settle": settle,
+            "settle": settle, "trigger": triggers[hhmm],
+            "on6": hhmm in DECISION_TIMES, **ev,
             # features (known at t)
             "implied_move": implied_move,
             "minutes_to_close": mtc,
@@ -261,34 +377,96 @@ def session_rows(grid: dict, F: pd.Series, settle: float,
             "risk_short_fly": (W - credit) * MULT + fees4 if fly_ok else float("nan"),
             "risk_long_fly": debit * MULT + fees4 if fly_ok else float("nan"),
             "pnl_short_straddle": (straddle_bid - move) * MULT - 2 * fee,
+            # execution variants (fly): mid if the market came through, else t+5 touch
+            "pnl_short_fly_midx": (credit_mid - intrinsic) * MULT - fees4 if fly_ok else np.nan,
+            "pnl_long_fly_midx": (intrinsic - credit_mid) * MULT - fees4 if fly_ok else np.nan,
+            "risk_short_fly_midx": (W - credit_mid) * MULT + fees4 if fly_ok else np.nan,
+            "risk_long_fly_midx": credit_mid * MULT + fees4 if fly_ok else np.nan,
+            "pnl_short_fly_t5": (ex["credit_t5"] - intrinsic) * MULT - fees4 if fly_ok else np.nan,
+            "pnl_long_fly_t5": (intrinsic - ex["debit_t5"]) * MULT - fees4 if fly_ok else np.nan,
+            "risk_short_fly_t5": (W - ex["credit_t5"]) * MULT + fees4 if fly_ok else np.nan,
+            "risk_long_fly_t5": ex["debit_t5"] * MULT + fees4 if fly_ok else np.nan,
+            **ex, **cd,
         })
     return rows
 
 
-def build_dataset(chains: dict, settlements: dict, **kw) -> pd.DataFrame:
+def _shock_marks(F: pd.Series, thr: float, day: pd.Timestamp) -> list:
+    """Minutes where the 5-minute move first reaches `thr` (log units).
+
+    Searched 09:35..14:55, at most MAX_SHOCKS a day, SHOCK_GAP_MIN apart. A
+    shock at minute m uses F up to m only; its decision row is at m + 5.
+    """
+    f = F.dropna()
+    r5 = (np.log(f) - np.log(f.shift(5))).abs()
+    lo, hi = day + pd.Timedelta(hours=9, minutes=35), day + pd.Timedelta(hours=14, minutes=55)
+    hits = r5[(r5.index >= lo) & (r5.index <= hi) & (r5 >= thr)]
+    marks = []
+    for m in hits.index:
+        if not marks or (m - marks[-1]) >= pd.Timedelta(minutes=SHOCK_GAP_MIN):
+            marks.append(m)
+        if len(marks) >= MAX_SHOCKS:
+            break
+    return marks
+
+
+def build_dataset(chains: dict, settlements: dict, times=DECISION_TIMES,
+                  event_times=None, shocks: bool = False, **kw) -> pd.DataFrame:
     """Decision rows across sessions, in date order.
 
     `chains` maps session date -> that session's quotes; `settlements` maps
     date -> SPX official close. A session with no settlement falls back to
     the last implied forward of the day and is flagged.
+
+    `times` is the regular grid (DECISION_TIMES or GRID15). `event_times`
+    maps session date -> list of scheduled intraday event times ("HH:MM");
+    each adds decisions EVENT_OFFSETS_MIN later. `shocks=True` adds a
+    decision 5 minutes after each market shock (threshold: SHOCK_QUANTILE of
+    prior sessions' 5-minute moves, prior days only).
     """
     rows = []
     prev_settle, prev_ratio = float("nan"), float("nan")
+    hist5 = []                                   # |5-min moves| of prior sessions
     for day in sorted(chains):
+        day = pd.Timestamp(day).normalize()
         grid = minute_grid(chains[day])
         F = implied_forward(grid)
-        settle = settlements.get(pd.Timestamp(day).normalize())
+        settle = settlements.get(day)
         src = "spx_close"
         if settle is None or not np.isfinite(settle):
             settle = float(F.dropna().iloc[-1]) if F.notna().any() else float("nan")
             src = "last_forward"
-        day_rows = session_rows(grid, F, settle, prev_settle, prev_ratio, **kw)
+        triggers = {h: "grid" for h in times}
+        marks = []
+        first, last = day + pd.Timedelta(hours=10), day + pd.Timedelta(hours=15)
+        for hh in (event_times or {}).get(day, []):
+            et = day + pd.Timedelta(hours=int(hh[:2]), minutes=int(hh[3:]))
+            marks.append(et)
+            for off in EVENT_OFFSETS_MIN:
+                tt = et + pd.Timedelta(minutes=off)
+                if first <= tt <= last:
+                    triggers[tt.strftime("%H:%M")] = "event"
+        if shocks and len(hist5) >= 5:
+            thr = float(np.quantile(np.concatenate(hist5[-SHOCK_LOOKBACK:]), SHOCK_QUANTILE))
+            for m in _shock_marks(F, thr, day):
+                marks.append(m)
+                tt = m + pd.Timedelta(minutes=5)
+                if first <= tt <= last:
+                    triggers[tt.strftime("%H:%M")] = "shock"
+        day_rows = session_rows(grid, F, settle, prev_settle, prev_ratio,
+                                triggers=triggers, event_marks=marks, **kw)
         for r in day_rows:
             r["settle_source"] = src
         rows.extend(day_rows)
         if day_rows:
-            prev_ratio = day_rows[0]["ratio"]
+            ten = [r for r in day_rows if r["hhmm"] == "10:00"]
+            prev_ratio = (ten or day_rows)[0]["ratio"]
         prev_settle = settle
+        f = F.dropna()
+        r5 = (np.log(f) - np.log(f.shift(5))).abs().dropna()
+        r5 = r5[r5.index >= day + pd.Timedelta(hours=9, minutes=35)].to_numpy()   # same window as detection
+        if len(r5):
+            hist5.append(r5)
     return pd.DataFrame(rows)
 
 
@@ -320,7 +498,8 @@ def _rule(pred_ratio: np.ndarray, margin: float) -> np.ndarray:
 
 
 def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
-                 margin: float = 0.15, shuffle_labels_seed=None):
+                 margin: float = 0.15, shuffle_labels_seed=None, features=None,
+                 collect_gain=None):
     """Predictions and actions for every row on a day with enough history.
 
     Rows on the first `min_train_days` sessions get NaN (not tested). With
@@ -331,7 +510,7 @@ def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
     pred = np.full(len(ds), np.nan)
     rng = np.random.default_rng(shuffle_labels_seed)
     y_all = ds["ratio"].clip(upper=4.0).to_numpy()
-    X_all = ds[FEATURES].to_numpy(dtype=float)
+    X_all = ds[list(features or FEATURES)].to_numpy(dtype=float)
     dvals = ds["day"].to_numpy()
     for i, d in enumerate(days):
         if i < min_train_days:
@@ -344,6 +523,9 @@ def walk_forward(ds: pd.DataFrame, model: str, min_train_days: int = 8,
         m = _make_model(model)
         m.fit(X_all[tr], y)
         pred[te] = m.predict(X_all[te])
+        if collect_gain is not None and model == "ml_lgbm":
+            g = m.booster_.feature_importance("gain").astype(float)
+            collect_gain.append(g / g.sum() if g.sum() > 0 else g)
     act = np.where(np.isfinite(pred), _rule(np.nan_to_num(pred, nan=1.0), margin), 0)
     return pred, act
 
@@ -440,39 +622,166 @@ def paired_diff(daily_a: pd.Series, daily_b: pd.Series, n_boot: int = 4000,
             "p_le_0": float(np.mean(bs <= 0))}
 
 
+def _first_per_day(ds: pd.DataFrame, act: np.ndarray) -> np.ndarray:
+    """Keep only each day's first non-zero action (rows sorted by time)."""
+    out = np.zeros_like(act)
+    seen = set()
+    for i, (d, a) in enumerate(zip(ds["day"].to_numpy(), act)):
+        if a != 0 and d not in seen:
+            out[i] = a
+            seen.add(d)
+    return out
+
+
+def _mode_masks(ds: pd.DataFrame) -> dict:
+    trig = ds["trigger"] if "trigger" in ds else pd.Series("grid", index=ds.index)
+    on6 = ds["on6"] if "on6" in ds else pd.Series(True, index=ds.index)
+    masks = {"fixed6": on6.to_numpy(bool),
+             "every15": trig.eq("grid").to_numpy(),
+             "events": trig.isin(["event", "shock"]).to_numpy()}
+    # every15 only differs from fixed6 if the grid is finer than 6 checks.
+    if masks["every15"].sum() <= masks["fixed6"].sum():
+        masks.pop("every15")
+    return {k: v for k, v in masks.items() if v.any()}
+
+
+def _mode_actions(mode: str, ds, pred, mask, tested, margin) -> np.ndarray:
+    ok = np.isfinite(pred) & mask & tested
+    if mode == "every15":
+        act = np.where(ok, _rule(np.nan_to_num(pred, nan=1.0), STRONG_MARGIN), 0)
+        return _first_per_day(ds, act)
+    return np.where(ok, _rule(np.nan_to_num(pred, nan=1.0), margin), 0)
+
+
+def _mode_baselines(mode: str, ds, mask, tested, seed) -> dict:
+    m = mask & tested
+    if mode == "every15":
+        # One trade a day, like the strategy it is compared with.
+        rng = np.random.default_rng(seed)
+        first = _first_per_day(ds, m.astype(int))
+        rnd = np.zeros(len(ds), dtype=int)
+        for d in np.unique(ds["day"].to_numpy()[m]):
+            idx = np.flatnonzero(m & (ds["day"].to_numpy() == d))
+            rnd[rng.choice(idx)] = rng.choice([-1, 1])
+        return {"flat": np.zeros(len(ds), dtype=int),
+                "short_once_at_10": first, "long_once_at_10": -first,
+                "random_once": rnd}
+    b = baseline_actions(ds, tested, seed=seed)
+    return {k: np.where(mask, v, 0) for k, v in b.items()}
+
+
 def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
               min_days_for_verdict: int = 40, seed: int = 0,
-              risk_budget=RISK_BUDGET) -> dict:
+              risk_budget=RISK_BUDGET, feature_sets=None, extra_preds=None,
+              layers=None) -> dict:
+    """Train once, score three trading versions from the same predictions.
+
+    Models are fit walk-forward on every decision row (grid, event, shock).
+    `feature_sets` maps a name to a feature list; "base" (FEATURES) always
+    runs and keeps the pre-registered names ml_ridge / ml_lgbm.
+
+    Versions ("modes"):
+      fixed6   the 6 pre-registered times, margin; decides the VERDICT
+      every15  every 15 minutes, first STRONG_MARGIN signal, 1 trade/day
+      events   decisions after scheduled events and market shocks
+    Top-level keys describe fixed6 (unchanged interface); rep["modes"] has all.
+    """
     ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
     days = sorted(ds["day"].unique())
     tested = ds["day"].isin(days[min_train_days:]).to_numpy()
+    feature_sets = dict(feature_sets or {})
+    feature_sets["base"] = list(FEATURES)
 
-    strategies = {}
     preds = {}
-    for m in ("ml_ridge", "ml_lgbm"):
-        preds[m], strategies[m] = walk_forward(ds, m, min_train_days, margin)
-    _, strategies["placebo_shuffled_labels"] = walk_forward(
-        ds, PRIMARY_MODEL, min_train_days, margin, shuffle_labels_seed=seed + 7)
-    baselines = baseline_actions(ds, tested, seed=seed)
-    strategies.update(baselines)
+    for fs_name, cols in feature_sets.items():
+        for m in ("ml_ridge", "ml_lgbm"):
+            label = m if fs_name == "base" else f"{m}{fs_name}"
+            preds[label], _ = walk_forward(ds, m, min_train_days, margin, features=cols)
+    for label, p in (extra_preds or {}).items():
+        preds[label] = np.asarray(p, dtype=float)
+    widest = max(feature_sets.values(), key=len)
+    placebo, _ = walk_forward(ds, PRIMARY_MODEL, min_train_days, margin,
+                              shuffle_labels_seed=seed + 7, features=widest)
+    model_preds = dict(preds, placebo_shuffled_labels=placebo)
 
-    res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
-    base_names = list(baselines)
-    best_base = max((b for b in base_names if b != "flat"),
-                    key=lambda b: res[b]["total_pnl"])
-    comparisons = {}
-    for m in ("ml_ridge", "ml_lgbm", "placebo_shuffled_labels"):
-        comparisons[m] = {
-            "vs_" + b: paired_diff(res[m]["_daily"], res[b]["_daily"], seed=seed)
-            for b in ("always_short_fly", best_base)
-        }
+    modes = {}
+    for mode, mask in _mode_masks(ds).items():
+        strategies = {k: _mode_actions(mode, ds, p, mask, tested, margin)
+                      for k, p in model_preds.items()}
+        baselines = _mode_baselines(mode, ds, mask, tested, seed)
+        strategies.update(baselines)
+        res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
+        best_base = max((b for b in baselines if b != "flat"),
+                        key=lambda b: res[b]["total_pnl"])
+        ref = "short_once_at_10" if mode == "every15" else "always_short_fly"
+        comparisons = {}
+        for m in model_preds:
+            targets = [ref, best_base]
+            base_m = m.split("+")[0]
+            if m.startswith("seq_transformer"):
+                base_m = "ml_lgbm" + ("" if m == "seq_transformer" else m[len("seq_transformer"):])
+            if mode == "fixed6" and base_m != m and base_m in res:
+                targets.append(base_m)        # does the extra data help this model?
+            comparisons[m] = {"vs_" + b: paired_diff(res[m]["_daily"], res[b]["_daily"], seed=seed)
+                              for b in dict.fromkeys(targets)}
+        rows = mask & tested
+        forecast_ic = {m: spearman_ic(p[rows], ds.loc[rows, "ratio"].to_numpy())
+                       for m, p in preds.items()}
+        from .portfolio import money_view
+        ml_names = [k for k in preds if k != PRIMARY_MODEL]
+        best_ml = max(ml_names, key=lambda k: res[k]["total_pnl"]) if ml_names else None
+        pick = {PRIMARY_MODEL: strategies[PRIMARY_MODEL], ref: strategies[ref]}
+        if best_ml:
+            pick[f"{best_ml} (best variant, picked after the fact)"] = strategies[best_ml]
+        pred_for = {PRIMARY_MODEL: preds[PRIMARY_MODEL]}
+        if best_ml:
+            pred_for[f"{best_ml} (best variant, picked after the fact)"] = preds[best_ml]
+        money = money_view(ds, pick, pred_for, tested)
+        for v in res.values():
+            v.pop("_daily", None)
+        modes[mode] = {"strategies": res, "comparisons": comparisons,
+                       "best_baseline": best_base, "reference": ref,
+                       "forecast_ic": forecast_ic, "n_rows_tested": int(rows.sum()),
+                       "money": money}
 
-    t_rows = ds[tested]
-    forecast_ic = {m: spearman_ic(preds[m][tested], t_rows["ratio"].to_numpy())
-                   for m in preds}
-    n_test_days = int(res[PRIMARY_MODEL]["n_test_days"])
-    prim = res[PRIMARY_MODEL]
-    beat_best = comparisons[PRIMARY_MODEL]["vs_" + best_base]
+    importance = None
+    if layers:
+        # (1) drop one layer from the full LightGBM model, (2) gain shares.
+        full_cols = list(widest)
+        m6 = _mode_masks(ds)["fixed6"]
+        rows6 = m6 & tested
+        gains = []
+        p_full, _ = walk_forward(ds, "ml_lgbm", min_train_days, margin,
+                                 features=full_cols, collect_gain=gains)
+        a_full = _mode_actions("fixed6", ds, p_full, m6, tested, margin)
+        s_full = summarize(ds, a_full, tested, risk_budget)
+        ic_full = spearman_ic(p_full[rows6], ds.loc[rows6, "ratio"].to_numpy())
+        drop = {}
+        for layer, cols in layers.items():
+            keep = [c for c in full_cols if c not in set(cols)]
+            if len(keep) == len(full_cols) or not keep:
+                continue
+            p_wo, _ = walk_forward(ds, "ml_lgbm", min_train_days, margin, features=keep)
+            a_wo = _mode_actions("fixed6", ds, p_wo, m6, tested, margin)
+            s_wo = summarize(ds, a_wo, tested, risk_budget)
+            drop[layer] = {
+                "ic_without": spearman_ic(p_wo[rows6], ds.loc[rows6, "ratio"].to_numpy()),
+                "ic_drop": ic_full - spearman_ic(p_wo[rows6], ds.loc[rows6, "ratio"].to_numpy()),
+                "pnl_lost_per_day": paired_diff(s_full["_daily"], s_wo["_daily"], seed=seed),
+                "n_features": len(cols)}
+        g = np.mean(gains, axis=0) if gains else np.zeros(len(full_cols))
+        gain = dict(sorted(zip(full_cols, map(float, g)), key=lambda kv: -kv[1]))
+        owner = {c: L for L, cols in layers.items() for c in cols}
+        by_layer = {}
+        for c, v in gain.items():
+            by_layer[owner.get(c, "base")] = by_layer.get(owner.get(c, "base"), 0.0) + v
+        importance = {"full_ic": ic_full, "drop_one": drop, "gain_top": dict(list(gain.items())[:20]),
+                      "gain_by_layer": dict(sorted(by_layer.items(), key=lambda kv: -kv[1]))}
+
+    main = modes["fixed6"]
+    prim = main["strategies"][PRIMARY_MODEL]
+    n_test_days = int(prim["n_test_days"])
+    beat_best = main["comparisons"][PRIMARY_MODEL]["vs_" + main["best_baseline"]]
     if n_test_days < min_days_for_verdict:
         verdict = (f"INCONCLUSIVE: {n_test_days} test days "
                    f"(< {min_days_for_verdict}). Directional read only.")
@@ -481,13 +790,15 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
     else:
         verdict = "FAIL: no edge over the baselines that survives the CI."
 
+    m6 = _mode_masks(ds)["fixed6"]
     summary = {
         "n_days": len(days), "n_test_days": n_test_days,
         "n_rows": int(len(ds)), "n_rows_tested": int(tested.sum()),
+        "rows_by_trigger": (ds["trigger"].value_counts().to_dict() if "trigger" in ds else {}),
         "settle_sources": ds["settle_source"].value_counts().to_dict()
         if "settle_source" in ds else {},
-        "mean_ratio_realized_over_implied": float(ds["ratio"].mean()),
-        "median_ratio": float(ds["ratio"].median()),
+        "mean_ratio_realized_over_implied": float(ds.loc[m6, "ratio"].mean()),
+        "median_ratio": float(ds.loc[m6, "ratio"].median()),
         "median_straddle_spread_pct": float(
             (ds["straddle_spread"] / ds["straddle_mid"]).median()),
         "median_fly_credit_$": float(ds["fly_credit"].median() * MULT),
@@ -495,12 +806,15 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         "sizing": (f"each trade sized to ${risk_budget:.0f} max loss"
                    if risk_budget else "1 lot per trade"),
     }
-    for v in res.values():
-        v.pop("_daily", None)
-    return {"summary": summary, "strategies": res, "comparisons": comparisons,
-            "best_baseline": best_base, "forecast_ic": forecast_ic,
-            "primary_model": PRIMARY_MODEL, "verdict": verdict,
+    return {"summary": summary, "strategies": main["strategies"],
+            "comparisons": main["comparisons"], "best_baseline": main["best_baseline"],
+            "forecast_ic": main["forecast_ic"], "primary_model": PRIMARY_MODEL,
+            "verdict": verdict, "modes": modes, "importance": importance,
+            "feature_sets": {k: len(v) for k, v in feature_sets.items()},
             "params": {"min_train_days": min_train_days, "margin": margin,
+                       "strong_margin": STRONG_MARGIN,
+                       "event_offsets_min": list(EVENT_OFFSETS_MIN),
+                       "shock_quantile": SHOCK_QUANTILE,
                        "decision_times": list(DECISION_TIMES)}}
 
 
@@ -710,7 +1024,54 @@ def print_report(rep: dict) -> None:
         for k, v in c.items():
             print(f"  {m:24s} {k:24s} {v['mean']:+8.1f} $/day  "
                   f"CI [{v['ci'][0]:+.1f}, {v['ci'][1]:+.1f}]")
-    print(f"\nVERDICT ({rep['primary_model']}): {rep['verdict']}")
+    extra = {m: c for m, c in rep["comparisons"].items() if "+" in m}
+    if extra:
+        print("\ndoes the extra data help? (each model vs the same model on base features)")
+        for m, c in extra.items():
+            k = "vs_" + m.split("+")[0]
+            if k in c:
+                v = c[k]
+                print(f"  {m:28s} {v['mean']:+8.1f} $/day  CI [{v['ci'][0]:+.1f}, {v['ci'][1]:+.1f}]")
+    titles = {"every15": "VERSION 2 - check every 15 min, 1 trade/day on a strong signal",
+              "events": "VERSION 3 - decide after scheduled events and market shocks"}
+    for mode, title in titles.items():
+        md = rep.get("modes", {}).get(mode)
+        if not md:
+            continue
+        print(f"\n=== {title} ({md['n_rows_tested']} tested decision points) ===")
+        for name, r in md["strategies"].items():
+            ci = r["sharpe_ci"]
+            print(f"{name:34s} {r['n_trades']:5d} trades  total {r['total_pnl']:9.0f}  "
+                  f"$/day {r['mean_daily_pnl']:7.1f}  hit {(r['hit_rate'] if np.isfinite(r['hit_rate']) else 0)*100:3.0f}%  "
+                  f"worst day {r['worst_day']:7.0f}  sharpe {r['sharpe']:+.2f} [{ci[0]:+.2f}, {ci[1]:+.2f}]")
+        print(f"  vs {md['reference']} / best baseline ({md['best_baseline']}):")
+        for m, c in md["comparisons"].items():
+            parts = [f"{k[3:]} {v['mean']:+.1f} [{v['ci'][0]:+.0f},{v['ci'][1]:+.0f}]" for k, v in c.items()]
+            print(f"  {m:34s} " + " | ".join(parts))
+    imp = rep.get("importance")
+    if imp:
+        print(f"\n=== WHAT HELPS - layer by layer (full LightGBM, version 1; full IC {imp['full_ic']:+.3f}) ===")
+        print("  drop one layer from the full model (positive = the layer was helping):")
+        for L, v in imp["drop_one"].items():
+            pl = v["pnl_lost_per_day"]
+            print(f"    {L:10s} {v['n_features']:3d} feats   IC drop {v['ic_drop']:+.3f}   "
+                  f"$/day lost {pl['mean']:+8.1f}  CI [{pl['ci'][0]:+.0f}, {pl['ci'][1]:+.0f}]")
+        print("  share of the model's splits (LightGBM gain), by layer:")
+        print("    " + "  ".join(f"{L} {v:.0%}" for L, v in imp["gain_by_layer"].items()))
+        print("  top inputs: " + ", ".join(f"{k} {v:.1%}" for k, v in list(imp["gain_top"].items())[:12]))
+    from .portfolio import print_money
+    for mode, md in rep.get("modes", {}).items():
+        if md.get("money"):
+            print_money(md["money"], {"fixed6": "version 1 (6 fixed times)",
+                                      "every15": "version 2 (every 15 min)",
+                                      "events": "version 3 (events)"}[mode])
+    n_var = sum(1 for k in rep["strategies"] if k.startswith(("ml_", "seq_")))
+    if n_var > 2:
+        print(f"\ncaution: {n_var} model variants were tried. At 95% confidence about "
+              f"{0.05 * n_var:.1f} of their CIs\n  would exclude zero by luck alone, so a lone "
+              f"'significant' variant is exploratory.\n  Only the pre-registered "
+              f"{rep['primary_model']} decides the verdict; a variant needs to repeat on new data.")
+    print(f"\nVERDICT ({rep['primary_model']}, pre-registered): {rep['verdict']}")
 
 
 def _cli() -> int:
@@ -721,6 +1082,12 @@ def _cli() -> int:
     ap.add_argument("--min-train-days", type=int, default=8)
     ap.add_argument("--margin", type=float, default=0.15)
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--base-only", action="store_true",
+                    help="skip calendar / context / social / nlp features")
+    ap.add_argument("--seq", action="store_true",
+                    help="also run the minute-sequence transformer (slower)")
+    ap.add_argument("--fixed6-only", action="store_true",
+                    help="only the 6 fixed times (no 15-min grid, events or shocks)")
     a = ap.parse_args()
     if a.selftest:
         return 0 if selftest() else 1
@@ -728,8 +1095,53 @@ def _cli() -> int:
     if not chains:
         print(f"no sessions in {a.data_dir}; run odte.data.fetch_0dte first")
         return 1
-    ds = build_dataset(chains, settles)
-    rep = run_study(ds, min_train_days=a.min_train_days, margin=a.margin)
+    if a.fixed6_only:
+        ds = build_dataset(chains, settles)
+    else:
+        event_times = {}
+        try:
+            from odte.data import calendar as cal
+            ev = cal.load()
+            timed = ev[ev["session_time"].notna()]
+            for d, g in timed.groupby("session"):
+                event_times[pd.Timestamp(d)] = sorted(set(g["session_time"]))
+        except FileNotFoundError:
+            print("[events] no calendar built; scheduled-event decisions skipped")
+        ds = build_dataset(chains, settles, times=GRID15, event_times=event_times,
+                           shocks=True)
+        print(f"[rows] {ds['trigger'].value_counts().to_dict()}")
+    sets, skipped = {}, {}
+    if not a.base_only:
+        from .extra_features import attach
+        ds, sets, skipped = attach(ds)
+        sets.pop("base", None)
+        for k, v in skipped.items():
+            print(f"[features] {k}: {v}")
+    if "min_since_event" in ds.columns and ds["min_since_event"].notna().any():
+        # Post-event features as the last cumulative layer.
+        top = max(sets, key=lambda k: len(sets[k])) if sets else None
+        sets[(top or "") + "+evt"] = (sets[top] if top else list(FEATURES)) + EVENT_FEATURES
+    extra = {}
+    if a.seq:
+        from .seq_model import minute_paths, walk_forward_seq
+        print("[seq] building minute paths ...", flush=True)
+        paths = {pd.Timestamp(d): minute_paths(c) for d, c in chains.items()}
+        ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
+        widest_name = max(sets, key=lambda k: len(sets[k])) if sets else None
+        static = sets[widest_name] if widest_name else list(FEATURES)
+        label = "seq_transformer" + (widest_name or "")
+        extra[label] = walk_forward_seq(ds, paths, static, min_train_days=a.min_train_days)
+    layers = {}
+    ordered = sorted(sets.items(), key=lambda kv: len(kv[1]))
+    prev = list(FEATURES)
+    for name, cols in ordered:
+        new_cols = [c for c in cols if c not in set(prev)]
+        if new_cols:
+            layers[name.split("+")[-1]] = new_cols
+        prev = cols
+    rep = run_study(ds, min_train_days=a.min_train_days, margin=a.margin,
+                    feature_sets=sets, extra_preds=extra, layers=layers or None)
+    rep["skipped_features"] = skipped
     print_report(rep)
     if a.write:
         OUT.mkdir(parents=True, exist_ok=True)
