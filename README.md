@@ -379,4 +379,3 @@ cost estimates, and post-launch monitoring.
 - [`docs/phase6_alpha_factor_discovery.md`](docs/phase6_alpha_factor_discovery.md) — Phase 6 spec
 - [`docs/phase7_alternative_data.md`](docs/phase7_alternative_data.md) — Phase 7 spec
 - [`docs/phase8_sovereign_infrastructure.md`](docs/phase8_sovereign_infrastructure.md) — Phase 8 spec
-- [`docs/sponsor_email_template.md`](docs/sponsor_email_template.md) — faculty-sponsor email template
