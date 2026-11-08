@@ -327,4 +327,20 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     (b) its Sharpe ≥ #1's.
   - Otherwise it is dropped before any block is opened. This is a screen,
     not proof; the sealed blocks decide.
+- 2026-11-08, **Dev screen result (seen SPX 2022-07-14 → 2026-09-04, 1,041
+  days, fixed6 −postevt, $1k max loss per trade).**
+
+  | strategy | total | Sharpe [95% CI] | max DD | vs #1 per day [CI] |
+  |---|---|---|---|---|
+  | #1 ridge+cal+ctx | +$86.7k | 0.77 [−0.22, +1.74] | −$37.3k | — |
+  | #2 +gamma | +$63.5k | 0.53 [−0.41, +1.51] | −$37.7k | −$22.2 [−92, +51] |
+  | #3 +ES | +$89.9k | 0.79 [−0.19, +1.76] | −$27.5k | +$3.1 [−43, +50] |
+  | always-short −postevt | +$32.5k | 0.19 | −$53.3k | |
+  | always-short | +$10.6k | 0.06 | −$64.1k | |
+
+  - Rule applied: **#2 dropped** (fails both conditions). **#3 kept** (passes
+    both, barely; it differs from #1 on 314 days).
+  - Lockbox candidates entering block 1: #1 and #3.
+  - Note: on this longer window #1's Sharpe CI includes 0 (the earlier
+    2022-07 → 2025-11 run gave 1.12). That is why the sealed blocks matter.
 
