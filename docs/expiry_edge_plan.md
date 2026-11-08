@@ -265,4 +265,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - **Development candidate for the final exam: `ml_ridge+cal+ctx -postevt`,
     held to expiry, 6 fixed times.** Next: test the dealer-gamma layer on it,
     then score the one final version once on the locked exam.
+- 2026-11-08, **Lockbox protocol adopted (user's call): data, once seen,
+  cannot test a strategy changed because of it.**
+  - Spent (development only): SPX 2022-07 → 2026-09.
+  - Sealed: SPX 2016 → 2022-05 in half-year blocks (Mon/Wed/Fri 0DTE days),
+    NDXP and RUTW (all years), and the SPX exam 2026-09-08 → 2026-11-06.
+  - Each block is opened once with `odte/eval/lockbox.py open`, for the
+    strategy as committed (the ledger pins the git hash). Models train on
+    all data before the block; data after it is dropped. After a block's
+    result, the strategy may be revised, but only later sealed blocks can
+    score the revision. The ledger (`docs/lockbox_ledger.json`) refuses
+    reopening.
+  - Strategy entering the first block: `ml_ridge+cal+ctx -postevt`, 6
+    fixed times, held to expiry.
 
