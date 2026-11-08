@@ -218,4 +218,25 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     P&L vs always-short-fly has 95% CI > 0. Drawdown and worst day are
     reported alongside.
   - Everything else is exploratory.
+- 2026-11-08, **4-year result (replication window 2022-07-01 → 2025-11-06,
+  834 tested sessions, $1k max loss per trade, weekly refits). Final exam
+  still locked.**
+  - Always-short-fly: +$13.6k on ~5,000 trades, Sharpe +0.09, max DD −$64k.
+    Essentially breakeven after costs over 3.4 years (realized/implied
+    median 0.76).
+  - **A, `ml_ridge+cal+ctx`: FAIL by the pre-registered rule.** +$97.4k,
+    Sharpe +0.96 [−0.09, +2.09]; vs always-short +$100/day CI [−103, +314].
+    Same sign as in the selection year (12-mo +$42k), so it replicates in
+    direction but not significance. Forecast IC +0.05.
+  - **B, `danger_logit+cal+ctx skip`: FAIL by the pre-registered rule
+    (close).** +$45.2k, +$38/day vs always-short CI [−9, +91]; max DD −$46k
+    vs −$64k. AUC 0.535, a weak detector. Flip ≈ skip (the 3x threshold
+    almost never fires).
+  - Exploratory: selling right after events/shocks loses (always-short on
+    event rows −$39k), so don't sell into post-event vol. LightGBM+cal
+    +$71k. For LightGBM the ctx layer hurt (drop-one +$126/day better
+    without it), while ridge gains from it.
+  - Money view of ridge+cal+ctx at $1M, quarter-Kelly: +98% over ~3.4 years
+    but max DD −59%, and 57% of trades capped by displayed size. Not an
+    acceptable risk profile as is.
 
