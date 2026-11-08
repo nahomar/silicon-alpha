@@ -117,7 +117,7 @@ def _agg_path(sub: str, kind: str) -> Path:
     return AGG / "reddit_hourly" / f"{sub}_{kind}.parquet"
 
 
-def fetch_reddit_hourly(start, end=None) -> pd.DataFrame:
+def fetch_reddit_hourly(start, end=None, subs=None, kinds=("comments", "posts")) -> pd.DataFrame:
     """Hourly comment and post counts per sub, a week at a time, resumable.
 
     Each (sub, kind) file is extended from its newest saved hour, so a rerun
@@ -125,8 +125,8 @@ def fetch_reddit_hourly(start, end=None) -> pd.DataFrame:
     as epoch seconds (date strings are read in the server's time zone).
     """
     end = pd.Timestamp(end) if end else pd.Timestamp.utcnow().tz_localize(None).floor("h")
-    for kind in ("comments", "posts"):
-        for sub in SUBS:
+    for kind in kinds:
+        for sub in (subs or SUBS):
             p = _agg_path(sub, kind)
             old = pd.read_parquet(p) if p.exists() else pd.DataFrame(columns=["hour_utc", "count"])
             lo = (pd.Timestamp(old["hour_utc"].max()) - pd.Timedelta(days=1)).floor("D") \
@@ -136,6 +136,8 @@ def fetch_reddit_hourly(start, end=None) -> pd.DataFrame:
             # A week of WSB comments is too heavy a query for the archive
             # (it times out); the smaller subs and all posts are fine weekly.
             step = pd.Timedelta(days=1 if (sub, kind) == ("wallstreetbets", "comments") else 7)
+            if t >= end:
+                continue                               # this slice is already covered
             while t < end:
                 hi = min(t + step, end)
                 data = _agg_adaptive(kind, sub, int(t.tz_localize("UTC").timestamp()),
@@ -295,8 +297,10 @@ def main() -> int:
     f = sp.add_parser("fetch-reddit")
     f.add_argument("--start", default="2025-10-01")
     f.add_argument("--end", default=None)
+    f.add_argument("--subs", nargs="+", default=None)
+    f.add_argument("--kinds", nargs="+", default=["comments", "posts"])
     a = ap.parse_args()
-    df = fetch_reddit_hourly(a.start, a.end)
+    df = fetch_reddit_hourly(a.start, a.end, subs=a.subs, kinds=tuple(a.kinds))
     print(f"{len(df):,} hourly rows -> {AGG/'reddit_hourly'}/")
     print(df.groupby(["sub", "kind"])["count"].agg(["size", "sum"]).to_string())
     return 0

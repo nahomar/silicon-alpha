@@ -117,8 +117,23 @@ def band_filter(chain: pd.DataFrame, band: float) -> pd.DataFrame:
     return chain[(chain["strike"] >= lo) & (chain["strike"] <= hi)].reset_index(drop=True)
 
 
+def zero_dte_symbols(root: str, day: pd.Timestamp, center: float, band: float,
+                     step: float = 5.0) -> list:
+    """OSI symbols for `day`'s expiry, every `step` points within +/- band.
+
+    Asking only for these, instead of the parent (every listed expiry), cuts
+    the bytes, cost and time several-fold. Strikes that are not listed simply
+    do not resolve and are skipped by the API.
+    """
+    lo = np.floor(center * (1 - band) / step) * step
+    hi = np.ceil(center * (1 + band) / step) * step
+    ymd = pd.Timestamp(day).strftime("%y%m%d")
+    return [f"{root:<6s}{ymd}{cp}{int(round(k * 1000)):08d}"
+            for k in np.arange(lo, hi + step / 2, step) for cp in ("C", "P")]
+
+
 def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
-                  parent: str = PARENT) -> pd.DataFrame:
+                  parent: str = PARENT, symbols=None) -> pd.DataFrame:
     import databento as db
     start, end = session_window(day)
     tmp = tmp_dir / f"{day:%Y%m%d}.dbn.zst"
@@ -126,7 +141,8 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
         def _get():
             tmp.unlink(missing_ok=True)
             client.timeseries.get_range(dataset=DATASET, schema=SCHEMA,
-                                        symbols=[parent], stype_in="parent",
+                                        symbols=symbols or [parent],
+                                        stype_in="raw_symbol" if symbols else "parent",
                                         start=start, end=end, path=str(tmp))
         _retry(_get, f"{day:%Y-%m-%d}")
         store = db.DBNStore.from_file(str(tmp))
@@ -165,6 +181,10 @@ def main() -> int:
                     help="cash-settled 0DTE options root")
     ap.add_argument("--out", default=None, help="default: the root's own data folder")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--fast", action="store_true",
+                    help="request only the session's own expiry near the money, "
+                         "several sessions in parallel")
+    ap.add_argument("--workers", type=int, default=4)
     a = ap.parse_args()
 
     import databento as db
@@ -179,15 +199,28 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     days = list(pd.bdate_range(a.start, a.end))
+    syms = {}
+    if a.fast:
+        # Band centre = previous session's index close (known before the open).
+        import yfinance as yf
+        h = yf.Ticker(index).history(start=pd.Timestamp(a.start) - pd.Timedelta(days=10),
+                                     end=pd.Timestamp(a.end) + pd.Timedelta(days=1),
+                                     auto_adjust=False)["Close"]
+        h.index = pd.to_datetime(h.index).tz_localize(None).normalize()
+        for d in days:
+            prev = h[h.index < d]
+            if len(prev):
+                syms[d] = zero_dte_symbols(a.root, d, float(prev.iloc[-1]), a.band + 0.01)
     todo, costs = [], {}
     for d in days:
         if (out / f"{d:%Y-%m-%d}.parquet").exists():
             continue
         s, e = session_window(d)
+        sym, st = (syms[d], "raw_symbol") if d in syms else ([parent], "parent")
         try:
             c = float(_retry(lambda: client.metadata.get_cost(
-                dataset=DATASET, schema=SCHEMA, symbols=[parent],
-                stype_in="parent", start=s, end=e), f"{d:%Y-%m-%d} price"))
+                dataset=DATASET, schema=SCHEMA, symbols=sym,
+                stype_in=st, start=s, end=e), f"{d:%Y-%m-%d} price"))
         except db.BentoClientError as ex:
             # On a market holiday no SPXW contract is listed for the window,
             # so the parent symbol does not resolve: 422, not a $0 quote.
@@ -210,21 +243,32 @@ def main() -> int:
             print(f"  {d:%Y-%m-%d}  ${costs[d]:.2f}")
         return 0
 
-    spent = 0.0
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    spent, lock = [0.0], threading.Lock()
+
+    def one(d, td):
+        with lock:
+            if spent[0] + costs[d] > a.max_usd:
+                print(f"{d:%Y-%m-%d}  STOP: would pass the cap (spent ${spent[0]:.2f})")
+                return
+            spent[0] += costs[d]              # reserve before downloading
+        chain = fetch_session(client, d, Path(td), a.band, parent=parent,
+                              symbols=syms.get(d) if a.fast else None)
+        if chain.empty:
+            print(f"{d:%Y-%m-%d}  empty after filtering")
+            return
+        f = out / f"{d:%Y-%m-%d}.parquet"
+        tmp = f.with_suffix(".tmp")
+        chain.to_parquet(tmp, index=False)
+        tmp.replace(f)                        # atomic: a killed run leaves no half file
+        print(f"{d:%Y-%m-%d}  {len(chain):>8,} rows  "
+              f"{chain['strike'].nunique()} strikes  ${costs[d]:.2f}  "
+              f"(spent ${spent[0]:.2f})", flush=True)
+
     with tempfile.TemporaryDirectory(dir=out) as td:
-        for d in todo:
-            if spent + costs[d] > a.max_usd:
-                print(f"STOP: next session would pass the cap (spent ${spent:.2f})")
-                break
-            chain = fetch_session(client, d, Path(td), a.band, parent=parent)
-            spent += costs[d]
-            if chain.empty:
-                print(f"{d:%Y-%m-%d}  empty after filtering")
-                continue
-            chain.to_parquet(out / f"{d:%Y-%m-%d}.parquet", index=False)
-            print(f"{d:%Y-%m-%d}  {len(chain):>8,} rows  "
-                  f"{chain['strike'].nunique()} strikes  ${costs[d]:.2f}  "
-                  f"(spent ${spent:.2f})", flush=True)
+        with ThreadPoolExecutor(max_workers=a.workers if a.fast else 1) as ex:
+            list(ex.map(lambda d: one(d, td), todo))
 
     have = sorted(pd.Timestamp(p.stem) for p in out.glob("20??-??-??.parquet"))
     if have:
