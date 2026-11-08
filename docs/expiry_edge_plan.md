@@ -317,4 +317,14 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     calls fall on expensive, wide-spread contracts.
   - Conclusion: at the 30-second horizon, tick data gives no tradeable edge
     for this project. TradeFM stays shelved; no H100/H200 retrain.
+- 2026-11-08, **Dev screen for candidates 2 and 3, rule fixed before the run.**
+  - Data: seen SPX only, 2022-05-16 → 2026-09-04 (`--data-from`,
+    `--holdout-from 2026-09-08`). Report window 2022-07-01 → 2026-09-04.
+  - Settings: the same as the lockbox (min 40 train days, weekly refit, sets
+    +cal, +cal+ctx, +gex, +es).
+  - Keep a candidate for the lockbox only if, in fixed6 with −postevt, both:
+    (a) its mean daily P&L minus #1's (paired, same days) is > 0, and
+    (b) its Sharpe ≥ #1's.
+  - Otherwise it is dropped before any block is opened. This is a screen,
+    not proof; the sealed blocks decide.
 

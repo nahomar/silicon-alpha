@@ -1324,6 +1324,8 @@ def _cli() -> int:
                     help="only the 6 fixed times (no 15-min grid, events or shocks)")
     ap.add_argument("--holdout-from", default=None,
                     help="drop every session on/after this date (locked final exam)")
+    ap.add_argument("--data-from", default=None,
+                    help="drop sessions before this date (keeps sealed older data unseen)")
     ap.add_argument("--report-from", default=None)
     ap.add_argument("--report-to", default=None)
     ap.add_argument("--refit-every", type=int, default=1)
@@ -1337,6 +1339,10 @@ def _cli() -> int:
     if a.selftest:
         return 0 if selftest() else 1
     chains, settles = load_sessions(Path(a.data_dir))
+    if a.data_from:
+        lo = pd.Timestamp(a.data_from)
+        chains = {d: c for d, c in chains.items() if d >= lo}
+        print(f"[data-from] sessions before {lo:%Y-%m-%d} not loaded; {len(chains)} sessions")
     if a.holdout_from:
         cut = pd.Timestamp(a.holdout_from)
         chains = {d: c for d, c in chains.items() if d < cut}
