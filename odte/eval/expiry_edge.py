@@ -875,8 +875,9 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
                 if "min_since_event" in ds else np.zeros(len(ds), bool))
         no_post = lambda a: np.where((a == 1) & post, 0, a)
         ref_short = "short_once_at_10" if mode == "every15" else "always_short_fly"
-        if a_key:
-            combos[f"{a_key} -postevt"] = no_post(strategies[a_key])
+        for mk in model_preds:                       # every model gets the post-event rule
+            if mk in strategies and not mk.startswith("placebo"):
+                combos[f"{mk} -postevt"] = no_post(strategies[mk])
         combos[f"{ref_short} -postevt"] = no_post(strategies[ref_short])
         if a_key and b_name:
             pb, bb = danger[b_name]
@@ -930,9 +931,9 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         if best_ml:
             pred_for[f"{best_ml} (best variant, picked after the fact)"] = preds[best_ml]
         money = money_view(ds, pick, pred_for, tested)
-        keep = [k for k in [ref, a_key, f"{a_key} -postevt" if a_key else None,
-                            f"{ref} -postevt", f"{b_name} skip" if b_name else None]
-                if k and k in res]
+        keep = [k for k in [ref, f"{ref} -postevt", f"{b_name} skip" if b_name else None,
+                            *[m for m in model_preds], *[f"{m} -postevt" for m in model_preds]]
+                if k and k in res and not k.startswith("placebo")]
         daily_series = {k: {str(pd.Timestamp(d).date()): float(v)
                             for d, v in res[k]["_daily"].items()} for k in keep}
         for v in res.values():

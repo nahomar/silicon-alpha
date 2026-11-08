@@ -31,7 +31,10 @@ N_EXPIRIES, BAND, STEP = 5, 0.05, 5.0
 
 
 def _symbols(day, sessions, center) -> list:
-    exps = list(sessions[sessions >= day][:N_EXPIRIES])
+    # Before 2022 SPXW expired Mon/Wed/Fri only, so look further ahead: dates
+    # without an expiry just do not resolve.
+    n = N_EXPIRIES if day >= pd.Timestamp("2022-05-16") else 8
+    exps = list(sessions[sessions >= day][:n])
     lo = np.floor(center * (1 - BAND) / STEP) * STEP
     hi = np.ceil(center * (1 + BAND) / STEP) * STEP
     return [f"SPXW  {e:%y%m%d}{cp}{int(round(k * 1000)):08d}"
@@ -76,6 +79,14 @@ def main() -> int:
     client = db.Historical(os.environ["DATABENTO_API_KEY"])
     st = pd.read_csv(ROOT / "data" / "odte_0dte" / "settlements.csv", parse_dates=["date"])
     st = st.set_index("date")["spx_close"].sort_index()
+    if st.index.min() > pd.Timestamp(a.start) - pd.Timedelta(days=10):
+        # Settlement file does not reach back far enough: use Yahoo closes.
+        import yfinance as yf
+        h = yf.Ticker("^GSPC").history(start=pd.Timestamp(a.start) - pd.Timedelta(days=20),
+                                       end=pd.Timestamp(a.end) + pd.Timedelta(days=15),
+                                       auto_adjust=False)["Close"]
+        h.index = pd.to_datetime(h.index).tz_localize(None).normalize()
+        st = pd.concat([h, st]).groupby(level=0).last().sort_index()
     sessions = st.index
     days = [d for d in sessions if pd.Timestamp(a.start) <= d <= pd.Timestamp(a.end)]
     OUT.mkdir(parents=True, exist_ok=True)
@@ -85,13 +96,21 @@ def main() -> int:
 
     def price(d):
         s, e = _window(d)
-        return d, float(_retry(lambda: client.metadata.get_cost(
-            dataset=DATASET, schema="statistics", symbols=syms[d], stype_in="raw_symbol",
-            start=s, end=e), f"{d:%Y-%m-%d} price"))
+        try:
+            return d, float(_retry(lambda: client.metadata.get_cost(
+                dataset=DATASET, schema="statistics", symbols=syms[d], stype_in="raw_symbol",
+                start=s, end=e), f"{d:%Y-%m-%d} price"))
+        except db.BentoClientError as ex:
+            if "symbology_invalid_request" in str(ex):   # nothing listed in range that day
+                return d, 0.0
+            raise
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         costs = dict(ex.map(price, todo))
+    skipped = [d for d in todo if costs[d] <= 0]
+    todo = [d for d in todo if costs[d] > 0]
     total = sum(costs.values())
-    print(f"{len(todo)} sessions, estimated ${total:.2f} (cap ${a.max_usd:.2f})", flush=True)
+    print(f"{len(todo)} sessions, estimated ${total:.2f} (cap ${a.max_usd:.2f}); "
+          f"{len(skipped)} days with no resolvable contracts skipped", flush=True)
     if total > a.max_usd:
         print("ABORT: estimate exceeds the cap; nothing was downloaded.")
         return 2

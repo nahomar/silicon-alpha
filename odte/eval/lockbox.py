@@ -56,7 +56,7 @@ def _git(*args) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
 
 
-def open_block(data_dir: str, block: str, strategy: str, first: str, last: str,
+def open_block(data_dir: str, block: str, strategy, first: str, last: str,
                min_train_days: int = 40, refit_every: int = 5, sets=("+cal", "+cal+ctx"),
                force_reason: str | None = None) -> dict:
     data_key = Path(data_dir).name
@@ -89,20 +89,24 @@ def open_block(data_dir: str, block: str, strategy: str, first: str, last: str,
     rep = json.loads((ROOT / "reports" / "expiry_edge" / f"study-{tag}.json").read_text())
     md = rep["modes"]["fixed6"]
     st = md["strategies"]
-    r = st.get(strategy)
-    if r is None:
-        raise SystemExit(f"strategy {strategy!r} not in report; have {list(st)}")
+    strategies = [strategy] if isinstance(strategy, str) else list(strategy)
     ref = st["always_short_fly"]
-    cmp_ = md["comparisons"].get(strategy, {}).get("vs_always_short_fly", {})
+    results = {}
+    for name in strategies:
+        r = st.get(name)
+        if r is None:
+            raise SystemExit(f"strategy {name!r} not in report; have {list(st)}")
+        cmp_ = md["comparisons"].get(name, {}).get("vs_always_short_fly", {})
+        results[name] = {"n_test_days": r["n_test_days"], "total": r["total_pnl"],
+                         "sharpe": r["sharpe"], "sharpe_ci": r["sharpe_ci"],
+                         "max_drawdown": r["max_drawdown"], "worst_day": r["worst_day"],
+                         "vs_always_short_per_day": cmp_.get("mean"),
+                         "vs_always_short_ci": cmp_.get("ci")}
     entry = {
         "data": data_key, "block": block, "start": b["start"], "end": b["end"],
-        "strategy": strategy, "commit": _git("rev-parse", "--short", "HEAD"),
+        "strategies": strategies, "commit": _git("rev-parse", "--short", "HEAD"),
         "opened_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-        "n_test_days": r["n_test_days"], "total": r["total_pnl"],
-        "sharpe": r["sharpe"], "sharpe_ci": r["sharpe_ci"],
-        "max_drawdown": r["max_drawdown"], "worst_day": r["worst_day"],
-        "always_short_total": ref["total_pnl"],
-        "vs_always_short_per_day": cmp_.get("mean"), "vs_always_short_ci": cmp_.get("ci"),
+        "always_short_total": ref["total_pnl"], "results": results,
         "forced": force_reason,
     }
     led.append(entry)
@@ -122,8 +126,10 @@ def main() -> int:
         x.add_argument("--first", default="2016-01-01")
         x.add_argument("--last", default="2022-05-13")
     o.add_argument("--block", required=True)
-    o.add_argument("--strategy", required=True)
+    o.add_argument("--strategy", nargs="+", required=True,
+                   help="one or more strategies, all fixed before opening")
     o.add_argument("--force-reason", default=None)
+    o.add_argument("--sets", nargs="+", default=["+cal", "+cal+ctx", "+cal+ctx+gex"])
     sp.add_parser("ledger")
     a = ap.parse_args()
     if a.cmd == "plan":
@@ -133,18 +139,19 @@ def main() -> int:
             print(f"  {b['block']}  {b['start']} .. {b['end']}  {state}")
     elif a.cmd == "open":
         e = open_block(a.data_dir, a.block, a.strategy, a.first, a.last,
-                       force_reason=a.force_reason)
-        ci = e["vs_always_short_ci"] or [float("nan")] * 2
-        print(f"{e['data']} {e['block']} ({e['n_test_days']} days) {e['strategy']} @ {e['commit']}: "
-              f"total ${e['total']:,.0f}, Sharpe {e['sharpe']:+.2f} "
-              f"[{e['sharpe_ci'][0]:+.2f}, {e['sharpe_ci'][1]:+.2f}], max DD ${e['max_drawdown']:,.0f}; "
-              f"always-short ${e['always_short_total']:,.0f}; vs always-short "
-              f"{e['vs_always_short_per_day']:+.1f}/day CI [{ci[0]:+.0f}, {ci[1]:+.0f}]")
+                       sets=tuple(a.sets), force_reason=a.force_reason)
+        print(f"{e['data']} {e['block']} @ {e['commit']}  (always-short ${e['always_short_total']:,.0f})")
+        for name, r in e["results"].items():
+            ci = r["vs_always_short_ci"] or [float("nan")] * 2
+            print(f"  {name:36s} {r['n_test_days']} days  total ${r['total']:,.0f}  Sharpe {r['sharpe']:+.2f} "
+                  f"[{r['sharpe_ci'][0]:+.2f}, {r['sharpe_ci'][1]:+.2f}]  max DD ${r['max_drawdown']:,.0f}  "
+                  f"vs always-short {r['vs_always_short_per_day']:+.1f}/day CI [{ci[0]:+.0f}, {ci[1]:+.0f}]")
     else:
         for e in load_ledger():
-            print(f"  {e['opened_at']}  {e['data']:<14s} {e['block']}  {e['strategy']} @ {e['commit']}  "
-                  f"total ${e['total']:,.0f}  Sharpe {e['sharpe']:+.2f}"
-                  + (f"  FORCED: {e['forced']}" if e.get("forced") else ""))
+            for name, r in e.get("results", {}).items():
+                print(f"  {e['opened_at']}  {e['data']:<14s} {e['block']}  {name} @ {e['commit']}  "
+                      f"total ${r['total']:,.0f}  Sharpe {r['sharpe']:+.2f}"
+                      + (f"  FORCED: {e['forced']}" if e.get("forced") else ""))
     return 0
 
 

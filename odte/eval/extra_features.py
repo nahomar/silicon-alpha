@@ -25,7 +25,7 @@ import pandas as pd
 from .expiry_edge import FEATURES
 
 
-def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "alt")) -> tuple:
+def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "alt", "gex")) -> tuple:
     ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
     sets = {"base": list(FEATURES)}
     skipped = {}
@@ -108,4 +108,15 @@ def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "al
             prev_name = max(sets, key=lambda k: len(sets[k]))
             sets[(prev_name if prev_name != "base" else "") + layer] = sets[prev_name] + cols
         skipped["alt_coverage"] = cov
+    if "gex" in groups:
+        from odte.data.gamma import GEX_FEATURES, gamma_features
+        f = gamma_features(ds)
+        cov = float(f.notna().any(axis=1).mean())
+        if cov == 0:
+            skipped["gex"] = "no open-interest files (run: python3 -m odte.data.fetch_oi)"
+        else:
+            ds = pd.concat([ds, f], axis=1)
+            base = sets.get("+cal+ctx", sets.get("+cal", list(FEATURES)))
+            sets["+cal+ctx+gex" if "+cal+ctx" in sets else "+gex"] = base + list(GEX_FEATURES)
+            skipped["gex_coverage"] = round(cov, 3)
     return ds, sets, skipped
