@@ -59,14 +59,15 @@ SUBS = ("wallstreetbets", "options", "thetagang")
 KINDS = {"posts": "posts/search", "comments": "comments/search"}
 UA = "silicon-alpha-research-recorder/0.1"
 PAGE = 100
-PAUSE_S = 0.4            # between requests; the archive is a free service
+PAUSE_S = 1.0            # between requests; the archive is a free service and
+                         # answers 422 'Timeout. Maybe slow down a bit' when pushed
 OVERLAP_S = 120          # re-read this much on catch-up; dedup handles it
 COLUMNS = ["id", "kind", "subreddit", "created_utc", "retrieved_on",
            "author_hash", "title", "text", "link_id", "parent_id", "flair",
            "removed"]
 
 
-def _get(path: str, params: dict, attempts: int = 5) -> list:
+def _get(path: str, params: dict, attempts: int = 8) -> list:
     url = f"{API}/{path}?{urllib.parse.urlencode(params)}"
     for i in range(attempts):
         try:
@@ -79,13 +80,15 @@ def _get(path: str, params: dict, attempts: int = 5) -> list:
         except Exception as e:                       # network or bad payload
             if i == attempts - 1:
                 raise
-            wait = 10 * (i + 1)
             detail = str(e)[:80]
             if isinstance(e, urllib.error.HTTPError):
                 try:
                     detail += " " + e.read().decode("utf-8", "replace")[:160]
                 except Exception:
                     pass
+            # The archive's overload reply ("slow down") needs real backoff;
+            # other transient errors get the short one.
+            wait = 60 * (i + 1) if "slow down" in detail.lower() else 10 * (i + 1)
             print(f"  retry in {wait}s ({detail})", flush=True)
             time.sleep(wait)
     return []
@@ -192,6 +195,14 @@ def _write(sub: str, kind: str, rows: list) -> int:
     return n_new
 
 
+def _earliest_ts(sub: str, kind: str):
+    d = OUT / sub / kind
+    files = sorted(d.glob("20??-??-??.parquet")) if d.exists() else []
+    if not files:
+        return None
+    return int(pd.read_parquet(files[0], columns=["created_utc"])["created_utc"].min())
+
+
 def _latest_ts(sub: str, kind: str):
     d = OUT / sub / kind
     files = sorted(d.glob("20??-??-??.parquet")) if d.exists() else []
@@ -201,7 +212,7 @@ def _latest_ts(sub: str, kind: str):
 
 
 def sync(start=None, subs=SUBS, min_free_gb: float = 1.0,
-         chunk_s: int = 6 * 3600) -> dict:
+         chunk_s: int = 6 * 3600, kinds=tuple(KINDS)) -> dict:
     free_gb = shutil.disk_usage(ROOT).free / 1e9
     if free_gb < min_free_gb:
         print(f"SKIP: only {free_gb:.1f} GB free (< {min_free_gb} GB)")
@@ -219,26 +230,52 @@ def sync(start=None, subs=SUBS, min_free_gb: float = 1.0,
     # biggest sub last, so a long WSB backfill never starves the others.
     order = ([(s, "posts") for s in subs]
              + [(s, "comments") for s in sorted(subs, key=lambda x: x == "wallstreetbets")])
+    order = [(s, k) for s, k in order if k in kinds]
+    start_ts = int(pd.Timestamp(start, tz="UTC").timestamp()) if start else None
+    # Pause switch: touch data/social/reddit/.pause_backfill to give the
+    # archive's capacity to another job (e.g. the hourly-count fetch); delete
+    # it to resume. While paused nothing is fetched at all. A partial
+    # catch-up can itself run for hours after an interruption, so "catch up
+    # only" was not a real pause. Nothing is lost: the archive keeps history,
+    # and the next run resumes from the saved rows with no hole.
+    if (OUT / ".pause_backfill").exists():
+        print("reddit sync paused (.pause_backfill present); skipping this run")
+        return {}
     for sub, kind in order:
-        last = _latest_ts(sub, kind)
+        first, last = _earliest_ts(sub, kind), _latest_ts(sub, kind)
+        ranges = []
+        # Backward fill: history before the earliest saved row. Without this,
+        # a sub first seen by a plain catch-up would keep a hole forever.
+        if start_ts is not None and (first is None or first > start_ts):
+            ranges.append((start_ts, first if first is not None else now))
+        # Forward catch-up from the newest saved row.
         if last is not None:
-            after = last - OVERLAP_S
-        elif start is not None:
-            after = int(pd.Timestamp(start, tz="UTC").timestamp())
-        else:
-            after = now - 3600                    # first run, no start
+            ranges.append((last - OVERLAP_S, now))
+        elif not ranges:
+            ranges.append((now - 3600, now))          # first run, no --start
         total = 0
-        # Write in chunks so a long backfill survives interruption.
-        t = after
-        while t < now:
-            hi = min(t + chunk_s, now)
-            rows = list(fetch_range(sub, kind, t, hi))
-            total += _write(sub, kind, rows)
-            t = hi
-            if hi - after > chunk_s:              # progress on backfills
-                print(f"  {sub}/{kind} through "
-                      f"{pd.Timestamp(hi, unit='s', tz='UTC'):%Y-%m-%d %H:%M}Z "
-                      f"(+{total})", flush=True)
+        for n, (lo, hi_end) in enumerate(ranges):
+            backward = (n == 0 and start_ts is not None and lo == start_ts
+                        and (first is None or first > start_ts))
+            # Chunks are written one at a time so a long run survives an
+            # interruption. A backward fill walks newest-chunk-first, so what
+            # is saved is always one unbroken block [earliest, latest] and the
+            # next run resumes below `earliest` with no hole in the middle.
+            bounds = []
+            t = lo
+            while t < hi_end:
+                bounds.append((t, min(t + chunk_s, hi_end)))
+                t = bounds[-1][1]
+            if backward:
+                bounds.reverse()
+            for a, b in bounds:
+                rows = list(fetch_range(sub, kind, a, b))
+                total += _write(sub, kind, rows)
+                if hi_end - lo > chunk_s:             # progress on backfills
+                    edge = a if backward else b
+                    print(f"  {sub}/{kind} {'back to' if backward else 'through'} "
+                          f"{pd.Timestamp(edge, unit='s', tz='UTC'):%Y-%m-%d %H:%M}Z "
+                          f"(+{total})", flush=True)
         summary[f"{sub}/{kind}"] = total
         print(f"{sub}/{kind}: +{total} new", flush=True)
     return summary
@@ -268,10 +305,12 @@ def main() -> int:
     s.add_argument("--start", default=None, help="backfill from this UTC date if empty")
     s.add_argument("--subs", nargs="+", default=list(SUBS))
     s.add_argument("--min-free-gb", type=float, default=1.0)
+    s.add_argument("--kinds", nargs="+", default=list(KINDS), choices=list(KINDS))
     sp.add_parser("status")
     a = ap.parse_args()
     if a.cmd == "sync":
-        sync(start=a.start, subs=tuple(a.subs), min_free_gb=a.min_free_gb)
+        sync(start=a.start, subs=tuple(a.subs), min_free_gb=a.min_free_gb,
+             kinds=tuple(a.kinds))
     else:
         status()
     return 0

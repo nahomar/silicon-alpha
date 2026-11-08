@@ -53,7 +53,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "social" / "stocktwits"
 API = "https://api.stocktwits.com/api/2/streams/symbol"
-SYMBOLS = ("SPX", "SPY", "ES_F", "VIX")
+SYMBOLS = ("SPX", "ES_F", "VIX", "SPY")   # SPY last: busiest, slowest to backfill
 UA = "Mozilla/5.0 (silicon-alpha research recorder)"
 PAUSE_S = 0.8
 WRITE_EVERY = 20          # pages between writes during long runs
@@ -61,7 +61,7 @@ COLUMNS = ["id", "stream", "created_utc", "retrieved_utc", "user_hash",
            "body", "sentiment", "symbols"]
 
 
-def _get(symbol: str, max_id=None, attempts: int = 6) -> list:
+def _get(symbol: str, max_id=None, attempts: int = 30) -> list:
     url = f"{API}/{symbol}.json" + (f"?max={max_id}" if max_id else "")
     for i in range(attempts):
         try:
@@ -71,8 +71,11 @@ def _get(symbol: str, max_id=None, attempts: int = 6) -> list:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise
-            wait = 90 * (i + 1) if e.code == 429 else 10 * (i + 1)
-            if i == attempts - 1:
+            # 429 = rate limit (unauthenticated access is ~200 calls/hour).
+            # It is expected during a backfill, so wait it out rather than
+            # fail: up to ~2.5 h of 5-minute waits before giving up.
+            wait = 300 if e.code == 429 else 10 * (i + 1)
+            if i == attempts - 1 or (e.code != 429 and i >= 5):
                 raise
             print(f"  {symbol}: HTTP {e.code}, retry in {wait}s", flush=True)
             time.sleep(wait)
