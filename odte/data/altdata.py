@@ -233,8 +233,8 @@ def fetch_kalshi(start) -> None:
 
 
 GDELT_PACE_S = float(__import__("os").environ.get("GDELT_PACE_S", "60"))
-# Stated limit 1 / 5 s. From one address that had been rate-limited, 10 s and
-# 30 s still got 429s for hours; a fresh address (e.g. ASU Sol) can use ~6 s.
+# Stated limit 1 / 5 s. After it was exceeded, 10 s and 30 s still got 429s
+# for hours; for bulk history use the BigQuery route (fetch_gdelt_bq).
 
 
 def _gdelt_get(url: str, attempts: int = 40):

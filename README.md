@@ -124,10 +124,6 @@ verdict so far is **FAIL** (details below).
     ~1/50 the cost (the first 12 months cost ~$96, mostly before this trick;
     4 more years back to May 2022 cost ≈ $13).
 
-- **ASU Sol** ✅ *verified*: read-only connectivity check and GPU job templates
-  in [`infra/asu/`](infra/asu/) (A100 smoke job passes; personal ids stay in a
-  gitignored `sol.env`).
-
 - **Text→equity study** ✅ *complete; null*. Text adds no tradeable directional
   signal (all arms ≤ chance; placebo dAUC −0.029). The reusable finding is
   methodological: the within-day permutation null *exceeds* observed AUC, so
@@ -371,7 +367,6 @@ configs/              tradefm_40m.yml, tradefm_524m.yml, smoke configs
   tradefm/            tick_days.csv (TradeFM retrain days)
 docs/                 expiry_edge_plan.md (plan + pre-registrations), architecture.md, ...
 infra/
-  asu/                check_sol.sh, sol_job.sbatch, fetch_ticks.sbatch (ASU Sol)
   gcp/                phase2_a3mega.sh, launch_torchrun_524m.sh, TCPX env
   modal/              phase2_smoke.py (single-node validation suite)
 social/               reddit.py, stocktwits.py (recorders), features.py, nlp.py
@@ -457,7 +452,6 @@ cost estimates, and post-launch monitoring.
 ## Related docs
 
 - [`docs/expiry_edge_plan.md`](docs/expiry_edge_plan.md) — 0DTE study plan, pre-registrations, findings log
-- [`infra/asu/README.md`](infra/asu/README.md) — running on ASU Sol
 - [`STATE.md`](STATE.md) — handoff runbook, decisions, session log
 - [`BUDGET.md`](BUDGET.md) — compute + data cost tracking
 - [`docs/architecture.md`](docs/architecture.md) — full flow diagram with HRT palette

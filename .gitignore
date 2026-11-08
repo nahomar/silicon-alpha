@@ -44,9 +44,8 @@ data/social/
 data/calendar/
 data/context/
 data/alt/
-# personal ASU Sol settings and logs
-infra/asu/sol.env
-infra/asu/.setup.log
+# local-only cluster scripts and settings (not published)
+infra/asu/
 
 # Notebook outputs (cells are in source; outputs are per-run)
 .ipynb_checkpoints/

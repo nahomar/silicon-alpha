@@ -143,7 +143,7 @@ def _batched(net, T, X, M, P, S, bs: int = 128):
 def _fit_predict(Xtr, Mtr, Ptr, Str, ytr, Xte, Mte, Pte, Ste, seed: int,
                  epochs: int = 60, patience: int = 8, val_frac: float = 0.15):
     import torch
-    dev = ("cuda" if torch.cuda.is_available()           # ASU Sol / any NVIDIA GPU
+    dev = ("cuda" if torch.cuda.is_available()           # any NVIDIA GPU
            else "mps" if torch.backends.mps.is_available() else "cpu")
     torch.manual_seed(seed)
     np.random.seed(seed)
