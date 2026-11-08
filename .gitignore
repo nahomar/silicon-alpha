@@ -26,7 +26,8 @@ odte/kernels/*.cubin
 *.pem
 *.key
 credentials.json
-configs/broker_margin_live.yml   # live table contains broker-specific coefs
+# live table contains broker-specific coefs
+configs/broker_margin_live.yml
 
 # Data — too big for git, handled by GCS / S3
 reports/
@@ -35,6 +36,10 @@ checkpoints/
 data/cboe/
 data/opra/
 data/fake_datashop/
+# licensed OPRA quotes (Databento), not redistributable
+data/odte_0dte/
+# recorded Reddit / Stocktwits posts + logs
+data/social/
 
 # Notebook outputs (cells are in source; outputs are per-run)
 .ipynb_checkpoints/

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Reddit recorder: catches up every 5 minutes (social/reddit.py).
+
+  NOT installed automatically. To run it:
+
+    chmod +x social/record.sh
+    cp social/com.nahomar.social.reddit.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.nahomar.social.reddit.plist
+
+  To stop it:
+
+    launchctl unload ~/Library/LaunchAgents/com.nahomar.social.reddit.plist
+    rm ~/Library/LaunchAgents/com.nahomar.social.reddit.plist
+
+  5 minutes keeps the local copy close to live while staying polite to a
+  free archive: a quiet catch-up is a handful of requests.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nahomar.social.reddit</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/nahom/projects/silicon-alpha/social/record.sh</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/nahom/projects/silicon-alpha/data/social/logs/launchd.out</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/nahom/projects/silicon-alpha/data/social/logs/launchd.err</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/nahom/projects/silicon-alpha</string>
+</dict>
+</plist>
