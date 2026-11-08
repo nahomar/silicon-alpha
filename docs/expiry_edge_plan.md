@@ -290,4 +290,18 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     then the SPX exam.
   - A candidate is dropped or revised only between blocks; the ledger shows
     each change.
+- 2026-11-08, **TradeFM gate replaced, before any run.** The old gate (beat
+  53% next-tick direction) passes on book imbalance and bid-ask bounce,
+  which do not pay the spread. New gate (`odte/eval/tick_check.py`): on
+  cmbp-1 ticks, trade the model's most confident 1% of price-change events
+  as a taker, out after 30 s, after fees. Retrain TradeFM only if
+  LightGBM's top-1% P&L has a 30-minute-block 95% CI above $0 AND beats an
+  imbalance-only model.
+  - The 4 tick "eval" days (2026-09-11 / 09-16 / 10-06 / 10-20) are inside
+    the locked exam, so they are excluded.
+  - Train: the earliest 12 pre-exam tick days. Test: the latest 4
+    (2026-03-31, 04-08, 06-05, 06-22).
+  - Synthetic checks: no planted signal → 50% accuracy (no leak); planted
+    imbalance signal → found (74%), and correctly NO-GO for the big model,
+    since the simple rule matches it.
 
