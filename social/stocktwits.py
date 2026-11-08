@@ -63,7 +63,12 @@ COLUMNS = ["id", "stream", "created_utc", "retrieved_utc", "user_hash",
            "body", "sentiment", "symbols"]
 
 
-def _get(symbol: str, max_id=None, attempts: int = 30) -> list:
+class RateLimited(Exception):
+    """HTTP 429. The limit is per IP, so the whole run stops and the next
+    5-minute round resumes; waiting it out here blocked the Reddit sync."""
+
+
+def _get(symbol: str, max_id=None, attempts: int = 6) -> list:
     url = f"{API}/{symbol}.json" + (f"?max={max_id}" if max_id else "")
     for i in range(attempts):
         try:
@@ -73,11 +78,10 @@ def _get(symbol: str, max_id=None, attempts: int = 30) -> list:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise
-            # 429 = rate limit (unauthenticated access is ~200 calls/hour).
-            # It is expected during a backfill, so wait it out rather than
-            # fail: up to ~2.5 h of 5-minute waits before giving up.
-            wait = 300 if e.code == 429 else 10 * (i + 1)
-            if i == attempts - 1 or (e.code != 429 and i >= 5):
+            if e.code == 429:              # ~200 calls/hour unauthenticated
+                raise RateLimited(symbol) from None
+            wait = 10 * (i + 1)
+            if i == attempts - 1:
                 raise
             print(f"  {symbol}: HTTP {e.code}, retry in {wait}s", flush=True)
             time.sleep(wait)
@@ -157,7 +161,17 @@ def _page_down(symbol: str, start_max, stop_id=None, stop_ts=None, st=None,
     """
     max_id, buf, total, pages = start_max, [], 0, 0
     while True:
-        msgs = _get(symbol, max_id)
+        try:
+            msgs = _get(symbol, max_id)
+        except RateLimited:
+            # Keep what was read; a catch-up re-reads its gap next run and a
+            # backfill resumes from the oldest row written.
+            total += _write(symbol, buf)
+            if track_oldest and buf:
+                st["oldest_id"] = min(r["id"] for r in buf)
+                st["oldest_utc"] = min(r["created_utc"] for r in buf)
+                _save_state(symbol, st)
+            raise
         time.sleep(PAUSE_S)
         pages += 1
         if not msgs:
@@ -242,7 +256,12 @@ def sync(start=None, symbols=SYMBOLS, min_free_gb: float = 1.0) -> dict:
         return {}
     out = {}
     for s in symbols:
-        out[s] = sync_symbol(s, start)
+        try:
+            out[s] = sync_symbol(s, start)
+        except RateLimited:
+            print(f"{s}: rate-limited (HTTP 429); stopping this run, the next "
+                  f"round resumes", flush=True)
+            break
         print(f"{s}: +{out[s]} new", flush=True)
     return out
 
