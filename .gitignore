@@ -40,6 +40,13 @@ data/fake_datashop/
 data/odte_0dte/
 # recorded Reddit / Stocktwits posts + logs
 data/social/
+# derived calendar, cross-asset and alternative data (regenerable)
+data/calendar/
+data/context/
+data/alt/
+# personal ASU Sol settings and logs
+infra/asu/sol.env
+infra/asu/.setup.log
 
 # Notebook outputs (cells are in source; outputs are per-run)
 .ipynb_checkpoints/

@@ -1,0 +1,70 @@
+date,time_et,event,ref_period,source
+2025-10-24,08:30,cpi,2025-09,bls.gov/bls/news-release/cpi.htm (archive file names; Oct 2025 CPI never published - shutdown)
+2025-12-18,08:30,cpi,2025-11,bls.gov/bls/news-release/cpi.htm
+2026-01-13,08:30,cpi,2025-12,bls.gov/bls/news-release/cpi.htm
+2026-02-13,08:30,cpi,2026-01,bls.gov/bls/news-release/cpi.htm
+2026-03-11,08:30,cpi,2026-02,bls.gov/bls/news-release/cpi.htm
+2026-04-10,08:30,cpi,2026-03,bls.gov/bls/news-release/cpi.htm
+2026-05-12,08:30,cpi,2026-04,bls.gov/bls/news-release/cpi.htm
+2026-06-10,08:30,cpi,2026-05,bls.gov/bls/news-release/cpi.htm
+2026-07-14,08:30,cpi,2026-06,bls.gov/bls/news-release/cpi.htm
+2026-08-12,08:30,cpi,2026-07,bls.gov/bls/news-release/cpi.htm
+2026-09-11,08:30,cpi,2026-08,bls.gov/bls/news-release/cpi.htm
+2026-10-14,08:30,cpi,2026-09,bls.gov/bls/news-release/cpi.htm
+2026-11-10,08:30,cpi,2026-10,bls.gov/schedule/news_release/cpi.htm (scheduled)
+2025-11-20,08:30,nfp,2025-09,bls.gov/bls/news-release/empsit.htm (delayed by shutdown; Oct 2025 not published separately)
+2025-12-16,08:30,nfp,2025-11,bls.gov/bls/news-release/empsit.htm
+2026-01-09,08:30,nfp,2025-12,bls.gov/bls/news-release/empsit.htm
+2026-02-11,08:30,nfp,2026-01,bls.gov/bls/news-release/empsit.htm
+2026-03-06,08:30,nfp,2026-02,bls.gov/bls/news-release/empsit.htm
+2026-04-03,08:30,nfp,2026-03,bls.gov/bls/news-release/empsit.htm (Good Friday - market closed; hits next session)
+2026-05-08,08:30,nfp,2026-04,bls.gov/bls/news-release/empsit.htm
+2026-06-05,08:30,nfp,2026-05,bls.gov/bls/news-release/empsit.htm
+2026-07-02,08:30,nfp,2026-06,bls.gov/bls/news-release/empsit.htm
+2026-08-07,08:30,nfp,2026-07,bls.gov/bls/news-release/empsit.htm
+2026-09-04,08:30,nfp,2026-08,bls.gov/bls/news-release/empsit.htm
+2026-10-02,08:30,nfp,2026-09,bls.gov/bls/news-release/empsit.htm
+2026-11-06,08:30,nfp,2026-10,bls.gov/schedule/news_release/empsit.htm
+2025-11-25,08:30,ppi,2025-09,bls.gov/bls/news-release/ppi.htm (Oct 2025 not published)
+2026-01-14,08:30,ppi,2025-11,bls.gov/bls/news-release/ppi.htm
+2026-01-30,08:30,ppi,2025-12,bls.gov/bls/news-release/ppi.htm
+2026-02-27,08:30,ppi,2026-01,bls.gov/bls/news-release/ppi.htm
+2026-03-18,08:30,ppi,2026-02,bls.gov/bls/news-release/ppi.htm
+2026-04-14,08:30,ppi,2026-03,bls.gov/bls/news-release/ppi.htm
+2026-05-13,08:30,ppi,2026-04,bls.gov/bls/news-release/ppi.htm
+2026-06-11,08:30,ppi,2026-05,bls.gov/bls/news-release/ppi.htm
+2026-07-15,08:30,ppi,2026-06,bls.gov/bls/news-release/ppi.htm
+2026-08-13,08:30,ppi,2026-07,bls.gov/bls/news-release/ppi.htm
+2026-09-10,08:30,ppi,2026-08,bls.gov/bls/news-release/ppi.htm
+2026-10-15,08:30,ppi,2026-09,bls.gov/bls/news-release/ppi.htm
+2025-12-09,10:00,jolts,2025-10,bls.gov/bls/news-release/jolts.htm (Sep 2025 not published)
+2026-01-07,10:00,jolts,2025-11,bls.gov/bls/news-release/jolts.htm
+2026-02-05,10:00,jolts,2025-12,bls.gov/bls/news-release/jolts.htm
+2026-03-13,10:00,jolts,2026-01,bls.gov/bls/news-release/jolts.htm
+2026-03-31,10:00,jolts,2026-02,bls.gov/bls/news-release/jolts.htm
+2026-05-05,10:00,jolts,2026-03,bls.gov/bls/news-release/jolts.htm
+2026-06-02,10:00,jolts,2026-04,bls.gov/bls/news-release/jolts.htm
+2026-06-30,10:00,jolts,2026-05,bls.gov/bls/news-release/jolts.htm
+2026-08-04,10:00,jolts,2026-06,bls.gov/bls/news-release/jolts.htm
+2026-09-01,10:00,jolts,2026-07,bls.gov/bls/news-release/jolts.htm
+2026-09-29,10:00,jolts,2026-08,bls.gov/bls/news-release/jolts.htm
+2026-11-03,10:00,jolts,2026-09,bls.gov/bls/news-release/jolts.htm
+2025-10-29,14:00,fomc,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2025-12-10,14:00,fomc_sep,,federalreserve.gov/monetarypolicy/fomccalendars.htm (statement + projections)
+2026-01-28,14:00,fomc,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-03-18,14:00,fomc_sep,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-04-29,14:00,fomc,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-06-17,14:00,fomc_sep,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-07-29,14:00,fomc,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-09-16,14:00,fomc_sep,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-10-28,14:00,fomc,,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-12-09,14:00,fomc_sep,,federalreserve.gov/monetarypolicy/fomccalendars.htm (scheduled)
+2025-11-19,14:00,fomc_minutes,2025-10,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2025-12-30,14:00,fomc_minutes,2025-12,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-02-18,14:00,fomc_minutes,2026-01,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-04-08,14:00,fomc_minutes,2026-03,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-05-20,14:00,fomc_minutes,2026-04,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-07-08,14:00,fomc_minutes,2026-06,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-08-19,14:00,fomc_minutes,2026-07,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-10-07,14:00,fomc_minutes,2026-09,federalreserve.gov/monetarypolicy/fomccalendars.htm
+2026-11-03,00:00,election,midterm,US federal general election

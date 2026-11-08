@@ -36,6 +36,10 @@ OUT_DIR = ROOT / "data" / "odte_0dte"
 DATASET = "OPRA.PILLAR"
 SCHEMA = "cbbo-1m"
 PARENT = "SPXW.OPT"
+# Cash-settled 0DTE roots: options root -> (Yahoo ticker of the settlement index, data folder)
+ROOTS = {"SPXW": ("^GSPC", OUT_DIR),
+         "NDXP": ("^NDX", ROOT / "data" / "odte_0dte_ndxp"),
+         "RUTW": ("^RUT", ROOT / "data" / "odte_0dte_rutw")}
 TZ = "America/New_York"
 
 
@@ -113,7 +117,8 @@ def band_filter(chain: pd.DataFrame, band: float) -> pd.DataFrame:
     return chain[(chain["strike"] >= lo) & (chain["strike"] <= hi)].reset_index(drop=True)
 
 
-def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.DataFrame:
+def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
+                  parent: str = PARENT) -> pd.DataFrame:
     import databento as db
     start, end = session_window(day)
     tmp = tmp_dir / f"{day:%Y%m%d}.dbn.zst"
@@ -121,7 +126,7 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.D
         def _get():
             tmp.unlink(missing_ok=True)
             client.timeseries.get_range(dataset=DATASET, schema=SCHEMA,
-                                        symbols=[PARENT], stype_in="parent",
+                                        symbols=[parent], stype_in="parent",
                                         start=start, end=end, path=str(tmp))
         _retry(_get, f"{day:%Y-%m-%d}")
         store = db.DBNStore.from_file(str(tmp))
@@ -137,11 +142,11 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.D
     return band_filter(chain, band)
 
 
-def fetch_settlements(days: list, out: Path) -> pd.DataFrame:
+def fetch_settlements(days: list, out: Path, index: str = "^GSPC") -> pd.DataFrame:
     import yfinance as yf
     lo = min(days) - pd.Timedelta(days=7)
     hi = max(days) + pd.Timedelta(days=1)
-    h = yf.Ticker("^GSPC").history(start=f"{lo:%Y-%m-%d}", end=f"{hi:%Y-%m-%d}",
+    h = yf.Ticker(index).history(start=f"{lo:%Y-%m-%d}", end=f"{hi:%Y-%m-%d}",
                                    auto_adjust=False)
     s = pd.DataFrame({"date": pd.to_datetime(h.index).tz_localize(None).normalize(),
                       "spx_close": h["Close"].to_numpy()})
@@ -156,7 +161,9 @@ def main() -> int:
     ap.add_argument("--end", required=True, help="last session, inclusive")
     ap.add_argument("--max-usd", type=float, required=True)
     ap.add_argument("--band", type=float, default=0.06)
-    ap.add_argument("--out", default=str(OUT_DIR))
+    ap.add_argument("--root", default="SPXW", choices=list(ROOTS),
+                    help="cash-settled 0DTE options root")
+    ap.add_argument("--out", default=None, help="default: the root's own data folder")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -166,7 +173,9 @@ def main() -> int:
         print("DATABENTO_API_KEY is not set")
         return 1
     client = db.Historical(key)
-    out = Path(a.out)
+    parent = f"{a.root}.OPT"
+    index, default_out = ROOTS[a.root]
+    out = Path(a.out) if a.out else default_out
     out.mkdir(parents=True, exist_ok=True)
 
     days = list(pd.bdate_range(a.start, a.end))
@@ -175,9 +184,17 @@ def main() -> int:
         if (out / f"{d:%Y-%m-%d}.parquet").exists():
             continue
         s, e = session_window(d)
-        c = float(_retry(lambda: client.metadata.get_cost(
-            dataset=DATASET, schema=SCHEMA, symbols=[PARENT],
-            stype_in="parent", start=s, end=e), f"{d:%Y-%m-%d} price"))
+        try:
+            c = float(_retry(lambda: client.metadata.get_cost(
+                dataset=DATASET, schema=SCHEMA, symbols=[parent],
+                stype_in="parent", start=s, end=e), f"{d:%Y-%m-%d} price"))
+        except db.BentoClientError as ex:
+            # On a market holiday no SPXW contract is listed for the window,
+            # so the parent symbol does not resolve: 422, not a $0 quote.
+            if "symbology_invalid_request" in str(ex):
+                print(f"{d:%Y-%m-%d}  no listed contracts (holiday) -- skipped")
+                continue
+            raise
         if c <= 0:
             print(f"{d:%Y-%m-%d}  no data (holiday?) -- skipped")
             continue
@@ -199,7 +216,7 @@ def main() -> int:
             if spent + costs[d] > a.max_usd:
                 print(f"STOP: next session would pass the cap (spent ${spent:.2f})")
                 break
-            chain = fetch_session(client, d, Path(td), a.band)
+            chain = fetch_session(client, d, Path(td), a.band, parent=parent)
             spent += costs[d]
             if chain.empty:
                 print(f"{d:%Y-%m-%d}  empty after filtering")
@@ -212,7 +229,7 @@ def main() -> int:
     have = sorted(pd.Timestamp(p.stem) for p in out.glob("20??-??-??.parquet"))
     if have:
         try:
-            s = fetch_settlements(have, out / "settlements.csv")
+            s = fetch_settlements(have, out / "settlements.csv", index=index)
             print(f"settlements: {len(s)} SPX closes -> {out/'settlements.csv'}")
         except Exception as e:
             print(f"settlements fetch failed ({e}); study will use last forward")
