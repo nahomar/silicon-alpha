@@ -184,4 +184,21 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     drawdown vs always-short.
   - The 4-year run (2022-05 → 2026-11) tests both objectives. The last 2
     months stay a locked final exam.
+- 2026-11-08, **12-month result (objective A), 251 sessions / 211 tested,
+  $1k max loss per trade:**
+  - Pre-registered `ml_ridge` (base): −$12.6k, Sharpe −0.88. **Verdict FAIL.**
+  - Always-short-fly: +$6.2k, Sharpe +0.18, roughly breakeven after costs.
+    Realized/implied: mean 0.93, median 0.76.
+  - Best variant `ml_ridge+cal+ctx+soc(+nlp+kalshi)`: ≈ +$51k, Sharpe ≈ 2.0
+    [-0.1, +4.2]; vs always-short +$214/day CI [-186, +628], not
+    significant; picked after ~40 variants.
+  - Drop-one-layer (full LightGBM): calendar is the only significant layer,
+    −$169/day CI [+24, +331] when removed. LightGBM gain: market context 50%,
+    led by vix1d_over_vix, gap, vvix_prev and spx_rv20.
+  - Layers beyond kalshi (news, btc, flows, evt) lowered ridge P&L; most
+    LightGBM variants lost (too many features for the sample). The sequence
+    transformer made +$6k, no better than ridge.
+  - every15 / events versions: small and not significant.
+  - Next: replicate the chosen configuration on 2022-05 → 2025-10 (unseen
+    for selection), add objective B, and keep the last 2 months locked.
 
