@@ -108,3 +108,14 @@ def test_every15_trades_at_most_once_a_day():
     ds = pd.DataFrame({"day": pd.to_datetime(["2025-01-02"] * 3 + ["2025-01-03"] * 2)})
     act = np.array([0, -1, 1, 1, 1])
     assert ee._first_per_day(ds, act).tolist() == [0, -1, 0, 1, 0]
+
+
+def test_early_close_drops_decisions_after_the_bell():
+    rng = np.random.default_rng(3)
+    day = pd.Timestamp("2026-07-02")
+    chain, close, _ = ee.synthetic_session(day, 6000.0, 0.15, 0.15, rng)   # quotes run to 16:00
+    ds = ee.build_dataset({day: chain}, {day: close}, times=ee.GRID15,
+                          early_closes={day: "13:00"})
+    assert ds["hhmm"].max() < "13:00"
+    r = ds[ds["hhmm"] == "12:00"].iloc[0]
+    assert r["minutes_to_close"] == 60

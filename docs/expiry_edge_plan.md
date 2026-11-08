@@ -161,4 +161,15 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     RUTW ~$0.54/day, so ~$300 for a year of both. Both cash-settled like SPX.
     `fetch_0dte.py --root NDXP|RUTW` is ready. SPY/QQQ are physically
     settled (exercise risk) and not planned.
+- 2026-11-08, **GDELT source amended before any 12-month result:** the DOC
+  API rate-limited this machine for hours. GDELT's own route for bulk use is
+  Google BigQuery (`odte/data/gdelt_bq.sql`, ~120 GB scanned, inside the free
+  tier, 7 s). Topics are GKG theme tags, fixed from a one-day theme listing:
+  - market = ECON_STOCKMARKET
+  - tariff = EPU_CATS_TRADE_POLICY | WB_775_TRADE_POLICY_AND_INTEGRATION
+  - fed = ECON_CENTRALBANK | ECON_INTEREST_RATES | EPU_POLICY_INTEREST_RATE(S)
+  - geo = ARMEDCONFLICT | SANCTIONS
+  Each 15-min batch counts as known 15 min after its stamp. Using another
+  machine's IP to get around the DOC API (and Stocktwits) rate limits was
+  considered and rejected.
 

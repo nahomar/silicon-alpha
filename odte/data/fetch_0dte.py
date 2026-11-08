@@ -132,6 +132,23 @@ def zero_dte_symbols(root: str, day: pd.Timestamp, center: float, band: float,
             for k in np.arange(lo, hi + step / 2, step) for cp in ("C", "P")]
 
 
+def fetch_raw(client, day: pd.Timestamp, out_dir: Path, symbols: list,
+              schema: str) -> Path:
+    """Save one session's raw DBN (e.g. tick-level cmbp-1 for TradeFM) as is."""
+    start, end = session_window(day)
+    f = out_dir / f"{day:%Y-%m-%d}.{schema}.dbn.zst"
+    tmp = out_dir / f".{f.name}.part"
+
+    def _get():
+        tmp.unlink(missing_ok=True)
+        client.timeseries.get_range(dataset=DATASET, schema=schema, symbols=symbols,
+                                    stype_in="raw_symbol", start=start, end=end,
+                                    path=str(tmp))
+    _retry(_get, f"{day:%Y-%m-%d} {schema}")
+    tmp.replace(f)
+    return f
+
+
 def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
                   parent: str = PARENT, symbols=None) -> pd.DataFrame:
     import databento as db
@@ -185,6 +202,12 @@ def main() -> int:
                     help="request only the session's own expiry near the money, "
                          "several sessions in parallel")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--schema", default=SCHEMA,
+                    help="cbbo-1m (minute quotes, reduced) or a tick schema such as cmbp-1")
+    ap.add_argument("--keep-raw", action="store_true",
+                    help="save each session's raw DBN instead of reducing it (tick data)")
+    ap.add_argument("--days-file", default=None,
+                    help="CSV with a `date` column: fetch exactly these sessions")
     a = ap.parse_args()
 
     import databento as db
@@ -199,6 +222,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     days = list(pd.bdate_range(a.start, a.end))
+    if a.days_file:
+        days = sorted(pd.to_datetime(pd.read_csv(a.days_file)["date"]))
     syms = {}
     if a.fast:
         # Band centre = previous session's index close (known before the open).
@@ -212,14 +237,19 @@ def main() -> int:
             if len(prev):
                 syms[d] = zero_dte_symbols(a.root, d, float(prev.iloc[-1]), a.band + 0.01)
     todo, costs = [], {}
+    def done(d):
+        if a.keep_raw:
+            return (out / f"{d:%Y-%m-%d}.{a.schema}.dbn.zst").exists()
+        return (out / f"{d:%Y-%m-%d}.parquet").exists()
+
     for d in days:
-        if (out / f"{d:%Y-%m-%d}.parquet").exists():
+        if done(d):
             continue
         s, e = session_window(d)
         sym, st = (syms[d], "raw_symbol") if d in syms else ([parent], "parent")
         try:
             c = float(_retry(lambda: client.metadata.get_cost(
-                dataset=DATASET, schema=SCHEMA, symbols=sym,
+                dataset=DATASET, schema=a.schema, symbols=sym,
                 stype_in=st, start=s, end=e), f"{d:%Y-%m-%d} price"))
         except db.BentoClientError as ex:
             # On a market holiday no SPXW contract is listed for the window,
@@ -253,6 +283,11 @@ def main() -> int:
                 print(f"{d:%Y-%m-%d}  STOP: would pass the cap (spent ${spent[0]:.2f})")
                 return
             spent[0] += costs[d]              # reserve before downloading
+        if a.keep_raw:
+            f = fetch_raw(client, d, out, syms[d], a.schema)
+            print(f"{d:%Y-%m-%d}  raw {a.schema} {f.stat().st_size/1e9:.2f} GB  ${costs[d]:.2f}  "
+                  f"(spent ${spent[0]:.2f})", flush=True)
+            return
         chain = fetch_session(client, d, Path(td), a.band, parent=parent,
                               symbols=syms.get(d) if a.fast else None)
         if chain.empty:
@@ -271,7 +306,7 @@ def main() -> int:
             list(ex.map(lambda d: one(d, td), todo))
 
     have = sorted(pd.Timestamp(p.stem) for p in out.glob("20??-??-??.parquet"))
-    if have:
+    if have and not a.keep_raw:
         try:
             s = fetch_settlements(have, out / "settlements.csv", index=index)
             print(f"settlements: {len(s)} SPX closes -> {out/'settlements.csv'}")

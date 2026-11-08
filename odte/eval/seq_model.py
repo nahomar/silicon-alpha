@@ -128,6 +128,18 @@ def _net(n_static: int, d: int = 32):
     return SeqNet()
 
 
+def _batched(net, T, X, M, P, S, bs: int = 128):
+    """Forward pass in chunks. One full-size batch needs attention memory that
+    grows with the number of rows (OOM-killed the 12-month run at ~3.5k rows)."""
+    import torch
+    outs = []
+    with torch.no_grad():
+        for i in range(0, len(X), bs):
+            outs.append(net(T(X[i:i + bs]), T(M[i:i + bs], torch.bool),
+                            T(P[i:i + bs], torch.long), T(S[i:i + bs])).cpu().numpy())
+    return np.concatenate(outs) if outs else np.zeros(0, np.float32)
+
+
 def _fit_predict(Xtr, Mtr, Ptr, Str, ytr, Xte, Mte, Pte, Ste, seed: int,
                  epochs: int = 60, patience: int = 8, val_frac: float = 0.15):
     import torch
@@ -152,9 +164,8 @@ def _fit_predict(Xtr, Mtr, Ptr, Str, ytr, Xte, Mte, Pte, Ste, seed: int,
             torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
             opt.step()
         net.eval()
-        with torch.no_grad():
-            v = net(T(Xtr[va]), T(Mtr[va], torch.bool), T(Ptr[va], torch.long), T(Str[va]))
-            vl = float(torch.mean((v - T(ytr[va])) ** 2))
+        v = _batched(net, T, Xtr[va], Mtr[va], Ptr[va], Str[va])
+        vl = float(np.mean((v - ytr[va]) ** 2))
         if vl < best - 1e-5:
             best, bad = vl, 0
             best_state = {k: x.detach().clone() for k, x in net.state_dict().items()}
@@ -164,8 +175,13 @@ def _fit_predict(Xtr, Mtr, Ptr, Str, ytr, Xte, Mte, Pte, Ste, seed: int,
                 break
     net.load_state_dict(best_state)
     net.eval()
-    with torch.no_grad():
-        return net(T(Xte), T(Mte, torch.bool), T(Pte, torch.long), T(Ste)).cpu().numpy()
+    out = _batched(net, T, Xte, Mte, Pte, Ste)
+    del net, opt
+    if dev == "mps":
+        torch.mps.empty_cache()
+    elif dev == "cuda":
+        torch.cuda.empty_cache()
+    return out
 
 
 def walk_forward_seq(ds: pd.DataFrame, paths: dict, static_cols: list,

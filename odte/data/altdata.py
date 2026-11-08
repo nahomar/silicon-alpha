@@ -281,16 +281,45 @@ def fetch_gdelt(start, end=None) -> pd.DataFrame:
     return old
 
 
+def fetch_gdelt_bq(csv_path=None) -> pd.DataFrame:
+    """GDELT via Google BigQuery, GDELT's own route for bulk use.
+
+    Runs odte/data/gdelt_bq.sql with the `bq` CLI under the signed-in Google
+    Cloud project: ~120 GB scanned, inside the 1 TB/month free tier, about 10 s.
+    Topics are GKG theme tags, not keyword searches. Rows are stamped at the
+    15-minute batch time, and features treat a batch as known 15 minutes
+    after that stamp, which is conservative.
+    """
+    import subprocess
+    sql = "\n".join(l for l in (ROOT / "odte" / "data" / "gdelt_bq.sql").read_text().splitlines()
+                    if not l.startswith("--"))
+    csv_path = Path(csv_path or ALT / "gdelt_gkg.csv")
+    if not csv_path.exists():
+        out = subprocess.run(["bq", "query", "--use_legacy_sql=false", "--format=csv",
+                              "--max_rows=200000", sql], capture_output=True, text=True, check=True)
+        csv_path.write_text(out.stdout)
+    g = pd.read_csv(csv_path)
+    ts = pd.to_datetime(g["batch"].astype(str), format="%Y%m%d%H%M%S").astype("int64") // 10**9
+    rows = [pd.DataFrame({"query": q, "ts": ts, "value": g[f"n_{q}"], "norm": g["n_all"]})
+            for q in ("market", "tariff", "fed", "geo")]
+    df = pd.concat(rows, ignore_index=True).sort_values(["query", "ts"])
+    df.to_parquet(ALT / "gdelt.parquet", index=False)
+    print(f"gdelt (BigQuery): {len(g):,} 15-min batches, "
+          f"{pd.Timestamp(int(ts.min()), unit='s'):%Y-%m-%d} .. {pd.Timestamp(int(ts.max()), unit='s'):%Y-%m-%d}")
+    return df
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = ap.add_subparsers(dest="cmd", required=True)
     f = sp.add_parser("fetch")
-    f.add_argument("source", choices=["truth", "btc", "kalshi", "gdelt"])
+    f.add_argument("source", choices=["truth", "btc", "kalshi", "gdelt", "gdelt-bq"])
     f.add_argument("--start", default="2025-10-25")
     a = ap.parse_args()
     {"truth": lambda: fetch_truth(), "btc": lambda: fetch_btc(a.start),
-     "kalshi": lambda: fetch_kalshi(a.start), "gdelt": lambda: fetch_gdelt(a.start)}[a.source]()
+     "kalshi": lambda: fetch_kalshi(a.start), "gdelt": lambda: fetch_gdelt(a.start),
+     "gdelt-bq": lambda: fetch_gdelt_bq()}[a.source]()
     return 0
 
 

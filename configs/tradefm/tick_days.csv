@@ -1,0 +1,21 @@
+date,split,why,abs_move_pct
+2025-11-21,train,opex/quad witching,0.98
+2025-12-10,train,FOMC,0.67
+2025-12-16,train,random ordinary day,0.24
+2025-12-18,train,CPI,0.79
+2025-12-19,train,opex/quad witching,0.88
+2026-01-08,train,"low-vol (smallest |move|; replaced 2026-07-02, an early close)",0.01
+2026-01-13,train,CPI,0.19
+2026-01-20,train,high-vol (largest |move|),2.08
+2026-01-28,train,FOMC,0.01
+2026-02-11,train,low-vol (smallest |move|),0.0
+2026-02-13,train,CPI,0.05
+2026-03-18,train,FOMC,1.37
+2026-03-31,train,high-vol (largest |move|),2.87
+2026-04-08,train,high-vol (largest |move|),2.48
+2026-06-05,train,high-vol (largest |move|),2.68
+2026-06-22,train,random ordinary day,0.37
+2026-09-11,eval,CPI,0.86
+2026-09-16,eval,FOMC,0.45
+2026-10-06,eval,random ordinary day,0.58
+2026-10-20,eval,random ordinary day,0.28

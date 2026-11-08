@@ -212,7 +212,7 @@ def session_rows(grid: dict, F: pd.Series, settle: float,
                  prev_ratio: float = float("nan"),
                  times=DECISION_TIMES, wing_mult: float = 1.5,
                  fee: float = FEE_PER_CONTRACT, triggers=None,
-                 event_marks=()) -> list:
+                 event_marks=(), close_hhmm=None) -> list:
     """One row per decision time: causal features, then settlement P&L.
 
     `triggers` maps hhmm -> "grid" | "event" | "shock" (default: `times`, all
@@ -228,6 +228,13 @@ def session_rows(grid: dict, F: pd.Series, settle: float,
     # Early-close sessions (day after Thanksgiving, Christmas Eve) stop
     # quoting at 13:00; minutes-to-close must count to the real bell.
     close_t = day + pd.Timedelta(hours=13 if valid_F.index[-1] < day + pd.Timedelta(hours=14) else 16)
+    if close_hhmm:
+        # Verified early close. The options feed can keep showing quotes after
+        # the 13:00 bell (2026-07-02: until 16:00), so quotes alone cannot
+        # identify these days, and a decision after the bell would already
+        # know the settlement.
+        close_t = day + pd.Timedelta(hours=int(close_hhmm[:2]), minutes=int(close_hhmm[3:]))
+        triggers = {h: v for h, v in triggers.items() if h < close_hhmm}
     F_open = float(valid_F.iloc[0])
     rows = []
     for hhmm in sorted(triggers):
@@ -410,8 +417,17 @@ def _shock_marks(F: pd.Series, thr: float, day: pd.Timestamp) -> list:
     return marks
 
 
+def load_early_closes() -> dict:
+    p = ROOT / "configs" / "calendar" / "early_closes.csv"
+    if not p.exists():
+        return {}
+    e = pd.read_csv(p, dtype=str)
+    return {pd.Timestamp(d): t for d, t in zip(e["date"], e["close_et"])}
+
+
 def build_dataset(chains: dict, settlements: dict, times=DECISION_TIMES,
-                  event_times=None, shocks: bool = False, **kw) -> pd.DataFrame:
+                  event_times=None, shocks: bool = False, early_closes=None,
+                  **kw) -> pd.DataFrame:
     """Decision rows across sessions, in date order.
 
     `chains` maps session date -> that session's quotes; `settlements` maps
@@ -448,13 +464,18 @@ def build_dataset(chains: dict, settlements: dict, times=DECISION_TIMES,
                     triggers[tt.strftime("%H:%M")] = "event"
         if shocks and len(hist5) >= 5:
             thr = float(np.quantile(np.concatenate(hist5[-SHOCK_LOOKBACK:]), SHOCK_QUANTILE))
-            for m in _shock_marks(F, thr, day):
+            ec = (early_closes or {}).get(day)
+            for m in _shock_marks(F if not ec else F[F.index < day + pd.Timedelta(hours=int(ec[:2]))], thr, day):
                 marks.append(m)
                 tt = m + pd.Timedelta(minutes=5)
                 if first <= tt <= last:
                     triggers[tt.strftime("%H:%M")] = "shock"
+        close_hhmm = (early_closes or {}).get(day)
+        if close_hhmm:
+            marks = [m for m in marks if m.strftime("%H:%M") < close_hhmm]
         day_rows = session_rows(grid, F, settle, prev_settle, prev_ratio,
-                                triggers=triggers, event_marks=marks, **kw)
+                                triggers=triggers, event_marks=marks,
+                                close_hhmm=close_hhmm, **kw)
         for r in day_rows:
             r["settle_source"] = src
         rows.extend(day_rows)
@@ -463,6 +484,9 @@ def build_dataset(chains: dict, settlements: dict, times=DECISION_TIMES,
             prev_ratio = (ten or day_rows)[0]["ratio"]
         prev_settle = settle
         f = F.dropna()
+        ec = (early_closes or {}).get(day)
+        if ec:                               # stale post-bell quotes are not moves
+            f = f[f.index < day + pd.Timedelta(hours=int(ec[:2]), minutes=int(ec[3:]))]
         r5 = (np.log(f) - np.log(f.shift(5))).abs().dropna()
         r5 = r5[r5.index >= day + pd.Timedelta(hours=9, minutes=35)].to_numpy()   # same window as detection
         if len(r5):
@@ -1096,7 +1120,7 @@ def _cli() -> int:
         print(f"no sessions in {a.data_dir}; run odte.data.fetch_0dte first")
         return 1
     if a.fixed6_only:
-        ds = build_dataset(chains, settles)
+        ds = build_dataset(chains, settles, early_closes=load_early_closes())
     else:
         event_times = {}
         try:
@@ -1108,7 +1132,7 @@ def _cli() -> int:
         except FileNotFoundError:
             print("[events] no calendar built; scheduled-event decisions skipped")
         ds = build_dataset(chains, settles, times=GRID15, event_times=event_times,
-                           shocks=True)
+                           shocks=True, early_closes=load_early_closes())
         print(f"[rows] {ds['trigger'].value_counts().to_dict()}")
     sets, skipped = {}, {}
     if not a.base_only:
