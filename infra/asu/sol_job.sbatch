@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 # GPU job template for ASU Sol (Slurm). Submit from the repo root on Sol:
 #   sbatch -A <your account> infra/asu/sol_job.sbatch
 # (the account is passed on the command line so no personal id lives in git)
@@ -15,8 +15,10 @@
 
 set -euo pipefail
 mkdir -p logs
-module load mamba/latest
-source activate odte                          # env created once: see infra/asu/README.md
-nvidia-smi || true
+# Call the env's python by path: `source activate` does not take effect in
+# a non-interactive batch shell (checked 2026-11-08: the job silently fell
+# back to the system python 3.6 and failed on `import numpy`).
+PY="$HOME/.conda/envs/odte/bin/python"         # env created once: see infra/asu/README.md
+nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader || true
 # The data folders are not in git: copy them first (rsync, see README).
-PYTHONPATH=. python -m odte.eval.expiry_edge --seq --min-train-days 40 --write
+PYTHONPATH=. "$PY" -m odte.eval.expiry_edge --seq --min-train-days 40 --write
