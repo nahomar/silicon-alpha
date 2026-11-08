@@ -129,7 +129,7 @@ def main() -> int:
     o.add_argument("--strategy", nargs="+", required=True,
                    help="one or more strategies, all fixed before opening")
     o.add_argument("--force-reason", default=None)
-    o.add_argument("--sets", nargs="+", default=["+cal", "+cal+ctx", "+cal+ctx+gex"])
+    o.add_argument("--sets", nargs="+", default=["+cal", "+cal+ctx", "+cal+ctx+gex", "+cal+ctx+es"])
     sp.add_parser("ledger")
     a = ap.parse_args()
     if a.cmd == "plan":

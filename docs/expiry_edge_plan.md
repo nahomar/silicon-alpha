@@ -278,4 +278,16 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     reopening.
   - Strategy entering the first block: `ml_ridge+cal+ctx -postevt`, 6
     fixed times, held to expiry.
+- 2026-11-08, **Lockbox candidates fixed before any block is opened.** All use
+  6 fixed times, iron fly held to expiry, no shorts within 60 min after
+  events, ridge, trained on everything before the block:
+  1. `ml_ridge+cal+ctx -postevt` (the development pick)
+  2. `ml_ridge+cal+ctx+gex -postevt` (+ dealer gamma from pre-open OI)
+  3. `ml_ridge+cal+ctx+es -postevt` (+ ES overnight path: return, realized
+     vol, range, volume, last 15 min)
+  - Benchmarks: always-short-fly and always-short-fly −postevt.
+  - Blocks are opened oldest first: SPX 2016H1 → 2022H1, then NDX and RUT,
+    then the SPX exam.
+  - A candidate is dropped or revised only between blocks; the ledger shows
+    each change.
 

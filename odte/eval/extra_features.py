@@ -25,7 +25,7 @@ import pandas as pd
 from .expiry_edge import FEATURES
 
 
-def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "alt", "gex")) -> tuple:
+def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "alt", "gex", "es")) -> tuple:
     ds = ds.sort_values(["day", "t"]).reset_index(drop=True)
     sets = {"base": list(FEATURES)}
     skipped = {}
@@ -119,4 +119,16 @@ def attach(ds: pd.DataFrame, groups=("calendar", "context", "social", "nlp", "al
             base = sets.get("+cal+ctx", sets.get("+cal", list(FEATURES)))
             sets["+cal+ctx+gex" if "+cal+ctx" in sets else "+gex"] = base + list(GEX_FEATURES)
             skipped["gex_coverage"] = round(cov, 3)
+    if "es" in groups:
+        from odte.data.futures import ES_FEATURES, es_features
+        per_day = es_features(sorted(ds["day"].unique()))
+        f = per_day.reindex(pd.to_datetime(ds["day"]).dt.normalize()).set_axis(ds.index)
+        cov = float(f.notna().any(axis=1).mean())
+        if cov == 0:
+            skipped["es"] = "no ES bars (run: python3 -m odte.data.futures fetch)"
+        else:
+            ds = pd.concat([ds, f[ES_FEATURES]], axis=1)
+            base = sets.get("+cal+ctx", sets.get("+cal", list(FEATURES)))
+            sets["+cal+ctx+es" if "+cal+ctx" in sets else "+es"] = base + list(ES_FEATURES)
+            skipped["es_coverage"] = round(cov, 3)
     return ds, sets, skipped
