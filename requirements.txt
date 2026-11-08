@@ -25,3 +25,8 @@ boto3>=1.34              # Polygon flat-files S3 client (Phase 2 data source)
 # nlpalpha (text -> equity alpha study)
 # torch is installed separately in CI from the CPU wheel index; see ci.yml.
 # pandas / numpy / scikit-learn / vaderSentiment above already cover the rest.
+
+# 0DTE hold-to-expiry study + data fetch
+scipy>=1.11
+lightgbm>=4.0
+pyarrow>=14.0
