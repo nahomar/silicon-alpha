@@ -239,4 +239,14 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Money view of ridge+cal+ctx at $1M, quarter-Kelly: +98% over ~3.4 years
     but max DD −59%, and 57% of trades capped by displayed size. Not an
     acceptable risk profile as is.
+- 2026-11-08, **Items 1-3 pre-registered (before any result):**
+  1. Exits: close when profit >= 50% of max profit or loss >= 50% of max
+     loss, checked each minute at the touch (4 more fees); otherwise hold.
+  2. A x B: take `ml_ridge+cal+ctx`'s actions, but drop any short that
+     `danger_logit+cal+ctx` flags (P > 2x base rate).
+  3. No shorts within 60 min after a scheduled event or market shock.
+  - All are scored on the same replication window. Because that window has
+    now been looked at, these runs are **development**. One final candidate
+    is then chosen and scored **once** on the locked exam (2026-09-08 →
+    2026-11-06).
 

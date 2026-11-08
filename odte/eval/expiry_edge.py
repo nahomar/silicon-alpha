@@ -93,6 +93,12 @@ EVENT_FEATURES = ["min_since_event", "move_since_event", "ivchg_since_event", "i
 # is to sell the fly; skip when P(danger) > SKIP_X x the training base rate,
 # flip to buying when > FLIP_X x (flip variant only).
 DANGER_RATIO, SKIP_X, FLIP_X = 1.25, 2.0, 3.0
+# Items 1-3, pre-registered 2026-11-08 before any result:
+#   exits: close when profit >= EXIT_TP x max profit or loss >= EXIT_SL x max
+#          loss, checked every minute, crossing the spread (4 more fees);
+#          otherwise hold to the close.
+#   post-event: no short within POST_EVENT_MIN minutes after an event/shock.
+EXIT_TP, EXIT_SL, POST_EVENT_MIN = 0.5, 0.5, 60
 PRIMARY_MODEL = "ml_ridge"   # pre-registered: tiny samples favour a linear model
 RISK_BUDGET = 1000.0         # $ max loss per trade; each trade is sized to it
 _EPS = 1e-12
@@ -210,6 +216,42 @@ def _atm_iv(grid: dict, F: pd.Series, t: pd.Timestamp, close_t: pd.Timestamp) ->
     mid = (cb[K] + ca[K] + pb[K] + pa[K]) / 2.0
     mtc = max((close_t - t).total_seconds() / 60.0, 1.0)
     return mid / float(F.at[t]) / math.sqrt(mtc)
+
+
+def _exit_pnl(grid: dict, t, close_t, K, W, credit, debit, intrinsic, fee):
+    """Fly P&L (points, before entry fees) with take-profit / stop-loss exits.
+
+    Walks the minutes after entry; at each one the close-out price is read
+    from the touch (short fly: buy the body at the ask, sell the wings at the
+    bid). Returns (short_pnl, long_pnl, short_exited, long_exited), with the
+    exit-leg fees already subtracted in points.
+    """
+    legs = [("C", K), ("P", K), ("C", K + W), ("P", K - W)]
+    sl = slice(t + pd.Timedelta(minutes=1), close_t - pd.Timedelta(minutes=1))
+    try:
+        b = grid["bid"].loc[sl, legs].to_numpy(dtype=float)
+        a = grid["ask"].loc[sl, legs].to_numpy(dtype=float)
+    except KeyError:
+        return credit - intrinsic, intrinsic - debit, False, False
+    ok = np.isfinite(b).all(axis=1) & np.isfinite(a).all(axis=1)
+    fee_pts = 4 * fee / MULT
+    s_cost = a[:, 0] + a[:, 1] - b[:, 2] - b[:, 3]           # buy back a short fly
+    l_val = b[:, 0] + b[:, 1] - a[:, 2] - a[:, 3]            # sell out a long fly
+    s_un, l_un = credit - s_cost, l_val - debit
+    s_hit = ok & ((s_un >= EXIT_TP * credit) | (s_un <= -EXIT_SL * (W - credit)))
+    l_hit = ok & ((l_un >= EXIT_TP * (W - debit)) | (l_un <= -EXIT_SL * debit))
+    sp = float(s_un[np.argmax(s_hit)]) - fee_pts if s_hit.any() else credit - intrinsic
+    lp = float(l_un[np.argmax(l_hit)]) - fee_pts if l_hit.any() else intrinsic - debit
+    return sp, lp, bool(s_hit.any()), bool(l_hit.any())
+
+
+def _exit_cols(grid, t, close_t, K, W, credit, debit, intrinsic, fee, fees4, fly_ok) -> dict:
+    if not fly_ok:
+        return {"pnl_short_fly_x": np.nan, "pnl_long_fly_x": np.nan,
+                "exit_short": False, "exit_long": False}
+    sp, lp, se, le = _exit_pnl(grid, t, close_t, K, W, credit, debit, intrinsic, fee)
+    return {"pnl_short_fly_x": sp * MULT - fees4, "pnl_long_fly_x": lp * MULT - fees4,
+            "exit_short": se, "exit_long": le}
 
 
 def session_rows(grid: dict, F: pd.Series, settle: float,
@@ -399,6 +441,7 @@ def session_rows(grid: dict, F: pd.Series, settle: float,
             "risk_short_fly_t5": (W - ex["credit_t5"]) * MULT + fees4 if fly_ok else np.nan,
             "risk_long_fly_t5": ex["debit_t5"] * MULT + fees4 if fly_ok else np.nan,
             **ex, **cd,
+            **_exit_cols(grid, t, close_t, K, W, credit, debit, intrinsic, fee, fees4, fly_ok),
         })
     return rows
 
@@ -651,13 +694,13 @@ def baseline_actions(ds: pd.DataFrame, tested: np.ndarray, seed: int = 0) -> dic
 # Scoring
 # ---------------------------------------------------------------------------
 
-def _row_pnl(ds: pd.DataFrame, act: np.ndarray, risk_budget=RISK_BUDGET):
+def _row_pnl(ds: pd.DataFrame, act: np.ndarray, risk_budget=RISK_BUDGET, exits: bool = False):
     """Per-row P&L. With `risk_budget`, every trade is sized so its max loss
     equals the budget (fractional lots -- a research convention), which keeps
     a high-vol day from dominating the sample just because its fly is wider.
     With `risk_budget=None`, every trade is one lot."""
-    s = ds["pnl_short_fly"].to_numpy()
-    l = ds["pnl_long_fly"].to_numpy()
+    s = ds["pnl_short_fly_x" if exits else "pnl_short_fly"].to_numpy()
+    l = ds["pnl_long_fly_x" if exits else "pnl_long_fly"].to_numpy()
     rs = ds["risk_short_fly"].to_numpy()
     rl = ds["risk_long_fly"].to_numpy()
     tradable = np.isfinite(s) & np.isfinite(l)
@@ -672,8 +715,8 @@ def _row_pnl(ds: pd.DataFrame, act: np.ndarray, risk_budget=RISK_BUDGET):
 
 
 def summarize(ds: pd.DataFrame, act: np.ndarray, tested: np.ndarray,
-              risk_budget=RISK_BUDGET) -> dict:
-    pnl, risk, a = _row_pnl(ds, act, risk_budget)
+              risk_budget=RISK_BUDGET, exits: bool = False) -> dict:
+    pnl, risk, a = _row_pnl(ds, act, risk_budget, exits)
     sub = pd.DataFrame({"day": ds["day"], "pnl": pnl, "traded": a != 0})[tested]
     daily = sub.groupby("day")["pnl"].sum()
     trades = sub[sub["traded"]]
@@ -824,13 +867,41 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
                 strategies[f"{k} skip+flip"] = danger_actions(pd_, base_, mask, tested, flip=True)
         baselines = _mode_baselines(mode, ds, mask, tested, seed)
         strategies.update(baselines)
+        # Items 2-3: A combined with B, and no shorts right after events.
+        combos = {}
+        a_key = next((k for k in ("ml_ridge+cal+ctx", PRIMARY_MODEL) if k in strategies), None)
+        b_name = next((k for k in ("danger_logit+cal+ctx", "danger_logit") if k in danger), None)
+        post = ((ds["min_since_event"] <= POST_EVENT_MIN).to_numpy()
+                if "min_since_event" in ds else np.zeros(len(ds), bool))
+        no_post = lambda a: np.where((a == 1) & post, 0, a)
+        ref_short = "short_once_at_10" if mode == "every15" else "always_short_fly"
+        if a_key:
+            combos[f"{a_key} -postevt"] = no_post(strategies[a_key])
+        combos[f"{ref_short} -postevt"] = no_post(strategies[ref_short])
+        if a_key and b_name:
+            pb, bb = danger[b_name]
+            flag = np.isfinite(pb) & np.isfinite(bb) & (pb > SKIP_X * bb)
+            axb = np.where((strategies[a_key] == 1) & flag, 0, strategies[a_key])
+            combos[f"{a_key} xB"] = axb
+            combos[f"{a_key} xB -postevt"] = no_post(axb)
+            if f"{b_name} skip" in strategies:
+                combos[f"{b_name} skip -postevt"] = no_post(strategies[f"{b_name} skip"])
+        strategies.update(combos)
         res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
+        # Item 1: the same strategies with take-profit / stop-loss exits.
+        exit_keys = [k for k in [ref_short, a_key, f"{b_name} skip" if b_name else None, *combos]
+                     if k and k in strategies]
+        for k in exit_keys:
+            res[f"{k} +exits"] = summarize(ds, strategies[k], tested, risk_budget, exits=True)
         best_base = max((b for b in baselines if b != "flat"),
                         key=lambda b: res[b]["total_pnl"])
         ref = "short_once_at_10" if mode == "every15" else "always_short_fly"
         comparisons = {}
-        for m in list(model_preds) + [k for k in strategies if k.startswith("danger_")]:
+        extra_keys = [k for k in res if k.startswith("danger_") or k in combos or k.endswith("+exits")]
+        for m in list(model_preds) + extra_keys:
             targets = [ref, best_base]
+            if m.endswith("+exits") and f"{ref} +exits" in res:
+                targets.append(f"{ref} +exits")
             base_m = m.split("+")[0]
             if m.startswith("seq_transformer"):
                 base_m = "ml_lgbm" + ("" if m == "seq_transformer" else m[len("seq_transformer"):])
@@ -862,6 +933,8 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         for v in res.values():
             v.pop("_daily", None)
         modes[mode] = {"strategies": res, "comparisons": comparisons,
+                       "items_1_3": [k for k in res if k in combos or k.endswith("+exits")
+                                     or k in (ref, a_key, f"{b_name} skip" if b_name else "")],
                        "best_baseline": best_base, "reference": ref,
                        "forecast_ic": forecast_ic, "n_rows_tested": int(rows.sum()),
                        "danger_auc": danger_auc,
@@ -1172,6 +1245,21 @@ def print_report(rep: dict) -> None:
             print(f"  {k:38s} total {r['total_pnl']:9.0f}  worst day {r['worst_day']:7.0f}  "
                   f"max DD {r['max_drawdown']:9.0f}  sharpe {r['sharpe']:+.2f}  "
                   f"vs always-sell {c.get('mean', float('nan')):+7.1f}/day")
+    for mode, md_ in rep.get("modes", {}).items():
+        keys = md_.get("items_1_3") or []
+        if not keys:
+            continue
+        print(f"\n=== ITEMS 1-3 ({mode}): exits (TP {EXIT_TP:.0%}/SL {EXIT_SL:.0%}), A x B, "
+              f"no shorts {POST_EVENT_MIN} min after events ===")
+        for k in keys:
+            r = md_["strategies"][k]
+            c = md_["comparisons"].get(k, {})
+            vs = c.get("vs_" + md_["reference"], {})
+            print(f"  {k:44s} total {r['total_pnl']:9.0f}  worst day {r['worst_day']:7.0f}  "
+                  f"max DD {r['max_drawdown']:9.0f}  sharpe {r['sharpe']:+.2f} "
+                  f"[{r['sharpe_ci'][0]:+.2f},{r['sharpe_ci'][1]:+.2f}]  "
+                  f"vs {md_['reference']} {vs.get('mean', float('nan')):+7.1f}/day "
+                  f"[{vs.get('ci', [np.nan, np.nan])[0]:+.0f},{vs.get('ci', [np.nan, np.nan])[1]:+.0f}]")
     titles = {"every15": "VERSION 2 - check every 15 min, 1 trade/day on a strong signal",
               "events": "VERSION 3 - decide after scheduled events and market shocks"}
     for mode, title in titles.items():

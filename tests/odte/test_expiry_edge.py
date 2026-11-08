@@ -138,3 +138,20 @@ def test_danger_walk_forward_uses_only_earlier_days():
     ds2.loc[last, "ratio"] = 9.0                          # rewrite the last day's outcome
     p2, b2 = ee.walk_forward_danger(ds2, "danger_logit", min_train_days=10)
     assert np.allclose(p1, p2, equal_nan=True) and np.allclose(b1, b2, equal_nan=True)
+
+
+def test_exit_rules_respect_take_profit_and_stop_levels():
+    ds = ee.build_dataset(*ee.synthetic_world(n_days=6, informed=False, seed=21))
+    ds = ds[ds["pnl_short_fly"].notna()]
+    fee_pts = 4 * ee.FEE_PER_CONTRACT / ee.MULT
+    for _, r in ds.iterrows():
+        fees4 = 4 * ee.FEE_PER_CONTRACT
+        if r["exit_short"]:
+            pts = (r["pnl_short_fly_x"] + fees4) / ee.MULT + fee_pts     # before all fees
+            assert pts >= ee.EXIT_TP * r["fly_credit"] - 1e-9 or \
+                   pts <= -ee.EXIT_SL * (r["W"] - r["fly_credit"]) + 1e-9
+        else:
+            assert abs(r["pnl_short_fly_x"] - r["pnl_short_fly"]) < 1e-6
+        if not r["exit_long"]:
+            assert abs(r["pnl_long_fly_x"] - r["pnl_long_fly"]) < 1e-6
+    assert ds["exit_short"].any() or ds["exit_long"].any()
