@@ -34,6 +34,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "docs" / "lockbox_ledger.json"
+# Training-only warm-up: no earlier data exists to train on, so scoring it
+# would grade a model fit on a few weeks. Fixed before any block was opened.
+WARMUP = {("odte_0dte", "2016H1")}
 
 
 def blocks(first: str, last: str) -> list:
@@ -63,6 +66,8 @@ def open_block(data_dir: str, block: str, strategy, first: str, last: str,
     spec = {b["block"]: b for b in blocks(first, last)}
     if block not in spec:
         raise SystemExit(f"unknown block {block}; plan has {list(spec)}")
+    if (data_key, block) in WARMUP:
+        raise SystemExit(f"REFUSED: {data_key} {block} is the training-only warm-up.")
     led = load_ledger()
     prior = [e for e in led if e["data"] == data_key and e["block"] == block]
     if prior and not force_reason:
@@ -135,7 +140,8 @@ def main() -> int:
     if a.cmd == "plan":
         opened = {(e["data"], e["block"]) for e in load_ledger()}
         for b in blocks(a.first, a.last):
-            state = "OPENED" if (Path(a.data_dir).name, b["block"]) in opened else "sealed"
+            key = (Path(a.data_dir).name, b["block"])
+            state = "warm-up" if key in WARMUP else ("OPENED" if key in opened else "sealed")
             print(f"  {b['block']}  {b['start']} .. {b['end']}  {state}")
     elif a.cmd == "open":
         e = open_block(a.data_dir, a.block, a.strategy, a.first, a.last,

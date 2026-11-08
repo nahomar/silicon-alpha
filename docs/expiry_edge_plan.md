@@ -343,4 +343,14 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Lockbox candidates entering block 1: #1 and #3.
   - Note: on this longer window #1's Sharpe CI includes 0 (the earlier
     2022-07 → 2025-11 run gave 1.12). That is why the sealed blocks matter.
+- 2026-11-08, **SPX 2016-01-04 → 2022-05-13 downloaded ($9.60): 963 sessions,
+  all with settlements.** Decided before opening anything:
+  - SPX 2016H1 is a training-only warm-up (nothing earlier to train on) and
+    is never scored.
+  - First scored block: 2016H2.
+  - Strategies per block: #1 `ml_ridge+cal+ctx -postevt` and #3
+    `ml_ridge+cal+ctx+es -postevt`, with always-short as the reference.
+  - Each half-year block has roughly 75 sessions (Mon/Wed/Fri expiries before
+    2022), so single-block results are noisy. The overall verdict is the
+    pooled result across all scored blocks, decided after the last one.
 
