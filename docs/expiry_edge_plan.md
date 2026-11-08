@@ -249,4 +249,20 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     now been looked at, these runs are **development**. One final candidate
     is then chosen and scored **once** on the locked exam (2026-09-08 →
     2026-11-06).
+- 2026-11-08, **Items 1-3 result (development, replication window):**
+  - **Exits hurt.** Closing at +50% / −50% turned always-short from +$13.6k
+    into −$112k, and ridge+cal+ctx from +$97k into −$19k. Stops lock in
+    losses on paths that would have recovered by the close, and every exit
+    crosses four wide 0DTE spreads and pays four more fees. Keep holding to
+    expiry.
+  - **A x B equals A.** The danger detector never vetoes A's shorts (A
+    already avoids those days), so combining adds nothing.
+  - **No shorts within 60 min after events helps everywhere:**
+    - always-short +$48k vs +$13.6k
+    - ridge+cal+ctx +$107k, Sharpe 1.12 [+0.05, +2.23] (first CI above
+      zero), max DD −$38.5k vs −$47.5k
+    - B skip +$73k, +$72/day vs always-short CI [+3, +143]
+  - **Development candidate for the final exam: `ml_ridge+cal+ctx -postevt`,
+    held to expiry, 6 fixed times.** Next: test the dealer-gamma layer on it,
+    then score the one final version once on the locked exam.
 
