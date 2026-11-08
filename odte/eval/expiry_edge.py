@@ -930,9 +930,14 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         if best_ml:
             pred_for[f"{best_ml} (best variant, picked after the fact)"] = preds[best_ml]
         money = money_view(ds, pick, pred_for, tested)
+        keep = [k for k in [ref, a_key, f"{a_key} -postevt" if a_key else None,
+                            f"{ref} -postevt", f"{b_name} skip" if b_name else None]
+                if k and k in res]
+        daily_series = {k: {str(pd.Timestamp(d).date()): float(v)
+                            for d, v in res[k]["_daily"].items()} for k in keep}
         for v in res.values():
             v.pop("_daily", None)
-        modes[mode] = {"strategies": res, "comparisons": comparisons,
+        modes[mode] = {"strategies": res, "comparisons": comparisons, "daily": daily_series,
                        "items_1_3": [k for k in res if k in combos or k.endswith("+exits")
                                      or k in (ref, a_key, f"{b_name} skip" if b_name else "")],
                        "best_baseline": best_base, "reference": ref,
@@ -1324,6 +1329,7 @@ def _cli() -> int:
     ap.add_argument("--sets", nargs="+", default=None,
                     help="keep only these feature sets (names as printed, e.g. +cal +cal+ctx)")
     ap.add_argument("--no-importance", action="store_true")
+    ap.add_argument("--tag", default=None, help="write study-TAG.json / decisions-TAG.parquet")
     a = ap.parse_args()
     global REFIT_EVERY
     REFIT_EVERY = max(1, a.refit_every)
@@ -1397,9 +1403,10 @@ def _cli() -> int:
     print_report(rep)
     if a.write:
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / "study.json").write_text(json.dumps(rep, indent=2, default=str))
-        ds.to_parquet(OUT / "decisions.parquet")
-        print(f"\nwrote {OUT/'study.json'}")
+        name = f"study-{a.tag}.json" if a.tag else "study.json"
+        (OUT / name).write_text(json.dumps(rep, indent=2, default=str))
+        ds.to_parquet(OUT / (f"decisions-{a.tag}.parquet" if a.tag else "decisions.parquet"))
+        print(f"\nwrote {OUT/name}")
     return 0
 
 

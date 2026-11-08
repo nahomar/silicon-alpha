@@ -160,7 +160,7 @@ def earnings_events(tickers=MEGACAPS) -> pd.DataFrame:
     rows = []
     for tk in tickers:
         try:
-            e = yf.Ticker(tk).get_earnings_dates(limit=16)
+            e = yf.Ticker(tk).get_earnings_dates(limit=48)   # ~12 years
         except Exception as ex:                       # keep going without it
             print(f"  earnings {tk}: {str(ex)[:80]}")
             continue
