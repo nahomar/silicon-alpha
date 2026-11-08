@@ -304,4 +304,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Synthetic checks: no planted signal → 50% accuracy (no leak); planted
     imbalance signal → found (74%), and correctly NO-GO for the big model,
     since the simple rule matches it.
+- 2026-11-08, **TradeFM gate result: NO-GO, so do not retrain.** Sol job,
+  14 min CPU, 17.7M train / 6.0M test price-change events.
+  - Direction accuracy: LightGBM 51.9%, imbalance-only 50.5%, base rate
+    49.6% up. That also fails the old 53% bar.
+  - Taker P&L per contract, 30 s hold, after fees, most confident 1%:
+    - LightGBM −$208 (CI −$230 to −$187), win rate 19%;
+    - imbalance-only −$15.5 (CI −$17.5 to −$13.7).
+  - 59% of events had a move that would have paid in hindsight, but the
+    models cannot tell which way.
+  - Caveat (post hoc, does not change the verdict): the most confident
+    calls fall on expensive, wide-spread contracts.
+  - Conclusion: at the 30-second horizon, tick data gives no tradeable edge
+    for this project. TradeFM stays shelved; no H100/H200 retrain.
 
