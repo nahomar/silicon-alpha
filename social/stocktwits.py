@@ -55,7 +55,9 @@ OUT = ROOT / "data" / "social" / "stocktwits"
 API = "https://api.stocktwits.com/api/2/streams/symbol"
 SYMBOLS = ("SPX", "ES_F", "VIX", "SPY")   # SPY last: busiest, slowest to backfill
 UA = "Mozilla/5.0 (silicon-alpha research recorder)"
-PAUSE_S = 0.8
+# ~200 calls/hour unauthenticated. 0.8 s bursts got us 429'd for hours, so
+# stay under the limit instead of bouncing off it (override for live tests).
+PAUSE_S = float(__import__("os").environ.get("STOCKTWITS_PAUSE_S", "20"))
 WRITE_EVERY = 20          # pages between writes during long runs
 COLUMNS = ["id", "stream", "created_utc", "retrieved_utc", "user_hash",
            "body", "sentiment", "symbols"]

@@ -151,15 +151,18 @@ def _candles(series: str, ticker: str, lo: int, hi: int, period: int,
             for c in d.get("candlesticks", [])]
 
 
-def _events(series: str) -> list:
-    out, cursor = [], None
-    while True:
-        q = dict(series_ticker=series, limit=200, status="settled", **({"cursor": cursor} if cursor else {}))
-        d = _get_json(f"{KALSHI}/events?{urllib.parse.urlencode(q)}", pause=0.2)
-        out += [e["event_ticker"] for e in d.get("events", [])]
-        cursor = d.get("cursor")
-        if not cursor or not d.get("events"):
-            return out
+def _events(series: str, statuses=("settled",)) -> list:
+    out = []
+    for status in statuses:
+        cursor = None
+        while True:
+            q = dict(series_ticker=series, limit=200, status=status, **({"cursor": cursor} if cursor else {}))
+            d = _get_json(f"{KALSHI}/events?{urllib.parse.urlencode(q)}", pause=0.2)
+            out += [e["event_ticker"] for e in d.get("events", [])]
+            cursor = d.get("cursor")
+            if not cursor or not d.get("events"):
+                break
+    return sorted(set(out))
 
 
 def _event_markets(ev: str) -> tuple:
@@ -210,8 +213,10 @@ def fetch_kalshi(start) -> None:
             print(f"  kalshi INX: {n_done} sessions, at {day}", flush=True)
     print(f"kalshi INX: done ({len(list(inx_dir.glob('*.parquet')))} sessions on disk)", flush=True)
 
+    # Open meetings too: on early-November days the *next* meeting (Dec) has
+    # not settled yet, and it is exactly the one the feature needs.
     fed_rows = []
-    for ev in sorted(e for e in _events("KXFED") if e.startswith("KXFED-")):
+    for ev in sorted(e for e in _events("KXFED", ("settled", "open", "closed")) if e.startswith("KXFED-")):
         markets, hist = _event_markets(ev)
         if not markets or pd.Timestamp(markets[0]["close_time"]) < start_utc:
             continue
@@ -227,9 +232,12 @@ def fetch_kalshi(start) -> None:
     print(f"kalshi FED: {len(fed_rows)} daily candles", flush=True)
 
 
-def _gdelt_get(url: str, attempts: int = 12):
+GDELT_PACE_S = 60          # stated limit 1 / 5 s; at 10 s and 30 s they still answered 429 for hours
+
+
+def _gdelt_get(url: str, attempts: int = 40):
     """GDELT asks for <= 1 request / 5 s and answers 429 or an empty body when
-    pushed; both mean wait. Pace at 10 s, back off up to 5 minutes."""
+    pushed; both mean wait. Pace at GDELT_PACE_S, back off up to 15 minutes."""
     for i in range(attempts):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=90) as r:
@@ -237,10 +245,10 @@ def _gdelt_get(url: str, attempts: int = 12):
             out = json.loads(body) if body.strip() else None
             if out is None:
                 raise ValueError("empty body")
-            time.sleep(10)
+            time.sleep(GDELT_PACE_S)
             return out
         except Exception as e:
-            wait = min(60 * (i + 1), 300)
+            wait = min(120 * (i + 1), 900)
             print(f"  gdelt busy ({str(e)[:50]}); wait {wait}s", flush=True)
             time.sleep(wait)
     raise RuntimeError("gdelt: too many failures")
