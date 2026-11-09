@@ -524,4 +524,27 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     P&L. If none does, C0 stays.
   - The winner then gets ONE test on the sealed SPX 2021H2 + 2022H1, gate
     written before opening. If it passes, it joins the bot's shadow book.
+- 2026-11-09, **Improvement round, development result (1,648 tested days,
+  half of today's gap):**
+  - C1 profit target: +$131k, Sharpe 0.73 [−0.00, +1.54], +$40/day vs C0,
+    +$31/day vs always-sell.
+    - But −$36k in 2017-21 and +$168k in 2022-26; max DD −$71k.
+  - C0: +$65k, Sharpe 0.55.
+  - C2: +$108k, Sharpe 0.40.
+  - C3: +$59k, Sharpe 0.64, the only one positive in both eras; it fails the
+    selection rule vs C0 / always-sell.
+  - Always-sell: +$80k, Sharpe 0.29.
+  - **Winner by the pre-registered rule: C1.**
+- 2026-11-09, **Sealed test of C1, gate fixed before opening** SPX 2021H2 +
+  2022H1 (2021-07-01 → 2022-05-13), the last sealed SPX blocks.
+  - Same walk-forward (all earlier days), same post-event rule and scoring
+    (half of today's gap, $1k worst case per trade).
+  - **PASS if:**
+    (a) C1's total P&L > 0, AND
+    (b) its paired mean daily P&L beats both C0 and always-sell.
+  - Touch-cost results are reported as well.
+  - About 175 days: a pass is evidence, not proof. It puts C1 in the bot's
+    shadow book next to C0 for the live forward test.
+  - FAIL means C0 stays and C1 is dropped.
+  - Both blocks are recorded in the lockbox ledger as opened.
 

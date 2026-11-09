@@ -32,12 +32,12 @@ SMALL = ["ev_fomc", "ev_cpi", "ev_nfp", "events_ahead", "minutes_to_next_event",
          "vix1d_over_vix", "vix_chg", "spx_ret_prev", "spx_rv5", "iv_vs_vix1d", "megacap_earnings"]
 
 
-def load() -> pd.DataFrame:
-    d = pd.concat([pd.read_parquet(f) for f in FILES], ignore_index=True)
+def load(files=FILES, allow_sealed=False) -> pd.DataFrame:
+    d = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     d = d[d["on6"]].copy()
     d["day"] = pd.to_datetime(d["day"])
     for lo, hi in SEALED:
-        if d["day"].between(lo, hi).any():
+        if d["day"].between(lo, hi).any() and not allow_sealed:
             raise SystemExit("REFUSED: sealed days present")
     d = d.drop_duplicates(["day", "hhmm"]).sort_values(["day", "hhmm"]).reset_index(drop=True)
     cm, W = d["fly_credit_mid"].to_numpy(float), d["W"].to_numpy(float)
