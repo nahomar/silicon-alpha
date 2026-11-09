@@ -881,6 +881,9 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         for mk in model_preds:                       # every model gets the post-event rule
             if mk in strategies and not mk.startswith("placebo"):
                 combos[f"{mk} -postevt"] = no_post(strategies[mk])
+                # Sell-only (added 2026-11-08 after 2017H1): never buy the fly;
+                # the model only chooses between selling and sitting out.
+                combos[f"{mk} -postevt sell-only"] = np.where(no_post(strategies[mk]) == 1, 1, 0)
         combos[f"{ref_short} -postevt"] = no_post(strategies[ref_short])
         if a_key and b_name:
             pb, bb = danger[b_name]

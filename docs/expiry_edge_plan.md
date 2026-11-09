@@ -366,4 +366,11 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Check on seen data (2025-09..11): actions saved in the decisions file
     reproduce the report's touch totals exactly; today-cost totals there are
     close to touch, as expected when costs match.
+- 2026-11-08, **Revision after 2017H1 (user approved): sell-only variants**,
+  scored from 2017H2 on. In 2017H1 the models bought the fly 66-95 times
+  while options were overpriced. Sell-only turns every model "buy" into
+  "sit out".
+  - The block strategies are now #1, #3, #1 sell-only and #3 sell-only.
+  - The originals are unchanged, so their record stays continuous.
+  - The sell-only variants are judged only on blocks from 2017H2 on.
 

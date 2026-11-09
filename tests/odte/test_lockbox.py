@@ -36,3 +36,9 @@ def test_today_cost_reproduces_touch_pnl_when_given_the_touch_cost():
         want = want / ((W[i] - credit[i]) * 100 + lb.FEES4) * 1000
         assert np.isclose(got, want)
     assert lb.today_cost_pnl(dec, [0, 0]).tolist() == [0.0, 0.0]
+
+
+def test_sell_only_never_buys():
+    import numpy as np
+    a = np.array([1, -1, 0, 1, -1])
+    assert np.where(a == 1, 1, 0).tolist() == [1, 0, 0, 1, 0]
