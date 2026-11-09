@@ -547,4 +547,14 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     shadow book next to C0 for the live forward test.
   - FAIL means C0 stays and C1 is dropped.
   - Both blocks are recorded in the lockbox ledger as opened.
+- 2026-11-09, **Sealed C1 test result: FAIL.** SPX 2021-07-01 → 2022-05-13,
+  143 days, half of today's gap:
+  - C1: −$36.5k, Sharpe −2.47.
+  - C0: −$9.4k, Sharpe −0.99.
+  - Always-sell: −$72.9k (the 2022 bear market).
+  - C1 beat always-sell by $254/day but lost to C0 by $190/day.
+  - C0 stays as the bot's model, and C1 is dropped.
+  - No sealed SPX data remains apart from the exam (≥2026-09-08).
+  - Across every unseen period, the model's value so far is losing much
+    less than always-sell in bad markets, not making money on its own.
 
