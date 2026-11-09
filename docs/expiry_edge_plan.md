@@ -409,4 +409,29 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Same rows, days and gate as step 1.
   - If it fails too, TradeFM is not retrained for this: there was no signal
     at 30 s in ticks and none at 30-60 min here.
+- 2026-11-08, **Direction stage A (user approved $148 of ES order flow): add
+  order flow and headline content.** Fixed before the data arrives.
+  - Data, development year only: SPX sessions 2025-09-02 → 2026-09-04.
+    - ES front-month trades with aggressor side, reduced to per-minute buy
+      and sell volume (`odte/data/es_flow.py`).
+    - GDELT headlines from about 30 major outlets on finance, Fed,
+      inflation and trade policy (`odte/data/gdelt_titles.sql`), scored by
+      the same offline sentiment and fear/greed model as the social data.
+  - New inputs at t:
+    - ES aggressor imbalance over the last 5 / 15 / 30 / 60 min;
+    - big-trade (≥20 lots) imbalance over 15 / 60 min;
+    - overnight imbalance;
+    - volume vs the same minutes on the previous 20 days;
+    - headline count, mean sentiment and fear − greed over the last 15 / 60
+      min and overnight.
+    - Headlines count only from batch + 15 min.
+  - Walk-forward inside the year: first 100 days training only, refit every
+    21 days.
+  - Models: logistic and LightGBM, each with and without the new inputs.
+  - Gate: the step 1 gate applied to the WITH models (vs the best simple
+    rule, accuracy and captured move, 99% CIs above 0, H = 30 or 60). The
+    with-minus-without difference is reported.
+  - PASS → stage B: buy the same data for the sealed 2021H2-2022H1 and test
+    once, then simulate option trades. FAIL → stop the option-buying idea.
+  - About 150 test days, so power is limited.
 
