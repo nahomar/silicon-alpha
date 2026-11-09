@@ -304,7 +304,8 @@ def fetch_gdelt_bq(csv_path=None, start="2022-04-25", end=None) -> pd.DataFrame:
                               "--max_rows=200000", sql], capture_output=True, text=True, check=True)
         csv_path.write_text(out.stdout)
     g = pd.read_csv(csv_path)
-    ts = pd.to_datetime(g["batch"].astype(str), format="%Y%m%d%H%M%S").astype("int64") // 10**9
+    from odte.timeutil import epoch_s
+    ts = epoch_s(pd.to_datetime(g["batch"].astype(str), format="%Y%m%d%H%M%S"))
     rows = [pd.DataFrame({"query": q, "ts": ts, "value": g[f"n_{q}"], "norm": g["n_all"]})
             for q in ("market", "tariff", "fed", "geo")]
     df = pd.concat(rows, ignore_index=True).sort_values(["query", "ts"])

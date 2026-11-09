@@ -38,8 +38,8 @@ FLOW_FEATURES = ["of_imb5", "of_imb15", "of_imb30", "of_imb60", "of_big15", "of_
 
 
 def _utc(et) -> np.ndarray:
-    return (pd.DatetimeIndex(et).tz_localize("America/New_York").tz_convert("UTC")
-            .asi8 // 10**9)
+    from odte.timeutil import epoch_s
+    return epoch_s(pd.DatetimeIndex(et).tz_localize("America/New_York").tz_convert("UTC"))
 
 
 def flow_features(rows: pd.DataFrame, flow: pd.DataFrame) -> pd.DataFrame:

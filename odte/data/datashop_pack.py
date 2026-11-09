@@ -101,7 +101,8 @@ def prepare_features(chunk: pd.DataFrame) -> pd.DataFrame:
     df = chunk.copy()
     df["quote_datetime"] = pd.to_datetime(df["quote_datetime"], errors="coerce")
     df = df.dropna(subset=["quote_datetime"])
-    df["ts_ms"] = (df["quote_datetime"].astype("int64") // 1_000_000)
+    from odte.timeutil import epoch_ns
+    df["ts_ms"] = epoch_ns(df["quote_datetime"]) // 1_000_000
     df["mid"] = (df["bid"].astype(float) + df["ask"].astype(float)) / 2.0
     df["spread"] = (df["ask"].astype(float) - df["bid"].astype(float)).clip(lower=1e-6)
     df["bid_sz"] = df["bid_size"].astype(float).fillna(0.0)

@@ -56,7 +56,8 @@ def fetch(start, end, max_usd: float) -> pd.DataFrame:
         parts.append(df)
         print(f"  {y0}: {len(df):,} bars", flush=True)
     out = pd.concat(parts, ignore_index=True).drop_duplicates(["ts_event"]).sort_values("ts_event")
-    out["ts"] = pd.to_datetime(out["ts_event"], utc=True).astype("int64") // 10**9
+    from odte.timeutil import epoch_s
+    out["ts"] = epoch_s(pd.to_datetime(out["ts_event"], utc=True))
     out = out.drop(columns="ts_event")
     OUT.mkdir(parents=True, exist_ok=True)
     out.to_parquet(OUT / "es_1m.parquet", index=False)
@@ -95,7 +96,8 @@ def fetch_cross(start, end, max_usd: float, roots=tuple(CROSS)) -> None:
                                             end=hi.isoformat(), **kw).to_df().reset_index()
                 parts.append(df[["ts_event", "instrument_id", "high", "low", "close", "volume"]])
         out = pd.concat(parts, ignore_index=True).drop_duplicates("ts_event").sort_values("ts_event")
-        out["ts"] = pd.to_datetime(out["ts_event"], utc=True).astype("int64") // 10**9
+        from odte.timeutil import epoch_s
+        out["ts"] = epoch_s(pd.to_datetime(out["ts_event"], utc=True))
         out.drop(columns="ts_event").to_parquet(p.with_suffix(".tmp"), index=False)
         p.with_suffix(".tmp").replace(p)
         print(f"  {r}: {len(out):,} bars -> {p}", flush=True)

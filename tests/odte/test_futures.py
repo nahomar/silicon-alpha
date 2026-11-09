@@ -10,7 +10,8 @@ def _bars(day0, day1, jump_after_open=0.0):
     px = 6000 + np.cumsum(np.full(len(t), 0.25))
     open_ = pd.Timestamp(f"{day1} 09:30", tz="America/New_York")
     px = np.where(t >= open_, px + jump_after_open, px)
-    return pd.DataFrame({"ts": (t.tz_convert("UTC").astype("int64") // 10**9).to_numpy(),
+    from odte.timeutil import epoch_s
+    return pd.DataFrame({"ts": epoch_s(t.tz_convert("UTC")),
                          "instrument_id": 1, "open": px, "high": px + 0.5, "low": px - 0.5,
                          "close": px, "volume": 10.0})
 
