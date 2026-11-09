@@ -600,4 +600,38 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - The truly independent tests are the live paper days and the SPX exam
       (≥2026-09-08).
   - Next: the event seller joins the live bot's shadow book.
+- 2026-11-09, **Independent review (separate model, read-only, re-ran the
+  numbers)** and the changes made in response, all before any live day.
+  - Findings accepted:
+    - The NDX/RUT "pass" is not an independent test: same 48 days,
+      same-day P&L correlation with SPX ~0.75.
+    - The pooled-at-mid gate was too lenient: each index's own CI includes
+      0, and mid is rarely fillable.
+    - RUT rests on 5 days.
+    - Only three event types were chosen after looking: PPI and jobless
+      claims days were negative, which contradicts the stated mechanism.
+    - Negative in 2018, 2022 and 2023.
+    - The reviewer puts the chance the edge is real at ~25-30%. Realistic
+      P&L at $300 per trade: about +$1k/yr typical (best +$3k, bad −$2k).
+  - **Learning loop rule, revised:**
+    - Promote only on a paired advantage ≥ 1.5 standard errors over ≥ 60
+      shared live days (window 120), ≥ 30 trades, positive total.
+    - The automatic on/off switching of model orders is removed; risk is
+      handled by the drawdown pause and the kill switch.
+    - The old $25/day margin was ~6% of one SE and would have chased noise.
+  - **XSP parity:**
+    - The bot records XSP's own quotes (nearest-the-money ±8 strikes; SPX
+      gets the remaining quote lines).
+    - Orders and an extra shadow P&L are priced on XSP's own bid/ask, not
+      SPX/10.
+  - **Size:** one XSP lot per trade until ≥ 1 year of live data.
+  - **Gate before ANY real money (binding):** the event-day seller must
+    pass both
+    (a) the SPX exam (≥2026-09-08), and
+    (b) ≥ 60 live event days.
+    Both are scored at the touch on the traded symbol's own quotes, per
+    index, not pooled.
+  - Open question to answer before trusting the pattern: why PPI and claims
+    days lose while CPI/NFP/FOMC days win. Write the expectation down
+    before checking.
 

@@ -114,3 +114,18 @@ def test_previous_day_carries_settle_and_ratio(tmp_path):
     (tmp_path / "2026-11-10.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6800.5, "ratio": 0.71}) + "\n")
     (tmp_path / "2026-11-12.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6900.0, "ratio": 1.2}) + "\n")
     assert previous_day(cfg, "2026-11-11") == (6800.5, 0.71)        # never a later day
+
+
+def test_fly_from_xsp_quotes_and_line_budget():
+    q = pd.DataFrame([(k, r, b, b + 0.05) for k, r, b in [
+        (676.0, "C", 1.60), (676.0, "P", 1.40), (679.0, "C", 0.30), (673.0, "P", 0.35),
+        (680.0, "C", 0.20), (672.0, "P", 0.25), (677.0, "C", 1.05), (675.0, "P", 0.95),
+        (681.0, "C", 0.10), (671.0, "P", 0.15)]],
+        columns=["strike", "option_type", "bid", "ask"])
+    f = fly.fly_from_quotes(q, F=676.1)
+    assert f["K"] == 676.0 and f["W"] == 5.0                    # smallest distance >= 1.5 x 3.05 = 4.6
+    assert f["fly_credit"] == pytest.approx(1.60 + 1.40 - 0.15 - 0.20)
+    assert f["fly_credit"] < f["fly_credit_mid"] < f["fly_debit"]
+    o = fly.build(f, "XSP", 300.0, 5, 0.5, 0.01, native=True)
+    assert o.K == 676.0 and o.ladder[0] == pytest.approx(round(f["fly_credit_mid"], 2))
+    assert Config(symbol="XSP").spx_lines() == 95 - 34 and Config(symbol="SPX").spx_lines() == 95

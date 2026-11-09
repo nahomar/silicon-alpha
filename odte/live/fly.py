@@ -53,10 +53,40 @@ def worst_case_per_fly(W: float, credit: float) -> float:
     return (W - credit) * MULT + 4 * FEE_PER_LEG
 
 
+def fly_from_quotes(q, F: float, wing_mult: float = 1.5) -> dict | None:
+    """The backtests' iron fly built from one symbol's own quotes.
+
+    Body at the strike nearest the forward with both a call and a put quoted;
+    wings at the smallest symmetric distance >= wing_mult x straddle mid.
+    q: rows with strike, option_type, bid, ask (latest per contract)."""
+    import numpy as np
+    if q is None or len(q) == 0 or not (F > 0):
+        return None
+    q = q[(q["bid"] > 0) & (q["ask"] >= q["bid"])]
+    c = q[q["option_type"] == "C"].set_index("strike")
+    p = q[q["option_type"] == "P"].set_index("strike")
+    both = c.index.intersection(p.index)
+    if not len(both):
+        return None
+    K = float(both[np.argmin(np.abs(both.to_numpy(float) - F))])
+    mid = lambda df, k: (df.at[k, "bid"] + df.at[k, "ask"]) / 2
+    straddle = mid(c, K) + mid(p, K)
+    dists = sorted(d for d in {round(k - K, 4) for k in c.index} & {round(K - k, 4) for k in p.index}
+                   if d >= wing_mult * straddle)
+    if not dists or straddle <= 0:
+        return None
+    W = dists[0]
+    return {"K": K, "W": W, "straddle_mid": straddle,
+            "fly_credit_mid": straddle - (mid(c, K + W) + mid(p, K - W)),
+            "fly_credit": c.at[K, "bid"] + p.at[K, "bid"] - c.at[K + W, "ask"] - p.at[K - W, "ask"],
+            "fly_debit": c.at[K, "ask"] + p.at[K, "ask"] - c.at[K + W, "bid"] - p.at[K - W, "bid"]}
+
+
 def build(row: dict, symbol: str, max_loss: float, steps: int, max_concession: float,
-          tick: float) -> FlyOrder | None:
-    """Order for selling the fly in `row` (from features.feature_row), or None."""
-    s = scale(symbol)
+          tick: float, native: bool = False) -> FlyOrder | None:
+    """Order for selling the fly in `row`, or None. native=True: row is already
+    priced in the traded symbol (its own quotes); otherwise SPX row x scale."""
+    s = 1.0 if native else scale(symbol)
     K, W = row["K"] * s, row["W"] * s
     mid, touch = row["fly_credit_mid"] * s, row["fly_credit"] * s
     if not (math.isfinite(W) and mid > 0 and touch > 0):

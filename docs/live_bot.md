@@ -19,6 +19,16 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - Paper days are new unseen data. A strategy earns real money only if it keeps beating `always_sell` here.
 - On unseen history (2017-2021) none of them was profitable. Sell-only was closest (−$5.3k vs −$36.9k for always-sell on the same days).
 
+## XSP pricing
+- The bot records XSP's own quotes (nearest-the-money ±8 strikes) alongside SPX's. The quote-line budget is split: 34 lines XSP, the rest SPX.
+- Orders and an extra shadow P&L (`xsp_mid/half/touch`) are priced on XSP's own bid/ask. If XSP quotes are missing, SPX/10 is used, and the journal records `priced_on`.
+- The key live metric is `share_of_gap_paid` per fill, on XSP's book.
+
+## Before any real money (binding, from the plan)
+- The event-day seller must pass the SPX exam AND at least 60 live event days.
+- Both are scored at the touch on the traded symbol's own quotes, per index.
+- Then one XSP lot per trade until at least a year of live data.
+
 ## Safety
 - Paper by default. Live mode is refused unless `allow_live=True`, which is set only on the account owner's explicit go.
 - Risk limits (`odte/live/config.py`):
@@ -61,10 +71,14 @@ PYTHONPATH=. .venv-live/bin/python -m odte.live.runner --mode replay --day 2026-
 Every Saturday:
 1. Each new live day (quotes the bot recorded + settlement) becomes training rows, built by the same backtest feature code.
 2. Every candidate model is retrained on history + live days before the test window.
-3. Each is tested on the last 40 live days (unseen by those fits): sell when it says so, at half the day's own bid-ask gap.
-4. Fixed rules, set before any live day:
-   - **Promote** a challenger only with ≥20 live test days, ≥15 trades, a positive total, and ≥$25/day better than the model in charge.
-   - **Switch model-driven orders off** if the model in charge loses money and trails always-sell over the window; switch back on when it recovers. The event seller keeps trading either way.
+3. Each is tested on the last 120 live days (unseen by those fits): sell when it says so, at half the day's own bid-ask gap.
+4. Fixed rule, set before any live day and revised after the independent review: **promote** a challenger only if all of these hold over the last 120 live days:
+   - at least 60 shared days;
+   - at least 30 trades;
+   - a positive total;
+   - a paired daily advantage over the model in charge of at least **1.5 standard errors**.
+
+   There is no automatic on/off switching; the drawdown pause and the kill switch handle risk.
 5. The model in charge is refit on everything and saved as the bot's model.
 6. A report is written to `reports/live_weekly/<date>.md`, with every shadow strategy's live results.
 

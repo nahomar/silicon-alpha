@@ -1,30 +1,42 @@
 """Weekly loop: promotion / demotion rules, and an end-to-end week on replayed days."""
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from odte.live import loop
 
 
-def _ev(champ, chall, always, days=40, trades=60):
-    r = lambda m: {"days": days, "trades": trades, "total": m * days, "mean_day": m}
-    return {"status": "tested", "results": {"ratio_ridge_full": r(champ), "profit_ridge_full": r(chall),
-                                            "always_sell": r(always)}}
+def _ev(champ, chall, days=60, trades=60, noise=0.0, seed=0):
+    rng = np.random.default_rng(seed)
+    keys = [f"2027-01-{i:02d}" if i <= 31 else f"2027-02-{i - 31:02d}" for i in range(1, days + 1)]
+
+    def r(series):
+        return {"days": days, "trades": trades, "total": float(sum(series)), "mean_day": float(np.mean(series)),
+                "daily": dict(zip(keys, series))}
+    base = rng.normal(0, 2500, days)
+    c = base + champ
+    h = base + chall + rng.normal(0, noise, days)
+    return {"status": "tested", "results": {"ratio_ridge_full": r(c), "profit_ridge_full": r(h),
+                                            "always_sell": r(base)}}
 
 
-def test_promotion_needs_a_clear_margin():
-    reg = {"champion": "ratio_ridge_full", "ml_orders_enabled": True}
-    assert loop.decide(reg, _ev(10, 30, 0))["champion"] == "ratio_ridge_full"     # +20 < margin
-    assert loop.decide(reg, _ev(10, 40, 0))["champion"] == "profit_ridge_full"    # +30 >= margin
-    assert loop.decide(reg, _ev(10, 40, 0, trades=5))["champion"] == "ratio_ridge_full"   # too few trades
+def test_promotion_needs_a_statistically_clear_advantage():
+    reg = {"champion": "ratio_ridge_full"}
+    # +$25/day on a $2,500/day-noise P&L: the old rule promoted this; it is luck-sized
+    assert loop.decide(reg, _ev(10, 35, noise=800))["champion"] == "ratio_ridge_full"
+    # a large, consistent paired advantage clears 1.5 SE
+    assert loop.decide(reg, _ev(10, 400, noise=800))["champion"] == "profit_ridge_full"
+    # too few days or trades never promote
+    assert loop.decide(reg, _ev(10, 400, noise=800, days=30))["champion"] == "ratio_ridge_full"
+    assert loop.decide(reg, _ev(10, 400, noise=800, trades=10))["champion"] == "ratio_ridge_full"
 
 
-def test_demotion_switches_model_orders_off_and_back_on():
-    reg = {"champion": "ratio_ridge_full", "ml_orders_enabled": True}
-    off = loop.decide(reg, _ev(-20, -30, 5))
-    assert off["ml_orders_enabled"] is False
-    assert loop.decide(off, _ev(15, 0, 5))["ml_orders_enabled"] is True
+def test_no_automatic_on_off_switching():
+    reg = {"champion": "ratio_ridge_full"}
+    out = loop.decide(reg, _ev(-300, -400, noise=800))
+    assert "ml_orders_enabled" not in out
 
 
 def test_collecting_until_enough_live_days():
@@ -50,6 +62,7 @@ def test_week_end_to_end_on_replayed_days(tmp_path, monkeypatch):
     monkeypatch.setattr(loop, "MIN_LIVE_DAYS", 2)
     monkeypatch.setattr(loop, "WINDOW", 2)
     monkeypatch.setattr(loop, "MIN_TRADES", 1)
+    monkeypatch.setattr(loop, "PROMOTE_SE", 1.5)
     monkeypatch.setattr(loop, "ROOT", tmp_path)
     out = loop.weekly(cfg, today="2026-08-15")
     live = pd.read_parquet(tmp_path / "dataset.parquet")

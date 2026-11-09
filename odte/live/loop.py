@@ -9,13 +9,13 @@ Run once a week (e.g. Saturday) after the bot's trading days:
   3. TEST each on the most recent WINDOW live days (unseen by those fits): the
      daily P&L of selling the iron fly when the candidate says so, at half the
      day's own bid-ask gap, $1k worst case per trade, outside the post-release hour.
-  4. PROMOTE / DEMOTE by the fixed rules below (set 2026-11-09, before any live day):
-       promote a challenger only if, over >= MIN_LIVE_DAYS test days, it has
-       >= MIN_TRADES trades, total P&L > 0, and beats the champion's mean daily
-       P&L by >= PROMOTE_MARGIN;
-       switch model-driven orders OFF if the champion's mean daily P&L is < 0
-       AND below always-sell's over the window (the event seller keeps trading);
-       switch them back ON when the champion is >= 0 and >= always-sell again.
+  4. PROMOTE by the fixed rule below (revised 2026-11-09 after the independent
+     review, still before any live day): a challenger replaces the champion only
+     if, over >= MIN_LIVE_DAYS shared test days, it has >= MIN_TRADES trades, a
+     positive total, and its PAIRED daily advantage over the champion is at least
+     PROMOTE_SE standard errors. Daily P&L at a $1k budget swings ~$2,500/day,
+     so a fixed $/day margin would swap models on luck. There is no automatic
+     on/off switching; the runner's drawdown pause and kill switch handle risk.
   5. REFIT the champion on everything and save it as the bot's model.
   6. REPORT to reports/live_weekly/<date>.md, including every shadow strategy's
      live results from the journals.
@@ -42,8 +42,8 @@ EXAM_FROM = pd.Timestamp("2026-09-08")       # never trained on: the final exam 
 TIMES = ("10:00", "11:00", "12:00", "13:00", "14:00", "15:00")
 FEES4, BUDGET, TODAY_COST = 4 * 1.20, 1000.0, 0.0169
 
-# Fixed before any live day (2026-11-09)
-WINDOW, MIN_LIVE_DAYS, MIN_TRADES, PROMOTE_MARGIN = 40, 20, 15, 25.0
+# Fixed before any live day (2026-11-09; revised after the independent review)
+WINDOW, MIN_LIVE_DAYS, MIN_TRADES, PROMOTE_SE = 120, 60, 30, 1.5
 
 
 def _small():
@@ -177,41 +177,47 @@ def evaluate(hist: pd.DataFrame, live: pd.DataFrame, cands: dict) -> dict:
         sell = np.array([signal({"kind": kind}, p) == 1 for p in pred])
         x = daily_pnl(test, sell)
         out[name] = {"days": int(len(x)), "trades": int((sell & ~test["post"].to_numpy(bool)).sum()),
-                     "total": float(x.sum()), "mean_day": float(x.mean())}
+                     "total": float(x.sum()), "mean_day": float(x.mean()),
+                     "daily": {str(k.date()): float(v) for k, v in x.items()}}
     a = daily_pnl(test, np.ones(len(test), bool))
     out["always_sell"] = {"days": int(len(a)), "trades": int((~test["post"].to_numpy(bool)).sum()),
-                          "total": float(a.sum()), "mean_day": float(a.mean())}
+                          "total": float(a.sum()), "mean_day": float(a.mean()),
+                          "daily": {str(k.date()): float(v) for k, v in a.items()}}
     return {"status": "tested", "window": [str(pd.Timestamp(start).date()), str(pd.Timestamp(days[-1]).date())],
             "results": out}
 
 
+def paired(chall: dict, champ: dict) -> tuple:
+    """(mean daily advantage, its standard error, shared days)."""
+    days = sorted(set(chall) & set(champ))
+    d = np.array([chall[k] - champ[k] for k in days])
+    if len(d) < 2:
+        return float("nan"), float("nan"), len(d)
+    return float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))), len(d)
+
+
 def decide(reg: dict, ev: dict) -> dict:
-    """Apply the fixed promotion / demotion rules. Returns the updated registry."""
+    """Apply the fixed promotion rule. Returns the updated registry."""
     reg = dict(reg)
     res = ev.get("results", {})
     champ = reg.get("champion", "ratio_ridge_full")
     if ev.get("status") != "tested" or champ not in res:
         reg["last_decision"] = ev.get("status")
         return reg
-    c = res[champ]
-    best = None
+    best, best_t = None, 0.0
     for name, r in res.items():
         if name in (champ, "always_sell"):
             continue
-        if (r["days"] >= MIN_LIVE_DAYS and r["trades"] >= MIN_TRADES and r["total"] > 0
-                and r["mean_day"] >= c["mean_day"] + PROMOTE_MARGIN):
-            if best is None or r["mean_day"] > res[best]["mean_day"]:
-                best = name
+        adv, se, n = paired(r["daily"], res[champ]["daily"])
+        if (n >= MIN_LIVE_DAYS and r["trades"] >= MIN_TRADES and r["total"] > 0
+                and np.isfinite(se) and se > 0 and adv >= PROMOTE_SE * se and adv / se > best_t):
+            best, best_t = name, adv / se
     if best:
-        reg.setdefault("history", []).append({"date": str(date.today()), "promoted": best, "replaced": champ})
-        reg["champion"] = champ = best
-        c = res[champ]
-    alw = res["always_sell"]["mean_day"]
-    if c["mean_day"] < 0 and c["mean_day"] < alw:
-        reg["ml_orders_enabled"] = False
-    elif c["mean_day"] >= 0 and c["mean_day"] >= alw:
-        reg["ml_orders_enabled"] = True
-    reg["last_decision"] = f"champion {champ}; model orders {'ON' if reg.get('ml_orders_enabled', True) else 'OFF'}"
+        reg.setdefault("history", []).append({"date": str(date.today()), "promoted": best,
+                                              "replaced": champ, "t_stat": round(best_t, 2)})
+        reg["champion"] = best
+    reg["last_decision"] = (f"promoted {best} (paired advantage {best_t:.1f} SE)" if best
+                            else f"kept {champ}: no challenger cleared {PROMOTE_SE} SE")
     return reg
 
 
@@ -235,8 +241,7 @@ def shadow_summary(cfg: Config, since=None) -> pd.DataFrame:
 def weekly(cfg: Config = Config(), today=None) -> dict:
     today = pd.Timestamp(today or date.today()).normalize()
     reg_p = cfg.journal_dir.parent / "registry.json"
-    reg = json.loads(reg_p.read_text()) if reg_p.exists() else {"champion": "ratio_ridge_full",
-                                                                "ml_orders_enabled": True}
+    reg = json.loads(reg_p.read_text()) if reg_p.exists() else {"champion": "ratio_ridge_full"}
     hist, live = history(), live_dataset(cfg)
     cands = candidates()
     ev = evaluate(hist, live, cands)
@@ -260,6 +265,12 @@ def weekly(cfg: Config = Config(), today=None) -> dict:
                   "| model | days | trades | total | per day |", "|---|---|---|---|---|"]
         lines += [f"| {k} | {v['days']} | {v['trades']} | ${v['total']:,.0f} | ${v['mean_day']:+,.0f} |"
                   for k, v in ev["results"].items()]
+        champ_d = ev["results"][reg["champion"]]["daily"]
+        lines += ["", f"Paired advantage over the model in charge (promotion needs >= {PROMOTE_SE} SE):", ""]
+        for k, v in ev["results"].items():
+            if k not in (reg["champion"], "always_sell"):
+                adv, se, n = paired(v["daily"], champ_d)
+                lines.append(f"- {k}: {adv:+,.0f}/day, SE {se:,.0f} -> {adv / se if se else float('nan'):+.2f} SE over {n} days")
     if len(sh):
         lines += ["", "## Shadow book, all live days ($300 worst case per trade)", "",
                   "| strategy | days | trades | mid | half gap | touch |", "|---|---|---|---|---|---|"]

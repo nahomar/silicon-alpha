@@ -30,6 +30,7 @@ class Config:
     max_loss_per_trade: float = 300.0   # $ worst case of one trade (whole contracts)
     max_loss_per_day: float = 600.0     # $ worst case of all trades opened today
     max_trades_per_day: int = 2
+    max_qty: int = 1                    # one XSP lot per trade until >= 1 year of live data (review)
     pause_drawdown: float = 1500.0      # $ realized drawdown that pauses trading
     pause_sessions: int = 10
 
@@ -45,7 +46,11 @@ class Config:
     inner_band: float = 0.012
     band: float = 0.03
     outer_step: float = 25.0
-    max_lines: int = 95                 # IBKR default: 100 simultaneous quote lines
+    max_lines: int = 95                 # IBKR default: 100 simultaneous quote lines (SPX + XSP)
+    xsp_halfwidth: int = 8              # XSP strikes recorded: nearest-the-money +/- 8 points, every 1
+
+    def spx_lines(self) -> int:
+        return self.max_lines - (2 * (2 * self.xsp_halfwidth + 1) if self.symbol == "XSP" else 0)
 
     kill_switch: Path = field(default_factory=lambda: LIVE / "STOP")
     journal_dir: Path = field(default_factory=lambda: LIVE / "journal")

@@ -92,11 +92,14 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     while broker.now() < open_t:
         broker.sleep(min(30, max(1, (open_t - broker.now()).total_seconds())))
     spot = broker.spot()
-    strikes = fly_strikes = broker_strikes(cfg, spot)
-    broker.subscribe(day, fly_strikes)
-    j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes))
+    strikes = broker_strikes(cfg, spot)
+    xsp_strikes = ([float(k) for k in range(round(spot / 10) - cfg.xsp_halfwidth,
+                                            round(spot / 10) + cfg.xsp_halfwidth + 1)]
+                   if cfg.symbol == "XSP" else [])
+    broker.subscribe(day, strikes, xsp_strikes)
+    j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes), n_xsp_strikes=len(xsp_strikes))
 
-    chain, done, active, fills, shadows = [], set(), None, [], []
+    chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
     ratio_ref = None
     opened_worst, n_trades = 0.0, 0
     last_snap = None
@@ -105,6 +108,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         minute = now.floor("min")
         if now.second >= 58 and last_snap != minute:                 # record once a minute
             chain.append(broker.snapshot())
+            if cfg.symbol == "XSP":
+                xchain.append(broker.snapshot_xsp())
             last_snap = minute
         hhmm = now.strftime("%H:%M")
         if hhmm in times and hhmm not in done and now.second >= 2:
@@ -116,6 +121,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             else:
                 pred = predict(bundle, r)
                 sig = signal(bundle, pred, cfg.margin)
+                xfly = (fly.fly_from_quotes(xchain[-1], r["F"] / 10.0)
+                        if cfg.symbol == "XSP" and xchain and len(xchain[-1]) else None)
                 if hhmm == "10:00" or ratio_ref is None:
                     ratio_ref = (r["K"], r["straddle_mid"])
                 t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
@@ -124,7 +131,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 for name, rule in STRATEGIES.items():          # shadow book: no orders
                     side, reason = rule(sig, bool(recent), r)
                     sides[name] = side
-                    shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r})
+                    shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r, "xfly": xfly})
                     j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
                 why = None
                 wants = [n for n in order_strats if sides.get(n) == 1]
@@ -145,10 +152,19 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 o = None
                 if why is None:
                     budget = min(cfg.max_loss_per_trade, cfg.max_loss_per_day - opened_worst)
-                    o = fly.build(r, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession, cfg.tick())
+                    if xfly is not None:                     # XSP's own book
+                        o = fly.build(xfly, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession,
+                                      cfg.tick(), native=True)
+                    else:                                     # no XSP quotes: SPX / 10 (logged)
+                        o = fly.build(r, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession, cfg.tick())
+                    if o is not None and o.qty > cfg.max_qty:
+                        o.worst_case = o.worst_case / o.qty * cfg.max_qty
+                        o.qty = cfg.max_qty
                     if o is None:
                         why = f"one contract risks more than the ${budget:,.0f} left"
                 j.log(now, "decision", hhmm=hhmm, pred=round(pred, 4), wanted_by=wants,
+                      priced_on="XSP book" if xfly is not None else "SPX/10",
+                      xsp=({k: round(v, 3) for k, v in xfly.items()} if xfly else None),
                       implied_move=r["implied_move"],
                       K=r["K"], W=r["W"], mid=r["fly_credit_mid"], touch=r["fly_credit"],
                       action="sell" if why is None else "skip", reason=why)
@@ -189,6 +205,9 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     if chain:
         cfg.chain_dir.mkdir(parents=True, exist_ok=True)
         pd.concat(chain, ignore_index=True).to_parquet(cfg.chain_dir / f"{day:%Y-%m-%d}{tag}.parquet")
+    if any(len(x) for x in xchain):
+        (cfg.chain_dir / "xsp").mkdir(parents=True, exist_ok=True)
+        pd.concat(xchain, ignore_index=True).to_parquet(cfg.chain_dir / "xsp" / f"{day:%Y-%m-%d}{tag}.parquet")
     settle = broker.settlement(day)
     s = 0.1 if cfg.symbol == "XSP" else 1.0
     pnl = 0.0
@@ -199,13 +218,17 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     book = {}
     for sh in shadows:
         p = shadow_pnl(sh["side"], sh["row"], settle)
+        if p and sh.get("xfly"):                          # same trade on XSP's own bid/ask
+            px = shadow_pnl(sh["side"], sh["xfly"], settle / 10.0)
+            p.update({f"xsp_{k}": v for k, v in px.items()})
         if p:
             j.log(broker.now(), "shadow_settle", strategy=sh["strategy"], hhmm=sh["hhmm"],
                   side=sh["side"], **{k: round(v, 2) for k, v in p.items()})
             b = book.setdefault(sh["strategy"], {"trades": 0, "mid": 0.0, "half": 0.0, "touch": 0.0})
             b["trades"] += 1
-            for k in ("mid", "half", "touch"):
-                b[k] = round(b[k] + p[k], 2)
+            for k, v in p.items():
+                if np.isfinite(v):
+                    b[k] = round(b.get(k, 0.0) + v, 2)
     ratio_today = (abs(settle - ratio_ref[0]) / ratio_ref[1]
                    if ratio_ref and ratio_ref[1] > 0 else None)          # tomorrow's prev_ratio
     summary = {"day": f"{day:%Y-%m-%d}", "decisions": len(done), "orders": n_trades, "fills": len(fills),
@@ -234,7 +257,7 @@ def previous_day(cfg: Config, day) -> tuple:
 
 def broker_strikes(cfg: Config, spot: float) -> list:
     from odte.live.broker import strikes_for
-    return strikes_for(spot, cfg.inner_band, cfg.band, cfg.outer_step, max_lines=cfg.max_lines)
+    return strikes_for(spot, cfg.inner_band, cfg.band, cfg.outer_step, max_lines=cfg.spx_lines())
 
 
 def main() -> int:

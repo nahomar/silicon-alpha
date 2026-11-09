@@ -74,8 +74,11 @@ class ReplayBroker:
         F = implied_forward(minute_grid(v)).dropna()
         return float(F.iloc[-1]) if len(F) else float(v["strike"].median())
 
-    def subscribe(self, day, strikes):
+    def subscribe(self, day, strikes, xsp_strikes=()):
         self.strikes = set(strikes)
+
+    def snapshot_xsp(self):
+        return pd.DataFrame(columns=CHAIN_COLS)        # no historical XSP quotes
 
     def snapshot(self):
         v = self._visible()
@@ -167,23 +170,30 @@ class IBKRBroker:
         return Option(symbol, f"{pd.Timestamp(day):%Y%m%d}", k, right, "SMART",
                       multiplier="100", currency="USD", tradingClass=tc)
 
-    def subscribe(self, day, strikes):
-        cons = [self._option(self.cfg.signal_symbol, day, k, r) for k in strikes for r in ("C", "P")]
-        cons = [c for c in self.ib.qualifyContracts(*cons) if c and c.conId]
-        for c in cons:
-            self.tickers[(c.right, float(c.strike))] = self.ib.reqMktData(c, "", False, False)
+    def subscribe(self, day, strikes, xsp_strikes=()):
+        """Quotes for the signal symbol's strikes and, if trading XSP, XSP's own."""
         self.day = pd.Timestamp(day).normalize()
+        for sym, ks in ((self.cfg.signal_symbol, strikes), ("XSP", xsp_strikes)):
+            cons = [self._option(sym, day, k, r) for k in ks for r in ("C", "P")]
+            cons = [c for c in (self.ib.qualifyContracts(*cons) if cons else []) if c and c.conId]
+            for c in cons:
+                self.tickers[(sym, c.right, float(c.strike))] = self.ib.reqMktData(c, "", False, False)
+
+    def _rows(self, sym):
+        now = self.now()
+        num = lambda x: float(x) if x is not None and math.isfinite(x) and x >= 0 else np.nan
+        root = {"SPX": "SPXW", "XSP": "XSP"}[sym]
+        rows = [{"quote_datetime": now, "root": root, "expiration": self.day, "strike": k,
+                 "option_type": r, "bid": num(t.bid), "ask": num(t.ask),
+                 "bid_size": num(t.bidSize), "ask_size": num(t.askSize)}
+                for (s, r, k), t in self.tickers.items() if s == sym]
+        return pd.DataFrame(rows, columns=CHAIN_COLS).dropna(subset=["bid", "ask"])
 
     def snapshot(self):
-        now = self.now()
-        rows = []
-        for (r, k), t in self.tickers.items():
-            num = lambda x: float(x) if x is not None and math.isfinite(x) and x >= 0 else np.nan
-            rows.append({"quote_datetime": now, "root": "SPXW" if self.cfg.signal_symbol == "SPX" else "XSP",
-                         "expiration": self.day, "strike": k, "option_type": r,
-                         "bid": num(t.bid), "ask": num(t.ask),
-                         "bid_size": num(t.bidSize), "ask_size": num(t.askSize)})
-        return pd.DataFrame(rows, columns=CHAIN_COLS).dropna(subset=["bid", "ask"])
+        return self._rows(self.cfg.signal_symbol)
+
+    def snapshot_xsp(self):
+        return self._rows("XSP")
 
     def place_fly(self, order, price):
         from ib_async import ComboLeg, Contract, LimitOrder
