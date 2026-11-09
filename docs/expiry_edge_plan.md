@@ -708,4 +708,40 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     live days.
   - No more hypothesis tests on old data are planned. Further evidence must
     come from live paper days.
+- 2026-11-09, **Signal factory (user: "think like a quant"). Protocol fixed
+  before any run** (`odte/research/factory.py`).
+  - Data: all seen SPX fixed-time decisions, 2016-01 → 2026-09-04 (the exam
+    is excluded), 12,197 rows / 2,044 days.
+  - **Signals:** about 50, in six families, each computed at decision time
+    from information known then:
+    - option pricing: IV/RV, IV level vs its own history, IV vs VIX, skew
+      and skew vs history, yesterday's realized/implied, VIX9D/VIX,
+      VIX/VIX3M, VVIX/VIX, VIX change, quoted spread;
+    - price action: gap, move so far, absolute move, range, recent vs
+      day-long realized vol, SPX 1d return, SPX RV5/RV20;
+    - calendar: every event flag, events/FOMC ahead, day of week, time of
+      day, minutes to close;
+    - dealer positioning: GEX net / 0DTE, flip distance, max-OI distance
+      (signed and absolute), 0DTE put/call OI;
+    - cross-market: rates, dollar, crude, gold, HYG, BTC, ES overnight
+      return / RV / range / volume, ES last 15 min;
+    - regime (idea B): a 4-state k-means of daily market state (VIX, VIX/VIX3M,
+      SPX RV20, 20-day SPX return, VVIX), refit each year on earlier days
+      only, used as walk-forward target encodings.
+  - **Targets** (z = (settle − F) / straddle mid, F = forward at t):
+    - T_fly: half-gap return on risk of selling the iron fly (today's cost);
+    - T_dir: z (which side the close lands on; idea A);
+    - T_size: |z|;
+    - T_tail: 1 if |z| > 1.5.
+  - **Statistic:** Spearman IC over all rows, with a cluster-robust (by day)
+    t-stat.
+  - **A signal × target SURVIVES only if both hold:**
+    (1) Benjamini-Hochberg FDR q ≤ 0.05 across ALL signal × target tests; AND
+    (2) the IC has the same sign in 2016-2021 and 2022-2026.
+  - Survivors are combined per target in a walk-forward ridge composite
+    (first 250 days training only, refit every 21 days).
+  - A composite that improves its target's trading rule on the development
+    data becomes a CHALLENGER in the live loop and is judged only on live
+    days.
+  - Development data never counts as proof.
 
