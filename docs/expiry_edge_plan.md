@@ -557,4 +557,33 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - No sealed SPX data remains apart from the exam (≥2026-09-08).
   - Across every unseen period, the model's value so far is losing much
     less than always-sell in bad markets, not making money on its own.
+- 2026-11-09, **Re-evaluation. Event-day seller, found by slicing seen SPX
+  data (hypothesis, not proof).**
+  - Always-sell outside the hour after releases, at half of today's gap:
+    - CPI/NFP/FOMC days: +$86k, $65/trade, 269 days, mean $320/day
+      [CI 23, 601], positive in 8 of 11 years, every event type positive.
+    - Other days: +$3k.
+  - Also: inverted VIX term structure (VIX/VIX3M > 1) was −$97/trade.
+  - Correction: CPI and NFP are 08:30 releases, so those days are sold after
+    the news. On FOMC days the measured trades are 10:00-13:00, i.e. before
+    the 14:00 statement (14:00 and 15:00 are inside the post-event hour).
+- 2026-11-09, **One-shot test of the event-day seller on SEALED NDX and RUT,
+  2025-01-01 → 2026-09-04 (never opened). Fixed before the run.**
+  - Rule (no fitting):
+    - On CPI / NFP / FOMC days (ev_cpi, ev_nfp, ev_fomc, ev_fomc_sep), sell
+      the iron fly at the six fixed times;
+    - skip a decision within 60 min after an intraday scheduled release;
+    - skip the day if yesterday's VIX/VIX3M > 1.0.
+  - Comparison group: the same rule on all other days.
+  - Each trade sized to a $1k worst case. Priced at mid, at half of the
+    index's own bid-ask gap, and at the touch.
+  - Built with build_dataset + calendar/context only: no models are fitted
+    and no other strategy is scored on this data.
+  - **PASS (the pattern is real):** pooling both indices, event-day minus
+    other-day mean daily P&L at mid > 0 with a 95% day-resampled CI above 0,
+    and each index's difference > 0.
+  - Also reported: whether event days are profitable at half of their own
+    gap (NDX/RUT gaps are 4-5x SPX's).
+  - PASS → the event seller joins the live shadow book. FAIL → drop it.
+  - NDX and RUT 2025-01 → 2026-09 are recorded in the ledger as opened.
 
