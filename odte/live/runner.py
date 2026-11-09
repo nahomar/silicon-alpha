@@ -24,6 +24,7 @@ import pandas as pd
 
 from odte.live import fly
 from odte.live.config import Config
+from odte.live.strategies import STRATEGIES, shadow_pnl
 from odte.live.features import day_context, feature_row
 from odte.live.model import load as load_model
 from odte.live.model import predict
@@ -89,7 +90,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     broker.subscribe(day, fly_strikes)
     j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes))
 
-    chain, done, active, fills = [], set(), None, []
+    chain, done, active, fills, shadows = [], set(), None, [], []
     opened_worst, n_trades = 0.0, 0
     last_snap = None
     while broker.now() < close_t:
@@ -109,6 +110,10 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 pred = predict(bundle, r)
                 t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
                 recent = [e for e in events if 0 <= (t_dec - e).total_seconds() / 60 <= cfg.post_event_min]
+                for name, rule in STRATEGIES.items():          # shadow book: no orders
+                    side, reason = rule(pred, bool(recent))
+                    shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r})
+                    j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
                 why = None
                 if pred >= 1 - cfg.margin:
                     why = "model: not overpriced enough"
@@ -177,7 +182,18 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         p = fly.settle_pnl(f["credit"], f["qty"], f["o"].K, f["o"].W, settle * s)
         pnl += p
         j.log(broker.now(), "settle", hhmm=f["hhmm"], settle=settle, pnl=round(p, 2))
+    book = {}
+    for sh in shadows:
+        p = shadow_pnl(sh["side"], sh["row"], settle)
+        if p:
+            j.log(broker.now(), "shadow_settle", strategy=sh["strategy"], hhmm=sh["hhmm"],
+                  side=sh["side"], **{k: round(v, 2) for k, v in p.items()})
+            b = book.setdefault(sh["strategy"], {"trades": 0, "mid": 0.0, "half": 0.0, "touch": 0.0})
+            b["trades"] += 1
+            for k in ("mid", "half", "touch"):
+                b[k] = round(b[k] + p[k], 2)
     summary = {"day": f"{day:%Y-%m-%d}", "decisions": len(done), "orders": n_trades, "fills": len(fills),
+               "shadow": book,
                "share_of_gap_paid": [round((f["o"].mid - f["credit"]) / (f["o"].mid - f["o"].touch), 3)
                                      if f["o"].mid > f["o"].touch else None for f in fills],
                "pnl": round(pnl, 2), "settle": settle}

@@ -75,3 +75,17 @@ def test_replay_day_order_fill_and_settlement(tmp_path):
     log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
     assert '"kind": "fill"' in log and '"kind": "settle"' in log and "max filled trades today" in log
     assert 0 <= s["share_of_gap_paid"][0] <= 0.5 + 1e-9
+
+
+def test_shadow_strategies_and_pricing():
+    from odte.live.strategies import STRATEGIES, shadow_pnl
+    assert STRATEGIES["sell_only"](0.80, False)[0] == 1
+    assert STRATEGIES["sell_only"](0.80, True)[0] == 0          # no short right after news
+    assert STRATEGIES["full_model"](1.20, True)[0] == -1         # buying is allowed then
+    assert STRATEGIES["always_sell"](1.50, False)[0] == 1
+    row = {"K": 7740.0, "W": 35.0, "fly_credit_mid": 17.9, "fly_credit": 17.7, "fly_debit": 18.1}
+    calm = shadow_pnl(1, row, 7740.0)
+    assert calm["mid"] > calm["half"] > calm["touch"] > 0        # paying more of the gap earns less
+    crash = shadow_pnl(1, row, 7600.0)
+    assert crash["touch"] == pytest.approx(-300.0)               # the loss stops at the budget
+    assert shadow_pnl(-1, row, 7600.0)["mid"] > 0                # the bought fly gains on the big move
