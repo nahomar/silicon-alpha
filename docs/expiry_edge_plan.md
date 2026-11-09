@@ -673,4 +673,19 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
       code, never as evidence.
   - PASSING hypotheses join the bot's shadow book, then face the SPX exam
     and live days.
+- 2026-11-09, **Fresh-data test details, fixed before the 2013-15 data
+  arrives** (`odte/eval/fresh_2013.py`).
+  - Bought: 118 SPX 0DTE sessions for $0.73.
+  - Official BLS (NFP, CPI, PPI) and Fed (FOMC) dates for 2013-15 added
+    from bls.gov and federalreserve.gov.
+  - No verified 2013-15 early-close list was found, so every possible early
+    close (Jul 3, Dec 24, the Friday after Thanksgiving) is dropped,
+    preventing the post-bell leak.
+  - H1 compares event days with "other" days. The PPI/claims-only days are
+    the mechanism check (prediction: no better than other days).
+  - H2 is per day: (13:00 + 14:00) − (10:00 + 11:00).
+  - H3: the stress-day mean must have a CI entirely below 0.
+  - H4 uses the parity forward: 09:31 → 10:00 move, then 15:30 → settlement;
+    the option trade is reported at the ask.
+  - The block is recorded in the lockbox ledger when opened.
 
