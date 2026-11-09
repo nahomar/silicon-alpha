@@ -688,4 +688,24 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - H4 uses the parity forward: 09:31 → 10:00 move, then 15:30 → settlement;
     the option trade is reported at the ask.
   - The block is recorded in the lockbox ledger when opened.
+- 2026-11-09, **Fresh-data test, SPX 2013-04 → 2015-12 (113 sessions):
+  NONE of H1-H4 passed.**
+  - H1 news-day seller:
+    - Event days +$123/day vs other days −$40/day (half gap).
+    - Difference +$163/day, 98.75% CI [−1229, +1628]: the predicted sign,
+      but only 30 event days, far too few to confirm or reject.
+    - PPI/claims days minus other days −$207/day: consistent with the
+      stated mechanism prediction (no better than ordinary days).
+  - H2 afternoon seller: −$128/day [−397, +137]. Wrong sign; fails.
+  - H3 stress filter: only 8 stress days, mean +$162. Untestable here.
+  - H4 intraday momentum:
+    - Index capture −2.3 bp [−7.3, +2.4]. Wrong sign.
+    - Buying the 0DTE option at 15:30 lost −$51 per contract [−97, −2].
+    - Rejected.
+  - The news-day seller has now shown the predicted sign in three samples
+    (seen SPX 2016-26, NDX/RUT 2025-26, SPX 2013-15). None of them is
+    independently conclusive. It stays a hypothesis for the SPX exam and
+    live days.
+  - No more hypothesis tests on old data are planned. Further evidence must
+    come from live paper days.
 
