@@ -447,4 +447,9 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     confident calls capture under half of an option buyer's break-even.
   - Per the pre-registration, TradeFM is not retrained for direction.
   - Stage A (order flow and headlines) continues.
+- 2026-11-08, **Headlines-only run of stage A (free), fixed before the run.**
+  - The ES order-flow download was lost to a session restart, so the re-buy
+    is on hold pending the user.
+  - Same stage A design and gate, with the new inputs = the headline
+    features only (`--no-flow`).
 

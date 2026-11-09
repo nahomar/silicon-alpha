@@ -77,14 +77,16 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("decisions")
     ap.add_argument("--out", default=str(ROOT / "reports" / "direction_stage_a.json"))
+    ap.add_argument("--no-flow", action="store_true", help="headlines only (no ES order flow)")
     a = ap.parse_args()
     from odte.data.es_flow import load as load_flow
     from odte.data.news_titles import NEWS_FEATURES, features_for
     d = dr.add_targets(dr.load([a.decisions]))
     d = d[d["day"].between(*YEAR)].reset_index(drop=True)
-    d = pd.concat([d, flow_features(d, load_flow()), features_for(d)], axis=1)
+    parts = [d, features_for(d)] + ([] if a.no_flow else [flow_features(d, load_flow())])
+    d = pd.concat(parts, axis=1)
     base = dr.feature_cols(d)
-    new = FLOW_FEATURES + NEWS_FEATURES
+    new = NEWS_FEATURES + ([] if a.no_flow else FLOW_FEATURES)
     cov = d[new].notna().mean().round(3).to_dict()
     print(f"{d['day'].nunique()} days, {len(d):,} rows; {len(base)} base + {len(new)} new inputs; "
           f"coverage {cov}", flush=True)
