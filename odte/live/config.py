@@ -38,7 +38,8 @@ class Config:
     walk_steps: int = 5
     walk_wait_s: int = 30
     max_concession: float = 0.5
-    combo_tick: float = 0.05
+    combo_tick: float | None = None     # None: 0.01 for XSP, 0.05 for SPX
+    max_attempts_per_day: int = 6       # orders placed (filled or not)
 
     # quotes: every strike within +/- inner_band, then every outer_step to +/- band
     inner_band: float = 0.012
@@ -50,6 +51,9 @@ class Config:
     journal_dir: Path = field(default_factory=lambda: LIVE / "journal")
     chain_dir: Path = field(default_factory=lambda: LIVE / "chains")
     model_path: Path = field(default_factory=lambda: LIVE / "model.pkl")
+
+    def tick(self) -> float:
+        return self.combo_tick or (0.01 if self.symbol == "XSP" else 0.05)
 
     def resolved_port(self) -> int:
         return self.port or PORTS.get(self.mode, 4002)

@@ -63,13 +63,37 @@ CAL_FEATURES = ([f"ev_{e}" for e in FLAG_EVENTS]
 # Trading sessions
 # ---------------------------------------------------------------------------
 
+def nyse_holidays(start, end) -> pd.DatetimeIndex:
+    """NYSE full-day holidays by rule (for days with no printed close yet)."""
+    from pandas.tseries.holiday import (AbstractHolidayCalendar, GoodFriday, Holiday,
+                                        USLaborDay, USMartinLutherKingJr, USMemorialDay,
+                                        USPresidentsDay, USThanksgivingDay, nearest_workday,
+                                        sunday_to_monday)
+
+    class NYSE(AbstractHolidayCalendar):
+        rules = [Holiday("NewYear", month=1, day=1, observance=sunday_to_monday),
+                 USMartinLutherKingJr, USPresidentsDay, GoodFriday, USMemorialDay,
+                 Holiday("Juneteenth", month=6, day=19, start_date="2022-01-01",
+                         observance=nearest_workday),
+                 Holiday("July4", month=7, day=4, observance=nearest_workday),
+                 USLaborDay, USThanksgivingDay,
+                 Holiday("Christmas", month=12, day=25, observance=nearest_workday)]
+    return NYSE().holidays(pd.Timestamp(start), pd.Timestamp(end))
+
+
 def trading_sessions(start, end) -> pd.DatetimeIndex:
-    """NYSE sessions, taken from the days ^GSPC actually printed a close."""
+    """NYSE sessions: the days ^GSPC printed a close, then (after the last
+    close) weekdays minus NYSE holidays, so future events map to real days
+    instead of piling onto the last day with data."""
     import yfinance as yf
     h = yf.Ticker("^GSPC").history(start=pd.Timestamp(start) - pd.Timedelta(days=10),
                                    end=pd.Timestamp(end) + pd.Timedelta(days=10),
                                    auto_adjust=False)
-    return pd.DatetimeIndex(pd.to_datetime(h.index).tz_localize(None).normalize()).unique()
+    past = pd.DatetimeIndex(pd.to_datetime(h.index).tz_localize(None).normalize()).unique()
+    last = past.max() if len(past) else pd.Timestamp(start) - pd.Timedelta(days=1)
+    fut = pd.bdate_range(last + pd.Timedelta(days=1), pd.Timestamp(end) + pd.Timedelta(days=10))
+    fut = fut.difference(nyse_holidays(fut.min(), fut.max())) if len(fut) else fut
+    return past.append(fut).sort_values()
 
 
 def _holidays(sessions: pd.DatetimeIndex) -> pd.DatetimeIndex:

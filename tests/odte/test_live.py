@@ -50,3 +50,28 @@ def test_live_features_equal_the_backtest_rows():
         a = np.array([float(r.get(c, np.nan)) for c in cols])
         b = dec.loc[hhmm, cols].to_numpy(float)
         assert np.allclose(a, b, rtol=1e-6, equal_nan=True), hhmm
+
+
+def test_replay_day_order_fill_and_settlement(tmp_path):
+    """Full day through the runner with a broker that fills on the 2nd rung."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class SecondRung(ReplayBroker):
+        def modify(self, h, price):
+            super().modify(h, price)
+            o = self.orders[h]
+            o.update(filled=o["order"].qty, avg=price, live=False)
+
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", max_trades_per_day=1)
+    s = run_day(cfg, SecondRung("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["fills"] == 1 and s["decisions"] == 6
+    log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
+    assert '"kind": "fill"' in log and '"kind": "settle"' in log and "max filled trades today" in log
+    assert 0 <= s["share_of_gap_paid"][0] <= 0.5 + 1e-9
