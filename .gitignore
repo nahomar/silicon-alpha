@@ -83,3 +83,5 @@ data/market/logs/
 # dividends. A point-in-time capture is only available at the point in time, so
 # a snapshot lost is a snapshot gone forever. ~6KB per capture.
 data/supply/.last_poll
+.venv-live/
+data/live/
