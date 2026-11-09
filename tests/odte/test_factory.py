@@ -28,3 +28,12 @@ def test_history_zscore_uses_only_earlier_days():
     d2.loc[29, "x"] = 1e6                                      # change the last day only
     z2 = fx._hist_z(d2, "x")
     assert np.allclose(z1[:29], z2[:29], equal_nan=True)
+
+
+def test_vertical_payoffs_and_cost():
+    from odte.research import verticals as vx
+    d = pd.DataFrame({"put_mid": [2.0], "call_mid": [2.0], "W": [5.0], "settle": [100.0], "K": [100.0],
+                      "put_loss": [0.0], "call_loss": [5.0]})
+    r_put = vx.ror(d, "put", 0.0)[0]          # close at K: put spread keeps the credit
+    r_call = vx.ror(d, "call", 0.0)[0]        # max loss on the call side
+    assert r_put > 0 and np.isclose(r_call, -1.0)
