@@ -634,4 +634,43 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Open question to answer before trusting the pattern: why PPI and claims
     days lose while CPI/NFP/FOMC days win. Write the expectation down
     before checking.
+- 2026-11-09, **Edge search. Hypotheses and gate written BEFORE any fresh data
+  is bought or seen.**
+  - Fresh, time-independent test data: SPX 0DTE April 2013 → December 2015.
+    Only Fridays had a same-day expiry then, about 140 sessions. It is
+    before every period used so far, so it is independent in time (the
+    gap the review found).
+  - Each hypothesis has a mechanism and a predicted sign:
+    - **H1 News-day seller.** On CPI / NFP / FOMC days, outside the hour
+      after the release, not in stress: selling the iron fly beats ordinary
+      days.
+      - Mechanism: options carry an event premium that outlives the release.
+      - Prediction for PPI / jobless-claims days, stated now: no better than
+        ordinary days (smaller, less-feared releases).
+      - In 2013-15 mostly NFP Fridays are testable.
+    - **H2 Afternoon seller.** Selling at 13:00-14:00 beats 10:00-11:00.
+      - Mechanism: intraday volatility is U-shaped, so midday-to-afternoon
+        sessions are calmer than a 0DTE price spread evenly over the day
+        implies.
+    - **H3 Stress filter.** On days when yesterday's VIX > VIX3M, selling
+      loses money.
+      - Mechanism: inverted term structure = crisis regime with jumps.
+    - **H4 Published intraday momentum** (Gao, Han, Li & Zhou, J. Financial
+      Economics 2018). The 09:30-10:00 return predicts the 15:30-16:00 return
+      with the same sign.
+      - Tested first on the underlying; then buy a 0DTE call or put at 15:30,
+        held to the close, at the touch.
+  - Scoring:
+    - Today's cost (1.69% of mid; half the gap) for the fly hypotheses, with
+      the touch also reported, $1k worst case per trade.
+    - H4 on the index first (does the sign hold?), then the option trade at
+      the touch.
+  - Gate:
+    - A hypothesis PASSES on fresh data only if its effect has the
+      predicted sign with a 98.75% day-resampled CI above zero (Bonferroni
+      across the four).
+    - The development (seen) data is used only to rank and to check the
+      code, never as evidence.
+  - PASSING hypotheses join the bot's shadow book, then face the SPX exam
+    and live days.
 
