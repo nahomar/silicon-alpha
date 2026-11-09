@@ -768,4 +768,24 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Next per protocol: the T_fly and T_size composites become live
     CHALLENGERS. They need the pre-open OI each morning
     (`odte/data/fetch_oi.py`, ≈$0.001/day).
+- 2026-11-09, **Why GEX "didn't help" the wide model, resolved** (same
+  2016-26 rows, walk-forward, half gap):
+  - OOS IC vs |z|: 55-input ridge 0.051 → with GEX 0.066 → GEX alone 0.050.
+  - Rule "pred < 0.85": +$61k → +$86k with GEX.
+  - Rule "skip the predicted-riskiest 20%": +$124k → +$125k.
+  - gex_net is the #2 standardized coefficient of 60, and its IC barely
+    falls after removing the wide model's prediction (−0.066), so it adds
+    information.
+  - The earlier "−$22/day" drop of #2 used training data from 2022 only and
+    a short test window; its CI [−92, +51] was uninformative.
+  - The trading rule matters as much as the inputs: the danger-ranking rule
+    roughly doubles P&L versus the overpriced-threshold rule.
+  - New live challengers:
+    - `ratio_full_gex`: the 55-input ridge plus 5 GEX inputs, ratio rule;
+    - `danger_full_gex`: the same model, selling unless the prediction is
+      in the riskiest 20% of its training predictions;
+    - `gex_fly`: the factory T_fly composite;
+    - `size_filter`: the factory T_size composite, rank rule.
+  - With 6 challengers, the promotion bar is Bonferroni-adjusted:
+    z ≥ max(1.5, Φ⁻¹(1 − 0.10/n_challengers)), about 2.13 for six.
 
