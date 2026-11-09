@@ -29,3 +29,15 @@ def test_sealed_days_are_refused(tmp_path):
     _day("2021-09-15", np.full(21, 4400.0), 4400.0).to_parquet(p)
     with pytest.raises(SystemExit, match="REFUSED"):
         dr.load([p])
+
+
+def test_sequence_tokens_never_see_after_t():
+    from odte.eval import direction_seq as ds
+    idx = pd.date_range("2023-03-15 09:30", "2023-03-15 16:00", freq="min")
+    path = pd.DataFrame({"F": np.linspace(4000, 4010, len(idx)), "straddle": 20.0, "spread": 0.4}, index=idx)
+    t = pd.Timestamp("2023-03-15 11:00")
+    a, ma = ds.tokens(path, t)
+    later = path.copy()
+    later.loc[later.index > t, "F"] = 9999.0
+    b, mb = ds.tokens(later, t)
+    assert np.array_equal(a, b) and np.array_equal(ma, mb) and ma.sum() == ds.L

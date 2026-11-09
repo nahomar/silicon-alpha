@@ -392,4 +392,21 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     is reported alongside.
   - FAIL means stop: plan B is a sequence transformer on minute paths, then
     TradeFM.
+- 2026-11-08, **Direction step 1 result: FAIL** (1,651 tested days, 27k / 22k
+  rows).
+
+  | H | always-up | logistic | LightGBM | captured move vs option break-even |
+  |---|---|---|---|---|
+  | 30 min | 52.9% | 52.4% | 51.6% | +0.26 bp vs about 3.3 bp |
+  | 60 min | 53.3% | 52.2% | 51.6% | +0.27 bp vs about 6.3 bp |
+
+  - Neither model beats always-up. Even the most confident 20% capture
+    under 1 bp, about 10x short of what an option buyer needs.
+- 2026-11-08, **Plan B (user): sequence transformer on minute paths**
+  (`odte/eval/direction_seq.py`), fixed before the run.
+  - Inputs: the last 120 minutes plus the same 87 inputs.
+  - Two heads (30 and 60 min); refit every 63 days; 2 seeds.
+  - Same rows, days and gate as step 1.
+  - If it fails too, TradeFM is not retrained for this: there was no signal
+    at 30 s in ticks and none at 30-60 min here.
 

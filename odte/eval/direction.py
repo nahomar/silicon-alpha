@@ -160,14 +160,17 @@ def evaluate(d: pd.DataFrame, preds: dict) -> dict:
     for h in HORIZONS:
         y = d[f"fwd{h}"].to_numpy()
         lag = d["ret30" if h == 30 else "ret60"].to_numpy()
-        valid = np.isfinite(y) & (y != 0) & np.isfinite(preds[("logit", h)]) & np.isfinite(lag)
+        kinds = sorted({k for k, hh in preds if hh == h})
+        valid = np.isfinite(y) & (y != 0) & np.isfinite(lag)
+        for kind in kinds:
+            valid &= np.isfinite(preds[(kind, h)])
         r = {"n_rows": int(valid.sum()), "n_days": int(d.loc[valid, "day"].nunique()),
              "up_share": float((y[valid] > 0).mean()),
              "mean_abs_move_bp": float(np.abs(y[valid]).mean()),
              "median_hurdle_bp": float(np.nanmedian(d[f"hurdle{h}"].to_numpy()[valid]))}
         sign = {"always_up": np.ones(valid.sum()), "momentum": np.sign(lag[valid]),
                 "reversal": -np.sign(lag[valid])}
-        for kind in ("logit", "lgbm"):
+        for kind in kinds:
             sign[kind] = np.where(preds[(kind, h)][valid] > 0.5, 1.0, -1.0)
         yv, day = y[valid], d["day"].to_numpy()[valid]
         acc = {k: (s == np.sign(yv)).astype(float) for k, s in sign.items()}
@@ -177,7 +180,7 @@ def evaluate(d: pd.DataFrame, preds: dict) -> dict:
         best_acc = max(("always_up", "momentum", "reversal"), key=lambda k: acc[k].mean())
         best_cap = max(("always_up", "momentum", "reversal"), key=lambda k: cap[k].mean())
         r["best_rule_accuracy"], r["best_rule_capture"] = best_acc, best_cap
-        for kind in ("logit", "lgbm"):
+        for kind in kinds:
             da, ca = _boot(day, acc[kind], acc[best_acc])
             dc, cc = _boot(day, cap[kind], cap[best_cap])
             conf = np.abs(preds[(kind, h)][valid] - 0.5)
@@ -189,8 +192,8 @@ def evaluate(d: pd.DataFrame, preds: dict) -> dict:
                        "top20pct_hurdle_bp": float(np.nanmedian(d[f"hurdle{h}"].to_numpy()[valid][top])),
                        "passes": bool(ca[0] > 0 and cc[0] > 0)}
         out[f"H{h}"] = r
-    out["verdict"] = "PASS" if any(out[f"H{h}"][k]["passes"] for h in HORIZONS
-                                   for k in ("logit", "lgbm")) else "FAIL"
+    out["verdict"] = "PASS" if any(v["passes"] for h in HORIZONS for v in out[f"H{h}"].values()
+                                   if isinstance(v, dict) and "passes" in v) else "FAIL"
     return out
 
 
