@@ -796,4 +796,27 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - TODO before the exam: re-fetch OI for 2026-11-05 and 2026-11-06. Those
     files hold only the same-day expiry, because the old fetch had no
     future sessions.
+- 2026-11-09, **Edge #1: one-sided spreads driven by the T_dir signal. Fixed
+  before any run** (`odte/research/verticals.py`, seen data, a screen only).
+  - Structures at each fixed decision (same K and W as the fly):
+    - put credit spread: sell put K, buy put K − W;
+    - call credit spread: sell call K, buy call K + W.
+    - Priced from the minute chain at t. Settled on the SPX close.
+  - Cost: half of TODAY's typical vertical gap (median (mid − touch)/mid over
+    2025-09 → 2026-09 seen decisions, per side), plus $1.20 × 2 legs. $1k
+    worst case per trade.
+  - Side selector: walk-forward ridge on the factory's T_dir survivors
+    (oi_pcr_0dte, skew_vs_hist, gex_0dte, gex_flip_dist, skew, gex_net,
+    minutes_to_close). Predicted z > 0 → sell the put spread; < 0 → sell
+    the call spread.
+  - Benchmarks on the same rows:
+    - always sell the put spread (the put-skew premium; the key one);
+    - always sell the call spread;
+    - random side;
+    - always-sell fly.
+  - Screen PASSES only if both hold:
+    (a) the side selector beats always-put on paired mean daily P&L with a
+        95% CI above 0; and
+    (b) it is positive in both 2016-21 and 2022-26.
+  - Pass → it becomes a shadow strategy (live orders stay flies until then).
 
