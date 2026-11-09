@@ -8,7 +8,8 @@ from odte.eval import pairs as pr
 def _row(pred, cm, pnl_s, pnl_l, rs, rl):
     return pd.Series({"pred": pred, "fly_credit_mid": cm, "ratio": 1.0, "pnl_short_fly": pnl_s,
                       "pnl_long_fly": pnl_l, "risk_short_fly": rs, "risk_long_fly": rl,
-                      "pnl_short_fly_midx": pnl_s, "pnl_long_fly_midx": pnl_l,
+                      "pnl_short_fly_midx": pnl_s, "pnl_long_fly_midx": pnl_l, "pnl_short_fly_t5": pnl_s, "pnl_long_fly_t5": pnl_l,
+                      "risk_short_fly_t5": rs, "risk_long_fly_t5": rl, "fill_mid_short": False, "fill_mid_long": False,
                       "risk_short_fly_midx": rs, "risk_long_fly_midx": rl})
 
 

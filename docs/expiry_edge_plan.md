@@ -474,4 +474,28 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     depends on the unseen NDX and RUT legs.
   - The final pair rule, benchmarks and gate are written here before the
     sealed period is opened.
+- 2026-11-09, **Pair trade, development result (2022-05 → 2024-12): FAIL, so
+  the sealed 2025-26 NDX/RUT period is NOT opened for it.**
+  - At the touch: model pairs −$162k over 440 days (random pairs −$259k;
+    the model beats random by +$104/day [+18, +186]).
+  - Passive execution with the strict fill rule (mid only if the market
+    traded through it, else cross 5 min later): model −$149k.
+  - NDX and RUT fly bid-ask is 7.5% / 9.9% of mid vs 1.9% for SPX. A pair
+    pays two legs of that, which swamps the ranking skill.
+  - Bug found and fixed before any conclusion: the first passive run priced
+    every order at mid. Strict mid-fill rates in the backtest are SPX 26%,
+    NDX 8%, RUT 3%.
+  - Always-short fly, dev, by share x of the bid-ask gap paid at entry
+    (0 = mid, 1 = touch):
+
+    | index | x=0 | x=0.25 | x=0.5 | x=0.75 | x=1 |
+    |---|---|---|---|---|---|
+    | SPX | +$81k | +$59k | +$38k | +$17k | −$4k |
+    | NDX | +$98k | $0 | −$89k | −$171k | −$247k |
+    | RUT | +$157k | +$86k | +$21k | −$40k | −$96k |
+
+  - The premium is real, but it sits inside the bid-ask spread. In SPX,
+    selling pays if we capture about half of the gap. Whether that is
+    achievable is an execution question that only live (paper) trading can
+    answer.
 

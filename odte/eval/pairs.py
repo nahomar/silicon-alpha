@@ -41,7 +41,9 @@ MODEL = "ml_ridge+cal+ctx"
 MARGIN = 0.15
 BUDGET = 1000.0
 COLS = ["fly_credit_mid", "ratio", "pnl_short_fly", "pnl_long_fly", "risk_short_fly", "risk_long_fly",
-        "pnl_short_fly_midx", "pnl_long_fly_midx", "risk_short_fly_midx", "risk_long_fly_midx"]
+        "pnl_short_fly_midx", "pnl_long_fly_midx", "risk_short_fly_midx", "risk_long_fly_midx",
+        "pnl_short_fly_t5", "pnl_long_fly_t5", "risk_short_fly_t5", "risk_long_fly_t5",
+        "fill_mid_short", "fill_mid_long"]
 
 
 def load(tags) -> dict:
@@ -52,7 +54,14 @@ def load(tags) -> dict:
         d = d[d["on6"] & d["tested6"]].copy()
         d["pred"] = d[f"pred6__{MODEL}"]
         d["day"] = pd.to_datetime(d["day"])
-        out[tag.split("-")[-1]] = d.set_index(["day", "hhmm"])[["pred", *COLS]]
+        # Passive execution, as documented: mid only where the market traded
+        # through it (fill_mid_*), otherwise cross 5 minutes later (t5).
+        for side in ("short", "long"):
+            f = d[f"fill_mid_{side}"].fillna(False).astype(bool)
+            for c in ("pnl", "risk"):
+                d[f"{c}_{side}_fly_pas"] = np.where(f, d[f"{c}_{side}_fly_midx"], d[f"{c}_{side}_fly_t5"])
+        cols = ["pred", *COLS] + [f"{c}_{s}_fly_pas" for c in ("pnl", "risk") for s in ("short", "long")]
+        out[tag.split("-")[-1]] = d.set_index(["day", "hhmm"])[cols]
     return out
 
 
@@ -67,7 +76,7 @@ def carry_scores(frames: dict) -> dict:
 
 def pair_pnl(frames: dict, choose, exe: str = "touch") -> pd.Series:
     """Daily pair P&L. choose(row_scores) -> (short_index, long_index) or None."""
-    suf = "" if exe == "touch" else "_midx"
+    suf = "" if exe == "touch" else "_pas"
     keys = sorted(frames)
     idx = sorted(set().union(*[set(f.index) for f in frames.values()]))
     pnl = {}
@@ -145,7 +154,7 @@ def run(tags, margin=MARGIN) -> dict:
         r = {"model": summary(m), "carry": summary(c), "random": summary(rnd),
              "model_vs_random": paired_diff(m, rnd.reindex(m.index).fillna(0)),
              "model_vs_carry": paired_diff(m, c.reindex(m.index).fillna(0))}
-        suf = "" if exe == "touch" else "_midx"
+        suf = "" if exe == "touch" else "_pas"
         for k, f in fr.items():
             one = (f[f"pnl_short_fly{suf}"] / f[f"risk_short_fly{suf}"] * BUDGET).groupby(level="day").sum()
             r[f"always_short_{k}"] = summary(one)
