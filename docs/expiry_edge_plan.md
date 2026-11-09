@@ -744,4 +744,28 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     data becomes a CHALLENGER in the live loop and is judged only on live
     days.
   - Development data never counts as proof.
+- 2026-11-09, **Signal factory result (development data only; proof must come
+  live).**
+  - 2,041 days, 63 signals, 240 tests: 25 pass BH-FDR q ≤ 0.05, and all 25
+    keep the same sign in 2016-21 and 2022-26.
+  - The dealer-positioning family (gex_net, gex_flip_dist, gex_0dte,
+    oi_pcr_0dte, all from pre-open open interest) dominates every target.
+    These are correlated, so effectively one signal.
+    - Long dealer gamma → smaller moves (IC vs |z| −0.077, t −4.9).
+    - Also predicts tails and the side of the close.
+  - Composites (walk-forward ridge on each target's survivors):
+    - T_fly (ev_month_end + gex_net): OOS IC +0.051 (t 3.0). Selling when
+      predicted > 0: +$148k over 1,791 days, Sharpe 0.72 [0.01, 1.49], vs
+      always-sell −$16k. But 2016-21 −$10k, 2022-26 +$158k.
+    - T_size danger filter (9 signals; skip the predicted-riskiest 20%):
+      OOS IC +0.067 (t 3.9), +$122k, positive in both eras (+$6k / +$115k).
+    - T_tail: OOS IC +0.062.
+    - T_dir (OI put/call, skew, gamma): OOS IC +0.060, side hit rate 53.0%.
+      Monetizing it needs vertical spreads (not built).
+  - Tension to note: adding GEX to the 55-input ridge earlier (#2) did not
+    improve P&L, while on its own it is the strongest family. A focused model
+    may use it better than a wide one, or the earlier test was noisy.
+  - Next per protocol: the T_fly and T_size composites become live
+    CHALLENGERS. They need the pre-open OI each morning
+    (`odte/data/fetch_oi.py`, ≈$0.001/day).
 
