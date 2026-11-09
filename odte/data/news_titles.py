@@ -38,7 +38,17 @@ def score(csv_path) -> pd.DataFrame:
     g["visible_utc"] = pd.to_datetime(g["batch"].astype(str), format="%Y%m%d%H%M%S") + LAG
     g = g.sort_values("visible_utc").drop_duplicates("title", keep="first").reset_index(drop=True)
     print(f"{len(g):,} unique headlines; scoring...", flush=True)
-    s = Scorer(batch=128).score(g["title"].tolist())
+    parts_dir = SCORED.parent / "gdelt_titles_scored_parts"
+    parts_dir.mkdir(exist_ok=True)
+    sc, step = None, 20_000
+    for i in range(0, len(g), step):                 # saved in parts: resumable
+        part = parts_dir / f"{i:07d}.parquet"
+        if part.exists():
+            continue
+        sc = sc or Scorer(batch=128)
+        sc.score(g["title"].iloc[i:i + step].tolist()).to_parquet(part, index=False)
+        print(f"  {min(i + step, len(g)):,}/{len(g):,}", flush=True)
+    s = pd.concat([pd.read_parquet(f) for f in sorted(parts_dir.glob("*.parquet"))], ignore_index=True)
     out = pd.concat([g[["visible_utc", "source", "title", "tone"]], s], axis=1)
     out["sent"] = out["p_pos"] - out["p_neg"]
     out.to_parquet(SCORED, index=False)

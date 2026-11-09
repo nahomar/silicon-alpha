@@ -5,7 +5,9 @@ trade carries its aggressor side (Databento `side`: 'B' = the buyer crossed
 the spread, 'A' = the seller did, 'N' = unknown). Raw trades are never
 stored: each UTC day is fetched, reduced to 1-minute sums, and dropped.
 
-Output: data/futures/es_flow/YYYY-MM.parquet, one row per minute with
+Output: data/futures/es_flow/days/YYYY-MM-DD.parquet, written as soon as each
+day is reduced (resumable: finished days are never re-fetched, so never
+re-billed), one row per minute with
   ts          minute start, UTC epoch seconds (the minute is known at ts + 60)
   buy, sell   aggressive buy / sell volume (contracts)
   big_buy, big_sell   the same for trades of >= 20 contracts
@@ -57,37 +59,33 @@ def fetch(start, end, max_usd: float, workers: int = 4) -> None:
     print(f"ES.c.0 trades {start}..{end}: ${cost:.2f} (cap ${max_usd:.2f})", flush=True)
     if cost > max_usd:
         raise SystemExit("ABORT: estimate exceeds the cap; nothing was downloaded.")
-    OUT.mkdir(parents=True, exist_ok=True)
-    done_file = OUT / ".done_days"
-    done = set(done_file.read_text().split()) if done_file.exists() else set()
+    days_dir = OUT / "days"
+    days_dir.mkdir(parents=True, exist_ok=True)
     days = [d for d in pd.date_range(start, pd.Timestamp(end) - pd.Timedelta(days=1))
-            if f"{d:%Y-%m-%d}" not in done]
-    lock, parts = threading.Lock(), {}
+            if not (days_dir / f"{d:%Y-%m-%d}.parquet").exists()]
+    print(f"{len(days)} days to fetch", flush=True)
+    lock, n = threading.Lock(), [0]
 
     def one(d):
         s, e = d.isoformat(), (d + pd.Timedelta(days=1)).isoformat()
         store = _retry(lambda: c.timeseries.get_range(start=s, end=e, **KW), f"{d:%Y-%m-%d} es trades")
         arrs = list(store.to_ndarray(count=2_000_000)) if store.nbytes else []
         m = reduce_day(np.concatenate(arrs)) if arrs else reduce_day([])
+        f = days_dir / f"{d:%Y-%m-%d}.parquet"
+        m.to_parquet(f.with_suffix(".tmp"), index=False)
+        f.with_suffix(".tmp").replace(f)
         with lock:
-            parts.setdefault(f"{d:%Y-%m}", []).append(m)
-            done.add(f"{d:%Y-%m-%d}")
-            if len(done) % 20 == 0:
-                print(f"  {len(done)} days", flush=True)
+            n[0] += 1
+            if n[0] % 20 == 0:
+                print(f"  {n[0]}/{len(days)} days", flush=True)
     with ThreadPoolExecutor(workers) as ex:
         list(ex.map(one, days))
-    for month, ms in parts.items():
-        p = OUT / f"{month}.parquet"
-        old = [pd.read_parquet(p)] if p.exists() else []
-        m = pd.concat(old + ms).groupby("ts", as_index=False).sum().sort_values("ts")
-        m.to_parquet(p.with_suffix(".tmp"), index=False)
-        p.with_suffix(".tmp").replace(p)
-    done_file.write_text("\n".join(sorted(done)))
-    print(f"ES flow: {len(done)} days -> {OUT}")
+    print(f"ES flow: {len(list(days_dir.glob('*.parquet')))} days -> {days_dir}")
 
 
 def load() -> pd.DataFrame:
-    fs = sorted(OUT.glob("20??-??.parquet"))
+    fs = sorted((OUT / "days").glob("20??-??-??.parquet"))
+    fs = [f for f in fs if f.stat().st_size > 0]
     return (pd.concat(pd.read_parquet(f) for f in fs).groupby("ts", as_index=False).sum()
             .sort_values("ts").reset_index(drop=True)) if fs else pd.DataFrame()
 
