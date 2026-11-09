@@ -103,3 +103,23 @@ def settle_pnl(order_credit: float, qty: int, K: float, W: float, settle: float)
     """$ P&L at expiry of a short fly sold for order_credit (traded-symbol points)."""
     intrinsic = min(abs(settle - K), W)
     return (order_credit - intrinsic) * MULT * qty - 4 * FEE_PER_LEG * qty
+
+
+def vertical_from_quotes(q, K: float, W: float) -> dict | None:
+    """Put credit spread (sell P K, buy P K-W) and call credit spread (sell C K,
+    buy C K+W) from one symbol's latest quotes: mid and touch credits."""
+    if q is None or len(q) == 0:
+        return None
+    last = q.sort_values("quote_datetime").groupby(["option_type", "strike"]).tail(1) \
+        if "quote_datetime" in q else q
+    b = last.set_index(["option_type", "strike"])
+    try:
+        pk, pw = b.loc[("P", K)], b.loc[("P", K - W)]
+        ck, cw = b.loc[("C", K)], b.loc[("C", K + W)]
+    except KeyError:
+        return None
+    mid = lambda r: (r["bid"] + r["ask"]) / 2
+    out = {"K": K, "W": W,
+           "put_mid": mid(pk) - mid(pw), "put_touch": pk["bid"] - pw["ask"],
+           "call_mid": mid(ck) - mid(cw), "call_touch": ck["bid"] - cw["ask"]}
+    return out if out["put_mid"] > 0 and out["call_mid"] > 0 else None

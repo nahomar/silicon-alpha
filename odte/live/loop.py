@@ -250,6 +250,27 @@ def decide(reg: dict, ev: dict) -> dict:
     return reg
 
 
+SIDE_SIGNALS = ["oi_pcr_0dte", "skew_vs_hist", "gex_0dte", "gex_flip_dist", "skew", "gex_net",
+                "minutes_to_close"]
+
+
+def side_model(cfg: Config, allrows: pd.DataFrame) -> dict:
+    """Edge #1: which side the close lands on (z), from the factory's T_dir
+    survivors; saved for the live side_seller shadow strategy, together with
+    the recent skew history it needs for skew_vs_hist."""
+    from odte.research.factory import _hist_z
+    d = allrows.sort_values(["day", "hhmm"]).reset_index(drop=True)
+    d["T_dir"] = (d["settle"] - d["F"]) / d["straddle_mid"].replace(0, np.nan)
+    d["skew_vs_hist"] = _hist_z(d, "skew")
+    b = fit(d, "T_dir", SIDE_SIGNALS, "direction")
+    sdir = cfg.journal_dir.parent / "side"
+    sdir.mkdir(parents=True, exist_ok=True)
+    (sdir / "side_dir.pkl").write_bytes(pickle.dumps({**b, "name": "side_dir"}))
+    recent = d[d["day"] >= d["day"].max() - pd.Timedelta(days=60)][["day", "hhmm", "skew"]]
+    recent.to_parquet(sdir / "skew_history.parquet", index=False)
+    return b
+
+
 def shadow_summary(cfg: Config, since=None) -> pd.DataFrame:
     rows = []
     for p in sorted(cfg.journal_dir.glob("20??-??-??.jsonl")):
@@ -288,6 +309,7 @@ def weekly(cfg: Config = Config(), today=None) -> dict:
         if name == reg["champion"]:
             bundle = b
     cfg.model_path.write_bytes(pickle.dumps(bundle))
+    side_model(cfg, allrows)
     reg_p.parent.mkdir(parents=True, exist_ok=True)
     reg_p.write_text(json.dumps(reg, indent=2))
     sh = shadow_summary(cfg)

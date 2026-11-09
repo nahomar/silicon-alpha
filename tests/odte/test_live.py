@@ -129,3 +129,14 @@ def test_fly_from_xsp_quotes_and_line_budget():
     o = fly.build(f, "XSP", 300.0, 5, 0.5, 0.01, native=True)
     assert o.K == 676.0 and o.ladder[0] == pytest.approx(round(f["fly_credit_mid"], 2))
     assert Config(symbol="XSP").spx_lines() == 95 - 34 and Config(symbol="SPX").spx_lines() == 95
+
+
+def test_vertical_quotes_and_payoff():
+    from odte.live.strategies import vertical_pnl
+    q = pd.DataFrame([("P", 100.0, 2.0, 2.2), ("P", 95.0, 0.5, 0.6), ("C", 100.0, 2.1, 2.3), ("C", 105.0, 0.6, 0.7)],
+                     columns=["option_type", "strike", "bid", "ask"])
+    v = fly.vertical_from_quotes(q, 100.0, 5.0)
+    assert v["put_mid"] == pytest.approx(2.1 - 0.55) and v["put_touch"] == pytest.approx(2.0 - 0.6)
+    up = vertical_pnl("put", v, settle=103.0)        # close above K: the put spread keeps its credit
+    down = vertical_pnl("put", v, settle=90.0)       # close below K - W: max loss, = -budget at the touch
+    assert up["mid"] > up["touch"] > 0 and down["touch"] == pytest.approx(-300.0)

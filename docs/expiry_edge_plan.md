@@ -819,4 +819,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
         95% CI above 0; and
     (b) it is positive in both 2016-21 and 2022-26.
   - Pass → it becomes a shadow strategy (live orders stay flies until then).
+- 2026-11-09, **Edge #1 screen: PASS** (seen data, 1,791 tested days, half of
+  today's gap: put 1.5% / call 1.2% of mid).
+  - Side selector: +$216k, Sharpe 1.14 [0.38, 1.95]; 2016-21 +$64k,
+    2022-26 +$152k. Side hit rate 52.9%.
+  - Beats always-put by +$133/day [+26, +246].
+  - Benchmarks:
+    - always-put −$22k (no put-skew premium in ATM 0DTE verticals);
+    - always-call +$39k;
+    - random side +$32k;
+    - always-fly +$7k.
+  - Caveat: the T_dir signals were chosen by the factory on these same days.
+  - Next: the `side_seller` shadow strategy in the live bot (verticals
+    priced from the live chain).
 

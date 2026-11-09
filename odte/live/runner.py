@@ -24,7 +24,7 @@ import pandas as pd
 
 from odte.live import fly
 from odte.live.config import Config
-from odte.live.strategies import ORDER_STRATEGIES, STRATEGIES, shadow_pnl
+from odte.live.strategies import ORDER_STRATEGIES, STRATEGIES, shadow_pnl, vertical_pnl
 from odte.live.features import day_context, feature_row
 from odte.live.model import load as load_model
 from odte.live.model import predict, signal
@@ -74,6 +74,18 @@ def load_candidates(cfg: Config) -> dict:
     return {p.stem: pickle.loads(p.read_bytes()) for p in sorted(d.glob("*.pkl"))} if d.exists() else {}
 
 
+def load_side(cfg: Config):
+    """The edge #1 side model and its skew history (from the weekly loop)."""
+    import pickle
+    d = cfg.journal_dir.parent / "side"
+    if not (d / "side_dir.pkl").exists():
+        return None, pd.DataFrame(columns=["day", "hhmm", "skew"])
+    h = pd.read_parquet(d / "skew_history.parquet") if (d / "skew_history.parquet").exists() \
+        else pd.DataFrame(columns=["day", "hhmm", "skew"])
+    h["day"] = pd.to_datetime(h["day"])
+    return pickle.loads((d / "side_dir.pkl").read_bytes()), h
+
+
 def default_oi(day, spot):
     """Pre-open open interest for the dealer-gamma inputs (history file if present)."""
     from odte.data import gamma
@@ -86,6 +98,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     j = Journal(cfg, day, tag)
     bundle = load_model(cfg)
     cands = load_candidates(cfg)
+    side_b, skew_hist = load_side(cfg)
     oi, oi_tried = None, False
     dctx = day_context(day)
     close_hhmm = dctx["close_hhmm"] or "16:00"
@@ -159,6 +172,21 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                     sides[name] = side
                     shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r, "xfly": xfly})
                     j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
+                if side_b is not None:                          # edge #1: pick the side
+                    past = skew_hist[(skew_hist["hhmm"] == hhmm) & (skew_hist["day"] < day)].tail(20)
+                    r["skew_vs_hist"] = ((r["skew"] - past["skew"].mean()) / past["skew"].std()
+                                         if len(past) >= 10 and past["skew"].std() > 0 else np.nan)
+                    skew_hist = pd.concat([skew_hist, pd.DataFrame([{"day": day, "hhmm": hhmm,
+                                                                     "skew": r["skew"]}])], ignore_index=True)
+                    pz = predict(side_b, r)
+                    vq = fly.vertical_from_quotes(chain[-1], r["K"], r["W"]) if chain else None
+                    structure = "put" if pz > 0 else "call"
+                    if vq is not None and np.isfinite(pz) and not recent:
+                        shadows.append({"strategy": "side_seller", "hhmm": hhmm, "side": 1,
+                                        "structure": structure, "vq": vq, "row": r})
+                    j.log(now, "shadow", strategy="side_seller", hhmm=hhmm,
+                          side=(structure if vq is not None and not recent else 0),
+                          pred_z=round(pz, 4) if np.isfinite(pz) else None)
                 for name, cb in cands.items():                  # every candidate model, shadow only
                     cp = predict(cb, r)
                     side = 1 if signal(cb, cp, cfg.margin) == 1 and not recent else 0
@@ -241,6 +269,9 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     if any(len(x) for x in xchain):
         (cfg.chain_dir / "xsp").mkdir(parents=True, exist_ok=True)
         pd.concat(xchain, ignore_index=True).to_parquet(cfg.chain_dir / "xsp" / f"{day:%Y-%m-%d}{tag}.parquet")
+    if side_b is not None and len(skew_hist) and not tag:      # never let replays touch live history
+        sp = cfg.journal_dir.parent / "side" / "skew_history.parquet"
+        skew_hist[skew_hist["day"] >= day - pd.Timedelta(days=60)].to_parquet(sp, index=False)
     settle = broker.settlement(day)
     s = 0.1 if cfg.symbol == "XSP" else 1.0
     pnl = 0.0
@@ -250,7 +281,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         j.log(broker.now(), "settle", hhmm=f["hhmm"], settle=settle, pnl=round(p, 2))
     book = {}
     for sh in shadows:
-        p = shadow_pnl(sh["side"], sh["row"], settle)
+        p = (vertical_pnl(sh["structure"], sh["vq"], settle) if sh.get("structure")
+             else shadow_pnl(sh["side"], sh["row"], settle))
         if p and sh.get("xfly"):                          # same trade on XSP's own bid/ask
             px = shadow_pnl(sh["side"], sh["xfly"], settle / 10.0)
             p.update({f"xsp_{k}": v for k, v in px.items()})

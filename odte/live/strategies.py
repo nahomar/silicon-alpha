@@ -80,3 +80,16 @@ def shadow_pnl(side: int, row: dict, settle: float, budget: float = 300.0, fee: 
             risk = d * 100 + fees4
             out[name] = ((intrinsic - d) * 100 - fees4) / risk * budget if risk > 0 else float("nan")
     return out
+
+
+def vertical_pnl(structure: str, vq: dict, settle: float, budget: float = 300.0, fee: float = 1.20) -> dict:
+    """$ P&L of a put or call credit spread sold at mid / half-gap / touch, sized
+    to `budget` worst case (2 legs of fees)."""
+    K, W = vq["K"], vq["W"]
+    loss = min(max(K - settle, 0.0), W) if structure == "put" else min(max(settle - K, 0.0), W)
+    m, t = vq[f"{structure}_mid"], vq[f"{structure}_touch"]
+    out = {}
+    for name, c in (("mid", m), ("half", m - 0.5 * (m - t)), ("touch", t)):
+        risk = (W - c) * 100 + 2 * fee
+        out[name] = ((c - loss) * 100 - 2 * fee) / risk * budget if risk > 0 else float("nan")
+    return out
