@@ -8,10 +8,13 @@ The bot trades the strategy that held up best on unseen data: **#1 sell-only**.
 The first goal is **measuring execution**: how much of the bid-ask gap a mid-price limit order actually pays. The backtests show the edge depends on it (SPX: about +$38k over 2022-24 when paying half the gap, −$4k when paying all of it).
 
 ## Shadow book: every candidate strategy, every day
-- Besides the order-placing strategy, the bot shadow-trades every candidate on the same live quotes (`odte/live/strategies.py`).
+- Besides placing paper orders, the bot shadow-trades every candidate on the same live quotes (`odte/live/strategies.py`).
   - `sell_only` places the paper orders.
   - `full_model` also buys the fly when it expects a big move (crash protection).
   - `always_sell` has no model; it is the reference to beat.
+  - `event_seller` sells on CPI / jobs / Fed days, outside the hour after a release, unless VIX > VIX3M. No model.
+    - It is the only strategy so far that passed a test on never-opened data: Nasdaq/Russell 2025-26.
+- Paper orders are placed when `event_seller` OR `sell_only` says sell, within the risk limits.
 - Each shadow trade is priced on the settlement at mid, half the gap and the full touch, each sized to the same $300 worst case. No orders are placed.
 - Paper days are new unseen data. A strategy earns real money only if it keeps beating `always_sell` here.
 - On unseen history (2017-2021) none of them was profitable. Sell-only was closest (−$5.3k vs −$36.9k for always-sell on the same days).

@@ -24,7 +24,7 @@ import pandas as pd
 
 from odte.live import fly
 from odte.live.config import Config
-from odte.live.strategies import STRATEGIES, shadow_pnl
+from odte.live.strategies import ORDER_STRATEGIES, STRATEGIES, shadow_pnl
 from odte.live.features import day_context, feature_row
 from odte.live.model import load as load_model
 from odte.live.model import predict
@@ -110,13 +110,16 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 pred = predict(bundle, r)
                 t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
                 recent = [e for e in events if 0 <= (t_dec - e).total_seconds() / 60 <= cfg.post_event_min]
+                sides = {}
                 for name, rule in STRATEGIES.items():          # shadow book: no orders
-                    side, reason = rule(pred, bool(recent))
+                    side, reason = rule(pred, bool(recent), r)
+                    sides[name] = side
                     shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r})
                     j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
                 why = None
-                if pred >= 1 - cfg.margin:
-                    why = "model: not overpriced enough"
+                wants = [n for n in ORDER_STRATEGIES if sides.get(n) == 1]
+                if not wants:
+                    why = "no order strategy says sell"
                 elif recent:
                     why = "within 60 min after a scheduled event"
                 elif is_paused:
@@ -135,7 +138,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                     o = fly.build(r, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession, cfg.tick())
                     if o is None:
                         why = f"one contract risks more than the ${budget:,.0f} left"
-                j.log(now, "decision", hhmm=hhmm, pred=round(pred, 4), implied_move=r["implied_move"],
+                j.log(now, "decision", hhmm=hhmm, pred=round(pred, 4), wanted_by=wants,
+                      implied_move=r["implied_move"],
                       K=r["K"], W=r["W"], mid=r["fly_credit_mid"], touch=r["fly_credit"],
                       action="sell" if why is None else "skip", reason=why)
                 if o is not None:

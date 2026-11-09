@@ -89,3 +89,12 @@ def test_shadow_strategies_and_pricing():
     crash = shadow_pnl(1, row, 7600.0)
     assert crash["touch"] == pytest.approx(-300.0)               # the loss stops at the budget
     assert shadow_pnl(-1, row, 7600.0)["mid"] > 0                # the bought fly gains on the big move
+
+
+def test_event_seller_rule():
+    from odte.live.strategies import event_seller
+    cpi = {"ev_cpi": 1.0, "vix_over_vix3m": 0.9}
+    assert event_seller(1.3, False, cpi)[0] == 1                          # no model needed
+    assert event_seller(1.3, True, cpi)[0] == 0                           # inside the post-release hour
+    assert event_seller(1.0, False, {"ev_cpi": 1.0, "vix_over_vix3m": 1.05})[0] == 0   # stress
+    assert event_seller(0.5, False, {"ev_cpi": 0.0, "vix_over_vix3m": 0.9})[0] == 0    # ordinary day

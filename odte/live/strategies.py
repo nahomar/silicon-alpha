@@ -11,6 +11,8 @@ Record on unseen SPX data 2017H1-2021H1 (today's cost), for reference:
   sell_only       #1 sell-only            -$5.3k / 637 days (always-sell: -$36.9k)
   full_model      #1 (sells and buys)     -$43.0k / 713 days (always-sell: -$50.1k)
   always_sell     no model, -postevt      lost; the reference every model must beat
+  event_seller    CPI/NFP/FOMC days only, no model; sealed NDX/RUT 2025-26 PASS
+                  (event days +$581/day over other days at mid, CI [53, 1088])
 """
 from __future__ import annotations
 
@@ -19,24 +21,42 @@ import math
 MARGIN = 0.15
 
 
-def sell_only(pred, after_event):
+EVENT_FLAGS = ("ev_cpi", "ev_nfp", "ev_fomc", "ev_fomc_sep")
+
+
+def sell_only(pred, after_event, row=None):
     if pred < 1 - MARGIN and not after_event:
         return 1, "overpriced"
     return 0, "after event" if pred < 1 - MARGIN else "not overpriced enough"
 
 
-def full_model(pred, after_event):
+def full_model(pred, after_event, row=None):
     if pred > 1 + MARGIN:
         return -1, "big move expected"           # buys are allowed after events
     return sell_only(pred, after_event)
 
 
-def always_sell(pred, after_event):
+def always_sell(pred, after_event, row=None):
     return (0, "after event") if after_event else (1, "always")
 
 
-STRATEGIES = {"sell_only": sell_only, "full_model": full_model, "always_sell": always_sell}
-LIVE_ORDERS = "sell_only"          # the one strategy that places (paper) orders
+def event_seller(pred, after_event, row=None):
+    """Sell on scheduled CPI / jobs / Fed days, outside the hour after a
+    release, unless yesterday's VIX/VIX3M > 1 (stress). No model."""
+    row = row or {}
+    if not any(float(row.get(k, 0) or 0) > 0 for k in EVENT_FLAGS):
+        return 0, "not an event day"
+    if after_event:
+        return 0, "within 60 min after the release"
+    v = row.get("vix_over_vix3m")
+    if v is not None and math.isfinite(v) and v > 1.0:
+        return 0, "stress: VIX above VIX3M"
+    return 1, "event day"
+
+
+STRATEGIES = {"sell_only": sell_only, "full_model": full_model, "always_sell": always_sell,
+              "event_seller": event_seller}
+ORDER_STRATEGIES = ("event_seller", "sell_only")   # paper orders when either says sell
 
 
 def shadow_pnl(side: int, row: dict, settle: float, budget: float = 300.0, fee: float = 1.20) -> dict:
