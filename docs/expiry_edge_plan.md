@@ -434,4 +434,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - PASS → stage B: buy the same data for the sealed 2021H2-2022H1 and test
     once, then simulate option trades. FAIL → stop the option-buying idea.
   - About 150 test days, so power is limited.
+- 2026-11-08, **Plan B result (sequence transformer, minute paths): FAIL.**
+
+  | H | always-up | transformer | captured move | most confident 20% | break-even |
+  |---|---|---|---|---|---|
+  | 30 min | 52.9% | 52.8% | +0.11 bp | 54.9%, +0.46 bp | 2.9 bp |
+  | 60 min | 53.3% | 53.6% | +0.77 bp | 56.1%, +2.03 bp | 5.5 bp |
+
+  - vs the best rule at 60 min: +0.28% accuracy [−0.62, +1.25], +0.18 bp
+    [−0.84, +1.28].
+  - It is the best model so far, but not significant, and its most
+    confident calls capture under half of an option buyer's break-even.
+  - Per the pre-registration, TradeFM is not retrained for direction.
+  - Stage A (order flow and headlines) continues.
 
