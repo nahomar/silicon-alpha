@@ -46,7 +46,7 @@ CTX_FEATURES = [
 ]
 
 
-def fetch(start, end) -> pd.DataFrame:
+def fetch(start, end, save: bool = True) -> pd.DataFrame:
     import yfinance as yf
     cols = {}
     for name, tk in TICKERS.items():
@@ -58,8 +58,22 @@ def fetch(start, end) -> pd.DataFrame:
         s.index = pd.to_datetime(s.index).tz_localize(None).normalize()
         cols[name] = s[~s.index.duplicated(keep="last")]
     wide = pd.DataFrame(cols).sort_index()
+    if save:
+        OUT.mkdir(parents=True, exist_ok=True)
+        wide.to_parquet(OUT / "daily.parquet")
+    return wide
+
+
+def refresh(lookback_days: int = 30) -> pd.DataFrame:
+    """Update the last `lookback_days` of closes without dropping older history
+    (fetch() alone would overwrite the file with only its own range)."""
+    today = pd.Timestamp.today().normalize()
+    new = fetch(today - pd.Timedelta(days=lookback_days), today + pd.Timedelta(days=1), save=False)
+    p = OUT / "daily.parquet"
+    old = pd.read_parquet(p) if p.exists() else pd.DataFrame()
+    wide = new.combine_first(old).sort_index() if len(old) else new
     OUT.mkdir(parents=True, exist_ok=True)
-    wide.to_parquet(OUT / "daily.parquet")
+    wide.to_parquet(p)
     return wide
 
 

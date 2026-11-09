@@ -79,10 +79,10 @@ def test_replay_day_order_fill_and_settlement(tmp_path):
 
 def test_shadow_strategies_and_pricing():
     from odte.live.strategies import STRATEGIES, shadow_pnl
-    assert STRATEGIES["sell_only"](0.80, False)[0] == 1
-    assert STRATEGIES["sell_only"](0.80, True)[0] == 0          # no short right after news
-    assert STRATEGIES["full_model"](1.20, True)[0] == -1         # buying is allowed then
-    assert STRATEGIES["always_sell"](1.50, False)[0] == 1
+    assert STRATEGIES["sell_only"](1, False)[0] == 1
+    assert STRATEGIES["sell_only"](1, True)[0] == 0              # no short right after news
+    assert STRATEGIES["full_model"](-1, True)[0] == -1           # buying is allowed then
+    assert STRATEGIES["always_sell"](-1, False)[0] == 1
     row = {"K": 7740.0, "W": 35.0, "fly_credit_mid": 17.9, "fly_credit": 17.7, "fly_debit": 18.1}
     calm = shadow_pnl(1, row, 7740.0)
     assert calm["mid"] > calm["half"] > calm["touch"] > 0        # paying more of the gap earns less
@@ -94,7 +94,23 @@ def test_shadow_strategies_and_pricing():
 def test_event_seller_rule():
     from odte.live.strategies import event_seller
     cpi = {"ev_cpi": 1.0, "vix_over_vix3m": 0.9}
-    assert event_seller(1.3, False, cpi)[0] == 1                          # no model needed
-    assert event_seller(1.3, True, cpi)[0] == 0                           # inside the post-release hour
-    assert event_seller(1.0, False, {"ev_cpi": 1.0, "vix_over_vix3m": 1.05})[0] == 0   # stress
-    assert event_seller(0.5, False, {"ev_cpi": 0.0, "vix_over_vix3m": 0.9})[0] == 0    # ordinary day
+    assert event_seller(-1, False, cpi)[0] == 1                           # no model needed
+    assert event_seller(0, True, cpi)[0] == 0                             # inside the post-release hour
+    assert event_seller(0, False, {"ev_cpi": 1.0, "vix_over_vix3m": 1.05})[0] == 0     # stress
+    assert event_seller(1, False, {"ev_cpi": 0.0, "vix_over_vix3m": 0.9})[0] == 0      # ordinary day
+
+
+def test_model_signal_rules():
+    from odte.live.model import signal
+    assert signal({"kind": "ratio"}, 0.80) == 1 and signal({"kind": "ratio"}, 1.20) == -1
+    assert signal({"kind": "ratio"}, 1.0) == 0
+    assert signal({"kind": "profit"}, 0.05) == 1 and signal({"kind": "profit"}, -0.01) == 0
+
+
+def test_previous_day_carries_settle_and_ratio(tmp_path):
+    import json as _j
+    from odte.live.runner import previous_day
+    cfg = Config(journal_dir=tmp_path)
+    (tmp_path / "2026-11-10.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6800.5, "ratio": 0.71}) + "\n")
+    (tmp_path / "2026-11-12.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6900.0, "ratio": 1.2}) + "\n")
+    assert previous_day(cfg, "2026-11-11") == (6800.5, 0.71)        # never a later day

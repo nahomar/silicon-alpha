@@ -38,7 +38,8 @@ def train(cfg: Config = Config(), files=TRAIN_FILES) -> dict:
         parts.append(d[d["on6"]][["day", *cols, "ratio"]])
     d = pd.concat(parts).dropna(subset=["ratio"])
     m = _make_model("ml_ridge").fit(d[cols].to_numpy(float), d["ratio"].clip(upper=4.0).to_numpy())
-    bundle = {"model": m, "features": cols, "n_rows": int(len(d)),
+    bundle = {"model": m, "features": cols, "n_rows": int(len(d)), "name": "ratio_ridge_full",
+              "kind": "ratio",
               "days": [str(pd.Timestamp(d["day"].min()).date()), str(pd.Timestamp(d["day"].max()).date())]}
     cfg.model_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.model_path.write_bytes(pickle.dumps(bundle))
@@ -52,6 +53,18 @@ def load(cfg: Config = Config()) -> dict:
 def predict(bundle: dict, row: dict) -> float:
     x = np.array([[float(row.get(c, np.nan)) for c in bundle["features"]]])
     return float(bundle["model"].predict(x)[0])
+
+
+def signal(bundle: dict, pred: float, margin: float = 0.15) -> int:
+    """+1 = options look overpriced (sell-worthy), -1 = big move expected, 0 = neither.
+
+    kind "ratio": pred is realized/implied (sell below 1 - margin, big move above 1 + margin)
+    kind "profit": pred is the half-gap return on risk of selling (sell above 0)"""
+    if not np.isfinite(pred):
+        return 0
+    if bundle.get("kind", "ratio") == "profit":
+        return 1 if pred > 0 else 0
+    return 1 if pred < 1 - margin else (-1 if pred > 1 + margin else 0)
 
 
 if __name__ == "__main__":

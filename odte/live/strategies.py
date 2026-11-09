@@ -24,23 +24,24 @@ MARGIN = 0.15
 EVENT_FLAGS = ("ev_cpi", "ev_nfp", "ev_fomc", "ev_fomc_sep")
 
 
-def sell_only(pred, after_event, row=None):
-    if pred < 1 - MARGIN and not after_event:
+# `sig` comes from odte.live.model.signal: +1 overpriced, -1 big move expected, 0 neither.
+def sell_only(sig, after_event, row=None):
+    if sig == 1 and not after_event:
         return 1, "overpriced"
-    return 0, "after event" if pred < 1 - MARGIN else "not overpriced enough"
+    return 0, "after event" if sig == 1 else "not overpriced enough"
 
 
-def full_model(pred, after_event, row=None):
-    if pred > 1 + MARGIN:
+def full_model(sig, after_event, row=None):
+    if sig == -1:
         return -1, "big move expected"           # buys are allowed after events
-    return sell_only(pred, after_event)
+    return sell_only(sig, after_event)
 
 
-def always_sell(pred, after_event, row=None):
+def always_sell(sig, after_event, row=None):
     return (0, "after event") if after_event else (1, "always")
 
 
-def event_seller(pred, after_event, row=None):
+def event_seller(sig, after_event, row=None):
     """Sell on scheduled CPI / jobs / Fed days, outside the hour after a
     release, unless yesterday's VIX/VIX3M > 1 (stress). No model."""
     row = row or {}

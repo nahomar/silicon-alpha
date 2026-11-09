@@ -27,7 +27,7 @@ from odte.live.config import Config
 from odte.live.strategies import ORDER_STRATEGIES, STRATEGIES, shadow_pnl
 from odte.live.features import day_context, feature_row
 from odte.live.model import load as load_model
-from odte.live.model import predict
+from odte.live.model import predict, signal
 
 
 class Journal:
@@ -77,8 +77,14 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     times = [h for h in cfg.decision_times if h < close_hhmm]
     events = [day + pd.Timedelta(hours=int(h[:2]), minutes=int(h[3:])) for h in dctx["event_times"]]
     j.log(broker.now(), "start", config={k: str(v) for k, v in asdict(cfg).items()},
+          model=bundle.get("name"), model_kind=bundle.get("kind", "ratio"),
           model_rows=bundle["n_rows"], events=dctx["event_times"], close=close_hhmm)
     is_paused = paused(cfg, day)
+    order_strats = list(ORDER_STRATEGIES)
+    reg = cfg.journal_dir.parent / "registry.json"
+    if reg.exists() and not json.loads(reg.read_text()).get("ml_orders_enabled", True):
+        order_strats = [s for s in order_strats if s == "event_seller"]
+        j.log(broker.now(), "note", text="model-driven orders switched off by the weekly loop")
     if is_paused:
         j.log(broker.now(), "paused", reason=f"drawdown >= ${cfg.pause_drawdown:,.0f}")
 
@@ -91,6 +97,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes))
 
     chain, done, active, fills, shadows = [], set(), None, [], []
+    ratio_ref = None
     opened_worst, n_trades = 0.0, 0
     last_snap = None
     while broker.now() < close_t:
@@ -108,16 +115,19 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 j.log(now, "decision", hhmm=hhmm, action="skip", reason="no quotes / no fly")
             else:
                 pred = predict(bundle, r)
+                sig = signal(bundle, pred, cfg.margin)
+                if hhmm == "10:00" or ratio_ref is None:
+                    ratio_ref = (r["K"], r["straddle_mid"])
                 t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
                 recent = [e for e in events if 0 <= (t_dec - e).total_seconds() / 60 <= cfg.post_event_min]
                 sides = {}
                 for name, rule in STRATEGIES.items():          # shadow book: no orders
-                    side, reason = rule(pred, bool(recent), r)
+                    side, reason = rule(sig, bool(recent), r)
                     sides[name] = side
                     shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r})
                     j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
                 why = None
-                wants = [n for n in ORDER_STRATEGIES if sides.get(n) == 1]
+                wants = [n for n in order_strats if sides.get(n) == 1]
                 if not wants:
                     why = "no order strategy says sell"
                 elif recent:
@@ -196,13 +206,30 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             b["trades"] += 1
             for k in ("mid", "half", "touch"):
                 b[k] = round(b[k] + p[k], 2)
+    ratio_today = (abs(settle - ratio_ref[0]) / ratio_ref[1]
+                   if ratio_ref and ratio_ref[1] > 0 else None)          # tomorrow's prev_ratio
     summary = {"day": f"{day:%Y-%m-%d}", "decisions": len(done), "orders": n_trades, "fills": len(fills),
+               "ratio": round(ratio_today, 4) if ratio_today is not None else None,
                "shadow": book,
                "share_of_gap_paid": [round((f["o"].mid - f["credit"]) / (f["o"].mid - f["o"].touch), 3)
                                      if f["o"].mid > f["o"].touch else None for f in fills],
                "pnl": round(pnl, 2), "settle": settle}
     j.log(broker.now(), "day_summary", **summary)
     return summary
+
+
+def previous_day(cfg: Config, day) -> tuple:
+    """(prev_settle, prev_ratio) from the latest earlier journal, else history."""
+    for p in sorted(cfg.journal_dir.glob("20??-??-??.jsonl"), reverse=True):
+        if p.stem >= f"{pd.Timestamp(day):%Y-%m-%d}":
+            continue
+        for line in p.read_text().splitlines():
+            r = json.loads(line)
+            if r["kind"] == "day_summary" and r.get("settle"):
+                return float(r["settle"]), float(r["ratio"]) if r.get("ratio") is not None else np.nan
+    st = pd.read_csv("data/odte_0dte/settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
+    prev = float(st[st.index < pd.Timestamp(day)].iloc[-1]) if (st.index < pd.Timestamp(day)).any() else np.nan
+    return prev, np.nan
 
 
 def broker_strikes(cfg: Config, spot: float) -> list:
@@ -226,12 +253,16 @@ def main() -> int:
         prev = float(st[st.index < day].iloc[-1])
         run_day(cfg, ReplayBroker(day), day, prev_settle=prev, tag="-replay")
     else:
+        from odte.data import context as ctx
         from odte.live.broker import IBKRBroker
+        try:
+            ctx.refresh()                     # yesterday's VIX etc.; only dates before today are used
+        except Exception as e:
+            print(f"WARNING: context refresh failed ({e}); using the saved closes", flush=True)
         b = IBKRBroker(cfg)
         day = b.now().normalize()
-        st = pd.read_csv("data/odte_0dte/settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
-        prev = float(st[st.index < day].iloc[-1]) if (st.index < day).any() else np.nan
-        run_day(cfg, b, day, prev_settle=prev)
+        prev_settle, prev_ratio = previous_day(cfg, day)
+        run_day(cfg, b, day, prev_settle=prev_settle, prev_ratio=prev_ratio)
     return 0
 
 

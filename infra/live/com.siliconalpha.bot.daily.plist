@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.siliconalpha.bot.daily</string>
+  <key>ProgramArguments</key>
+  <array><string>/Users/nahom/projects/silicon-alpha/.venv-live/bin/python</string><string>-m</string><string>odte.live.runner</string><string>--mode</string><string>paper</string></array>
+  <key>WorkingDirectory</key><string>/Users/nahom/projects/silicon-alpha</string>
+  <key>EnvironmentVariables</key><dict><key>PYTHONPATH</key><string>/Users/nahom/projects/silicon-alpha</string></dict>
+  <key>StartCalendarInterval</key><array><dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict><dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict><dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict><dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict><dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict></array>
+  <key>StandardOutPath</key><string>/Users/nahom/projects/silicon-alpha/data/live/logs/daily.out</string>
+  <key>StandardErrorPath</key><string>/Users/nahom/projects/silicon-alpha/data/live/logs/daily.err</string>
+</dict>
+</plist>

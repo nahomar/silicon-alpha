@@ -57,13 +57,38 @@ Replay a past day (no broker):
 PYTHONPATH=. .venv-live/bin/python -m odte.live.runner --mode replay --day 2026-09-04
 ```
 
+## The weekly learning loop (`odte/live/loop.py`)
+Every Saturday:
+1. Each new live day (quotes the bot recorded + settlement) becomes training rows, built by the same backtest feature code.
+2. Every candidate model is retrained on history + live days before the test window.
+3. Each is tested on the last 40 live days (unseen by those fits): sell when it says so, at half the day's own bid-ask gap.
+4. Fixed rules, set before any live day:
+   - **Promote** a challenger only with ≥20 live test days, ≥15 trades, a positive total, and ≥$25/day better than the model in charge.
+   - **Switch model-driven orders off** if the model in charge loses money and trails always-sell over the window; switch back on when it recovers. The event seller keeps trading either way.
+5. The model in charge is refit on everything and saved as the bot's model.
+6. A report is written to `reports/live_weekly/<date>.md`, with every shadow strategy's live results.
+
+Candidates are listed in `loop.candidates()`. New ideas are added there and must earn promotion on live days.
+The final exam (SPX ≥ 2026-09-08) is never used for training.
+
+## Running it automatically (owner installs; schedules are in `infra/live/`)
+- Daily, Mon-Fri 06:00 Pacific (= 09:00 Eastern): the bot starts, waits for the open, trades and settles.
+- Weekly, Saturday 08:00 Pacific: the learning loop.
+```
+cp infra/live/com.siliconalpha.bot.*.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.daily.plist
+launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.weekly.plist
+```
+- IB Gateway must be running and logged into the paper account, and the Mac must be awake.
+- IBKR periodically asks you to log in again; turn on IB Gateway's auto-restart.
+- Logs are in `data/live/logs/`.
+- The morning context refresh (yesterday's VIX etc.) and yesterday's result are handled by the runner.
+
 ## Maintenance
 - Retrain the model after new data is added: `python -m odte.live.model train`.
 - Calendar: verified releases through 2027-03 (BLS/Fed pages read 2026-11-09). JOLTS dates after 2026-12-01 were not listed yet. 2027 FOMC dates are tentative.
 - Rebuild the calendar with `python3 -m odte.data.calendar build` after adding dates.
-- Context (VIX etc.) must be refreshed each morning before the open, so the bot sees yesterday's closes: `python3 -m odte.data.context` (see its `--help`).
 
 ## Known limits (v1)
-- `prev_ratio` (yesterday's realized ÷ implied) is not yet carried between live days; the model imputes it.
 - Shock detection (unscheduled big moves) is not in the live post-event rule yet; only scheduled releases are.
 - Paper fills are simulated by IBKR and say nothing about real fill quality. Measuring that needs tiny real XSP orders, only with the owner's go.
