@@ -788,4 +788,12 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - `size_filter`: the factory T_size composite, rank rule.
   - With 6 challengers, the promotion bar is Bonferroni-adjusted:
     z ≥ max(1.5, Φ⁻¹(1 − 0.10/n_challengers)), about 2.13 for six.
+- 2026-11-09, **Challengers wired in (user approved ≈$0.001/day OI).**
+  - The live bot fetches pre-open OI daily, with the window ending 09:29
+    ET. Same-day OPRA after 09:30 ET needs a live licence (Databento 403).
+  - It adds GEX inputs to every decision and shadow-trades all 7 candidate
+    models. The loop saves every candidate weekly.
+  - TODO before the exam: re-fetch OI for 2026-11-05 and 2026-11-06. Those
+    files hold only the same-day expiry, because the old fetch had no
+    future sessions.
 

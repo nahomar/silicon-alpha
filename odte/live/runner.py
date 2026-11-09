@@ -67,10 +67,26 @@ def paused(cfg: Config, day) -> bool:
     return bool(len(hit)) and (len(h) - h.index.get_loc(hit.index[-1]) - 1) < cfg.pause_sessions
 
 
-def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag="") -> dict:
+def load_candidates(cfg: Config) -> dict:
+    """Every candidate model the weekly loop saved, for the shadow book."""
+    import pickle
+    d = cfg.journal_dir.parent / "candidates"
+    return {p.stem: pickle.loads(p.read_bytes()) for p in sorted(d.glob("*.pkl"))} if d.exists() else {}
+
+
+def default_oi(day, spot):
+    """Pre-open open interest for the dealer-gamma inputs (history file if present)."""
+    from odte.data import gamma
+    return gamma._load(day)
+
+
+def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag="",
+            oi_provider=default_oi) -> dict:
     day = pd.Timestamp(day).normalize()
     j = Journal(cfg, day, tag)
     bundle = load_model(cfg)
+    cands = load_candidates(cfg)
+    oi, oi_tried = None, False
     dctx = day_context(day)
     close_hhmm = dctx["close_hhmm"] or "16:00"
     close_t = day + pd.Timedelta(hours=int(close_hhmm[:2]), minutes=int(close_hhmm[3:]))
@@ -116,6 +132,16 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             done.add(hhmm)
             rows = pd.concat(chain, ignore_index=True) if chain else pd.DataFrame()
             r = feature_row(rows, hhmm, dctx, prev_settle, prev_ratio) if len(rows) else None
+            if not oi_tried:                           # once, before the first decision
+                oi_tried = True
+                try:
+                    oi = oi_provider(day, spot)
+                except Exception as e:
+                    j.log(now, "note", text=f"open interest unavailable: {e}")
+                j.log(now, "open_interest", contracts=0 if oi is None else int(len(oi)))
+            if r is not None:
+                from odte.data import gamma
+                r.update(gamma.features_for(oi, day, r["F"], r["implied_move"], r["minutes_to_close"]))
             if r is None:
                 j.log(now, "decision", hhmm=hhmm, action="skip", reason="no quotes / no fly")
             else:
@@ -133,6 +159,13 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                     sides[name] = side
                     shadows.append({"strategy": name, "hhmm": hhmm, "side": side, "row": r, "xfly": xfly})
                     j.log(now, "shadow", strategy=name, hhmm=hhmm, side=side, reason=reason)
+                for name, cb in cands.items():                  # every candidate model, shadow only
+                    cp = predict(cb, r)
+                    side = 1 if signal(cb, cp, cfg.margin) == 1 and not recent else 0
+                    shadows.append({"strategy": f"model:{name}", "hhmm": hhmm, "side": side, "row": r,
+                                    "xfly": xfly})
+                    j.log(now, "shadow", strategy=f"model:{name}", hhmm=hhmm, side=side,
+                          pred=round(cp, 4) if np.isfinite(cp) else None)
                 why = None
                 wants = [n for n in order_strats if sides.get(n) == 1]
                 if not wants:
@@ -241,6 +274,22 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     return summary
 
 
+def load_databento_key() -> None:
+    """For scheduled runs: read the key from an owner-only file the user created
+    (~/.config/silicon-alpha/databento.env, line `export DATABENTO_API_KEY=...`).
+    The key is never printed or written anywhere else."""
+    import os
+    from pathlib import Path
+    if os.environ.get("DATABENTO_API_KEY"):
+        return
+    p = Path.home() / ".config" / "silicon-alpha" / "databento.env"
+    if p.exists():
+        for line in p.read_text().splitlines():
+            line = line.strip().removeprefix("export ").strip()
+            if line.startswith("DATABENTO_API_KEY="):
+                os.environ["DATABENTO_API_KEY"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+
+
 def previous_day(cfg: Config, day) -> tuple:
     """(prev_settle, prev_ratio) from the latest earlier journal, else history."""
     for p in sorted(cfg.journal_dir.glob("20??-??-??.jsonl"), reverse=True):
@@ -285,7 +334,14 @@ def main() -> int:
         b = IBKRBroker(cfg)
         day = b.now().normalize()
         prev_settle, prev_ratio = previous_day(cfg, day)
-        run_day(cfg, b, day, prev_settle=prev_settle, prev_ratio=prev_ratio)
+
+        def live_oi(d, spot):
+            from odte.data import gamma
+            from odte.data.fetch_oi import fetch_today
+            load_databento_key()
+            fetch_today(d, spot)                      # ~$0.001; pre-open data only
+            return gamma._load(d)
+        run_day(cfg, b, day, prev_settle=prev_settle, prev_ratio=prev_ratio, oi_provider=live_oi)
     return 0
 
 

@@ -64,6 +64,8 @@ def signal(bundle: dict, pred: float, margin: float = 0.15) -> int:
         return 0
     if bundle.get("kind", "ratio") == "profit":
         return 1 if pred > 0 else 0
+    if bundle.get("kind") == "rank":            # sell unless among the riskiest 20% (training)
+        return 1 if pred < bundle["threshold"] else 0
     return 1 if pred < 1 - margin else (-1 if pred > 1 + margin else 0)
 
 

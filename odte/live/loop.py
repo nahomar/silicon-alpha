@@ -44,6 +44,16 @@ FEES4, BUDGET, TODAY_COST = 4 * 1.20, 1000.0, 0.0169
 
 # Fixed before any live day (2026-11-09; revised after the independent review)
 WINDOW, MIN_LIVE_DAYS, MIN_TRADES, PROMOTE_SE = 120, 60, 30, 1.5
+GEX = ["gex_net", "gex_0dte", "gex_flip_dist", "maxoi_dist", "oi_pcr_0dte"]
+# Signal-factory T_size survivors (docs/expiry_edge_plan.md, 2026-11-09)
+SIZE_SURVIVORS = ["gex_net", "gex_flip_dist", "oi_pcr_0dte", "gex_0dte", "ev_month_end", "spx_ret_prev",
+                  "vix9d_over_vix", "vix_prev", "iv_over_rv"]
+
+
+def promote_z(n_challengers: int) -> float:
+    """Promotion bar, Bonferroni-adjusted for how many challengers compete."""
+    from statistics import NormalDist
+    return max(PROMOTE_SE, NormalDist().inv_cdf(1 - 0.10 / max(n_challengers, 1)))
 
 
 def _small():
@@ -60,7 +70,12 @@ def candidates() -> dict:
     full = feature_list()
     return {"ratio_ridge_full": ("ratio", "ratio", full),        # the current champion
             "profit_ridge_full": ("ror_half", "profit", full),
-            "ratio_ridge_small": ("ratio", "ratio", _small())}
+            "ratio_ridge_small": ("ratio", "ratio", _small()),
+            # signal factory / GEX follow-up (2026-11-09)
+            "ratio_full_gex": ("ratio", "ratio", full + GEX),
+            "danger_full_gex": ("ratio", "rank", full + GEX),     # sell unless riskiest 20%
+            "gex_fly": ("ror_half", "profit", ["ev_month_end", "gex_net"]),
+            "size_filter": ("abs_z", "rank", SIZE_SURVIVORS)}
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +93,7 @@ def _returns(d: pd.DataFrame, gap_frac=None) -> pd.DataFrame:
         risk = (W - c) * 100 + FEES4
         d[f"ror_{name}"] = np.where(risk > 0, ((c - intrinsic) * 100 - FEES4) / risk, np.nan)
     d["post"] = (d["min_since_event"] <= 60).fillna(False).to_numpy() if "min_since_event" in d else False
+    d["abs_z"] = (d["settle"] - d["F"]).abs() / d["straddle_mid"].replace(0, np.nan)
     return d
 
 
@@ -122,6 +138,11 @@ def ingest_day(cfg: Config, day) -> pd.DataFrame | None:
     d["iv_vs_vix1d"] = [(im / 0.8) / math.sqrt(max(m, 1.0) / (390 * 252)) * 100.0 / v
                         if v and np.isfinite(v) else np.nan
                         for im, m, v in zip(d["implied_move"], d["minutes_to_close"], d["vix1d_prev"])]
+    from odte.data import gamma
+    oi = gamma._load(day)
+    gx = pd.DataFrame([gamma.features_for(oi, day, F_, im, m) for F_, im, m
+                       in zip(d["F"], d["implied_move"], d["minutes_to_close"])])
+    d = pd.concat([d, gx], axis=1)
     d["day"], d["on6"], d["source"] = day, True, "live"
     return _returns(d)
 
@@ -149,11 +170,18 @@ def live_dataset(cfg: Config) -> pd.DataFrame:
 # fit / test / promote
 # ---------------------------------------------------------------------------
 
-def fit(d: pd.DataFrame, target: str, cols: list):
+def fit(d: pd.DataFrame, target: str, cols: list, kind: str = "ratio") -> dict:
+    """A model bundle. kind "rank": `threshold` = 80th percentile of the
+    training predictions (sell unless a decision ranks among the riskiest 20%)."""
     from odte.eval.expiry_edge import _make_model
-    y = d[target].clip(upper=4.0).to_numpy(float) if target == "ratio" else d[target].to_numpy(float)
+    y = d[target].clip(upper=4.0).to_numpy(float) if target in ("ratio", "abs_z") else d[target].to_numpy(float)
     ok = np.isfinite(y)
-    return _make_model("ml_ridge").fit(d.loc[ok, cols].to_numpy(float), y[ok])
+    X = d.loc[ok, cols].to_numpy(float)
+    m = _make_model("ml_ridge").fit(X, y[ok])
+    b = {"model": m, "features": cols, "kind": kind, "target": target}
+    if kind == "rank":
+        b["threshold"] = float(np.nanquantile(m.predict(X), 0.8))
+    return b
 
 
 def daily_pnl(d: pd.DataFrame, sell: np.ndarray) -> pd.Series:
@@ -172,9 +200,9 @@ def evaluate(hist: pd.DataFrame, live: pd.DataFrame, cands: dict) -> dict:
     test = live[live["day"] >= start].reset_index(drop=True)
     out = {}
     for name, (target, kind, cols) in cands.items():
-        m = fit(train, target, cols)
-        pred = m.predict(test[cols].to_numpy(float))
-        sell = np.array([signal({"kind": kind}, p) == 1 for p in pred])
+        b = fit(train, target, cols, kind)
+        pred = b["model"].predict(test[cols].to_numpy(float))
+        sell = np.array([signal(b, p) == 1 for p in pred])
         x = daily_pnl(test, sell)
         out[name] = {"days": int(len(x)), "trades": int((sell & ~test["post"].to_numpy(bool)).sum()),
                      "total": float(x.sum()), "mean_day": float(x.mean()),
@@ -205,19 +233,20 @@ def decide(reg: dict, ev: dict) -> dict:
         reg["last_decision"] = ev.get("status")
         return reg
     best, best_t = None, 0.0
+    z_req = promote_z(sum(1 for k in res if k not in (champ, "always_sell")))
     for name, r in res.items():
         if name in (champ, "always_sell"):
             continue
         adv, se, n = paired(r["daily"], res[champ]["daily"])
         if (n >= MIN_LIVE_DAYS and r["trades"] >= MIN_TRADES and r["total"] > 0
-                and np.isfinite(se) and se > 0 and adv >= PROMOTE_SE * se and adv / se > best_t):
+                and np.isfinite(se) and se > 0 and adv >= z_req * se and adv / se > best_t):
             best, best_t = name, adv / se
     if best:
         reg.setdefault("history", []).append({"date": str(date.today()), "promoted": best,
                                               "replaced": champ, "t_stat": round(best_t, 2)})
         reg["champion"] = best
     reg["last_decision"] = (f"promoted {best} (paired advantage {best_t:.1f} SE)" if best
-                            else f"kept {champ}: no challenger cleared {PROMOTE_SE} SE")
+                            else f"kept {champ}: no challenger cleared {z_req:.2f} SE")
     return reg
 
 
@@ -248,10 +277,16 @@ def weekly(cfg: Config = Config(), today=None) -> dict:
     reg = decide(reg, ev)
     target, kind, cols = cands[reg["champion"]]
     allrows = pd.concat([hist, live], ignore_index=True) if len(live) else hist
-    m = fit(allrows, target, cols)
-    bundle = {"model": m, "features": cols, "n_rows": int(len(allrows)), "name": reg["champion"],
-              "kind": kind, "trained": str(today.date()), "live_days": int(live["day"].nunique()) if len(live) else 0,
-              "days": [str(allrows["day"].min().date()), str(allrows["day"].max().date())]}
+    meta = {"n_rows": int(len(allrows)), "trained": str(today.date()),
+            "live_days": int(live["day"].nunique()) if len(live) else 0,
+            "days": [str(allrows["day"].min().date()), str(allrows["day"].max().date())]}
+    cdir = cfg.journal_dir.parent / "candidates"
+    cdir.mkdir(parents=True, exist_ok=True)
+    for name, (t_, k_, c_) in cands.items():              # every candidate, for the shadow book
+        b = {**fit(allrows, t_, c_, k_), **meta, "name": name}
+        (cdir / f"{name}.pkl").write_bytes(pickle.dumps(b))
+        if name == reg["champion"]:
+            bundle = b
     cfg.model_path.write_bytes(pickle.dumps(bundle))
     reg_p.parent.mkdir(parents=True, exist_ok=True)
     reg_p.write_text(json.dumps(reg, indent=2))
@@ -266,7 +301,8 @@ def weekly(cfg: Config = Config(), today=None) -> dict:
         lines += [f"| {k} | {v['days']} | {v['trades']} | ${v['total']:,.0f} | ${v['mean_day']:+,.0f} |"
                   for k, v in ev["results"].items()]
         champ_d = ev["results"][reg["champion"]]["daily"]
-        lines += ["", f"Paired advantage over the model in charge (promotion needs >= {PROMOTE_SE} SE):", ""]
+        z_req = promote_z(len(ev["results"]) - 2)
+        lines += ["", f"Paired advantage over the model in charge (promotion needs >= {z_req:.2f} SE):", ""]
         for k, v in ev["results"].items():
             if k not in (reg["champion"], "always_sell"):
                 adv, se, n = paired(v["daily"], champ_d)

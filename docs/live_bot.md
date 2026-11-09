@@ -19,6 +19,26 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - Paper days are new unseen data. A strategy earns real money only if it keeps beating `always_sell` here.
 - On unseen history (2017-2021) none of them was profitable. Sell-only was closest (−$5.3k vs −$36.9k for always-sell on the same days).
 
+## Dealer-gamma inputs (morning open interest)
+- Before the first decision, the bot downloads today's pre-open open interest from Databento (`fetch_oi.fetch_today`, ≈$0.001/day).
+  - It covers the next 5 SPXW expiries, ±5% strikes.
+  - The window ends at 09:29 ET: same-day OPRA data after 09:30 needs a live licence, and the OI statistic is published before the open.
+- From it, every decision gets `gex_net`, `gex_0dte`, `gex_flip_dist`, `maxoi_dist` and `oi_pcr_0dte`: the signal-factory family that predicts move size.
+- Scheduled (launchd) runs don't see your shell's environment. Put the key in an owner-only file **yourself**:
+  `~/.config/silicon-alpha/databento.env` with the line `export DATABENTO_API_KEY=...`, then run `chmod 600` on it.
+  The runner reads it, and the key is never printed or copied.
+- If OI is unavailable, the bot logs it and the gamma inputs are blank for that day.
+
+## Candidate models (all shadow-traded every day; `loop.candidates()`)
+- The model in charge: `ratio_ridge_full`.
+- Challengers:
+  - `profit_ridge_full`, `ratio_ridge_small`;
+  - `ratio_full_gex` (+ dealer gamma);
+  - `danger_full_gex` (+ gamma, sell unless the riskiest 20%);
+  - `gex_fly` (factory T_fly composite);
+  - `size_filter` (factory T_size composite, rank rule).
+- Promotion bar: a paired advantage ≥ max(1.5, Bonferroni z at 10% / number of challengers) standard errors, about 2.13 with 6.
+
 ## XSP pricing
 - The bot records XSP's own quotes (nearest-the-money ±8 strikes) alongside SPX's. The quote-line budget is split: 34 lines XSP, the rest SPX.
 - Orders and an extra shadow P&L (`xsp_mid/half/touch`) are priced on XSP's own bid/ask. If XSP quotes are missing, SPX/10 is used, and the journal records `priced_on`.

@@ -70,3 +70,11 @@ def test_week_end_to_end_on_replayed_days(tmp_path, monkeypatch):
     assert out["eval"]["status"] == "tested" and set(out["eval"]["results"]) >= {"ratio_ridge_full", "always_sell"}
     assert json.loads((tmp_path / "registry.json").read_text())["champion"]
     assert (tmp_path / "reports" / "live_weekly" / "2026-08-15.md").exists()
+
+
+def test_rank_rule_and_bonferroni_bar():
+    from odte.live.model import signal
+    b = loop.fit(pd.DataFrame({"x": np.arange(100.0), "abs_z": np.arange(100.0) / 50}), "abs_z", ["x"], "rank")
+    assert 1.4 < b["threshold"] < 1.7                      # 80th percentile of training predictions
+    assert signal(b, 0.5) == 1 and signal(b, 1.9) == 0      # sell unless among the riskiest 20%
+    assert loop.promote_z(1) == 1.5 and 2.0 < loop.promote_z(6) < 2.3

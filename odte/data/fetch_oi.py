@@ -41,15 +41,16 @@ def _symbols(day, sessions, center) -> list:
             for e in exps for k in np.arange(lo, hi + STEP / 2, STEP) for cp in "CP"]
 
 
-def _window(day):
+def _window(day, end_hhmm: str = "09:35"):
     d = pd.Timestamp(day).normalize()
     s = d.tz_localize(TZ).tz_convert("UTC").isoformat()
-    e = (d + pd.Timedelta(hours=9, minutes=35)).tz_localize(TZ).tz_convert("UTC").isoformat()
+    h, m = int(end_hhmm[:2]), int(end_hhmm[3:])
+    e = (d + pd.Timedelta(hours=h, minutes=m)).tz_localize(TZ).tz_convert("UTC").isoformat()
     return s, e
 
 
-def fetch_day(client, day, symbols) -> pd.DataFrame:
-    s, e = _window(day)
+def fetch_day(client, day, symbols, end_hhmm: str = "09:35") -> pd.DataFrame:
+    s, e = _window(day, end_hhmm)
     store = _retry(lambda: client.timeseries.get_range(
         dataset=DATASET, schema="statistics", symbols=symbols, stype_in="raw_symbol",
         start=s, end=e), f"{day:%Y-%m-%d} oi")
@@ -65,6 +66,35 @@ def fetch_day(client, day, symbols) -> pd.DataFrame:
         "option_type": sym.str.slice(12, 13),
         "oi": df["quantity"].astype(float),
     }).reset_index(drop=True)
+
+
+def fetch_today(day, center: float, max_usd: float = 0.05) -> Path:
+    """Live use: today's pre-open open interest around `center` (index level).
+
+    Expiries come from the NYSE session calendar (future days included), so
+    this works before today's close exists anywhere. Run after 09:35 ET."""
+    import databento as db
+    from odte.data.calendar import OUT as CAL
+    day = pd.Timestamp(day).normalize()
+    f = OUT / f"{day:%Y-%m-%d}.parquet"
+    if f.exists():
+        return f
+    sessions = pd.DatetimeIndex(pd.read_parquet(CAL / "sessions.parquet")["session"]).sort_values()
+    syms = _symbols(day, sessions, center)
+    client = db.Historical(os.environ["DATABENTO_API_KEY"])
+    # Same-day OPRA data after 09:30 ET needs a live licence; the OI statistic
+    # is published before the open, so stop the window at 09:29.
+    s, e = _window(day, "09:29")
+    cost = float(client.metadata.get_cost(dataset=DATASET, schema="statistics", symbols=syms,
+                                          stype_in="raw_symbol", start=s, end=e))
+    if cost > max_usd:
+        raise SystemExit(f"ABORT: open interest for {day:%Y-%m-%d} quoted ${cost:.3f} > cap ${max_usd}")
+    oi = fetch_day(client, day, syms, "09:29")
+    OUT.mkdir(parents=True, exist_ok=True)
+    oi.to_parquet(f.with_suffix(".tmp"), index=False)
+    f.with_suffix(".tmp").replace(f)
+    print(f"open interest {day:%Y-%m-%d}: {len(oi)} contracts, ${cost:.4f}", flush=True)
+    return f
 
 
 def main() -> int:
