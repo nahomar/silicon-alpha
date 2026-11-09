@@ -578,5 +578,154 @@
       }
     },
     "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2019H1",
+    "start": "2019-01-01",
+    "end": "2019-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": 47166.00631126619
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -1411.3369112433056,
+        "sharpe": -0.18557377945474718,
+        "sharpe_ci": [
+          -3.665387905678728,
+          3.40688029785313
+        ],
+        "max_drawdown": -15142.470361551226,
+        "vs_always_short_per_day": -607.2167902813687,
+        "vs_always_short_ci": [
+          -1278.5529268631371,
+          45.349131731295934
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -7276.53341586874,
+        "sharpe": -0.8816566217366595,
+        "sharpe_ci": [
+          -4.43183233687461,
+          2.6380536339889153
+        ],
+        "max_drawdown": -16248.860259119294,
+        "vs_always_short_per_day": -680.5317465891867,
+        "vs_always_short_ci": [
+          -1391.8796333228058,
+          3.120257260242914
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 18722.660442305867,
+        "sharpe": 3.5184721315677923,
+        "sharpe_ci": [
+          0.07841911108779323,
+          7.493909457839734
+        ],
+        "max_drawdown": -7124.529429217675,
+        "vs_always_short_per_day": -355.54182336200404,
+        "vs_always_short_ci": [
+          -858.5383070935142,
+          156.4836763855472
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 13941.400225303178,
+        "sharpe": 2.553992435239756,
+        "sharpe_ci": [
+          -0.9400560333515181,
+          6.687765569363467
+        ],
+        "max_drawdown": -7387.519612551823,
+        "vs_always_short_per_day": -415.3075760745377,
+        "vs_always_short_ci": [
+          -906.8141971454229,
+          72.44069859941776
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "9751d96",
+    "opened_at": "2026-11-08 17:38",
+    "always_short_total": 25623.25379258547,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -10242.130710498683,
+        "sharpe": -1.3982836349498138,
+        "sharpe_ci": [
+          -4.826439383461342,
+          2.0830638443331537
+        ],
+        "max_drawdown": -17975.994523728972,
+        "worst_day": -3747.0649627789644,
+        "vs_always_short_per_day": -448.31730628855183,
+        "vs_always_short_ci": [
+          -1089.3603775801162,
+          177.61804568498582
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -16657.318685223123,
+        "sharpe": -2.0892778051378995,
+        "sharpe_ci": [
+          -5.567307757036273,
+          1.2853635771198215
+        ],
+        "max_drawdown": -22031.552728702663,
+        "worst_day": -4335.504974488755,
+        "vs_always_short_per_day": -528.5071559726074,
+        "vs_always_short_ci": [
+          -1207.5516738611152,
+          124.34242848687217
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 13252.80522199594,
+        "sharpe": 2.6348391485874463,
+        "sharpe_ci": [
+          -0.822812688980151,
+          6.842958052280378
+        ],
+        "max_drawdown": -7336.620924822216,
+        "worst_day": -3633.3383617893205,
+        "vs_always_short_per_day": -154.63060713236914,
+        "vs_always_short_ci": [
+          -627.7637971097456,
+          336.1496805280009
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 8427.772612758523,
+        "sharpe": 1.616762628136357,
+        "sharpe_ci": [
+          -1.841373880758158,
+          5.840219036302612
+        ],
+        "max_drawdown": -7619.338652306023,
+        "worst_day": -3633.3383617893205,
+        "vs_always_short_per_day": -214.9435147478368,
+        "vs_always_short_ci": [
+          -680.8304604986577,
+          254.8352923109674
+        ]
+      }
+    },
+    "forced": null
   }
 ]
