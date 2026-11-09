@@ -452,4 +452,11 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     is on hold pending the user.
   - Same stage A design and gate, with the new inputs = the headline
     features only (`--no-flow`).
+- 2026-11-08, **Headlines-only stage A result: FAIL.** Dev year, 155 test days.
+  - 30 min: logistic with headlines 52.3% vs 51.5% without (always-up
+    51.9%).
+    - vs the best rule: +0.35% [−3.9, +5.1].
+    - The most confident 20% capture +1.6 bp vs a 3.6 bp break-even.
+  - 60 min: nothing (49.9%).
+  - Headline content adds a little at 30 min, nowhere near enough.
 
