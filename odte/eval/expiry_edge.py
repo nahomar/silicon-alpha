@@ -99,7 +99,10 @@ DANGER_RATIO, SKIP_X, FLIP_X = 1.25, 2.0, 3.0
 #          otherwise hold to the close.
 #   post-event: no short within POST_EVENT_MIN minutes after an event/shock.
 EXIT_TP, EXIT_SL, POST_EVENT_MIN = 0.5, 0.5, 60
-PRIMARY_MODEL = "ml_ridge"   # pre-registered: tiny samples favour a linear model
+PRIMARY_MODEL = "ml_ridge"
+# fixed6 actions from the last run_study call, so callers can re-score the
+# same decisions under another cost model (see odte/eval/lockbox.py).
+LAST_FIXED6: dict = {}   # pre-registered: tiny samples favour a linear model
 RISK_BUDGET = 1000.0         # $ max loss per trade; each trade is sized to it
 _EPS = 1e-12
 
@@ -888,6 +891,10 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
             if f"{b_name} skip" in strategies:
                 combos[f"{b_name} skip -postevt"] = no_post(strategies[f"{b_name} skip"])
         strategies.update(combos)
+        if mode == "fixed6":
+            LAST_FIXED6.clear()
+            LAST_FIXED6.update(order=ds[["day", "t"]].copy(), tested=tested.copy(),
+                               actions={k: np.asarray(v) for k, v in strategies.items()})
         res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
         # Item 1: the same strategies with take-profit / stop-loss exits.
         exit_keys = [k for k in [ref_short, a_key, f"{b_name} skip" if b_name else None, *combos]
@@ -1412,7 +1419,11 @@ def _cli() -> int:
         OUT.mkdir(parents=True, exist_ok=True)
         name = f"study-{a.tag}.json" if a.tag else "study.json"
         (OUT / name).write_text(json.dumps(rep, indent=2, default=str))
-        ds.to_parquet(OUT / (f"decisions-{a.tag}.parquet" if a.tag else "decisions.parquet"))
+        out = ds.sort_values(["day", "t"]).reset_index(drop=True)   # run_study's row order
+        if LAST_FIXED6 and out[["day", "t"]].equals(LAST_FIXED6["order"].reset_index(drop=True)):
+            acts = {f"act6__{k}": v for k, v in LAST_FIXED6["actions"].items()}
+            out = pd.concat([out, pd.DataFrame(acts), pd.DataFrame({"tested6": LAST_FIXED6["tested"]})], axis=1)
+        out.to_parquet(OUT / (f"decisions-{a.tag}.parquet" if a.tag else "decisions.parquet"))
         print(f"\nwrote {OUT/name}")
     return 0
 

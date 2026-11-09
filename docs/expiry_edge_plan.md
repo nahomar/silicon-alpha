@@ -353,4 +353,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Each half-year block has roughly 75 sessions (Mon/Wed/Fri expiries before
     2022), so single-block results are noisy. The overall verdict is the
     pooled result across all scored blocks, decided after the last one.
+- 2026-11-08, **Scoring rule for the remaining blocks (user approved), fixed
+  after 2016H2 and before 2017H1 is opened.**
+  - Why: 2016H2 lost at its own touch because bid-ask was 15% of mid then,
+    vs about 2% today. Quote-only spreads: 2016 15%, 2018 8%, 2020 5%,
+    2021 4%, 2022H1 2.3%.
+  - PRIMARY score from 2017H1 on: the same decisions priced at the fly mid
+    ∓ 1.69% (`TODAY_COST`: the median entry cost over the seen 2022-07 →
+    2026-09 decisions) plus $1.20 per leg, each trade sized to $1k max loss.
+  - The real historical touch result is still reported for every block.
+  - 2016H2 keeps its touch-only record and is not re-scored.
+  - Check on seen data (2025-09..11): actions saved in the decisions file
+    reproduce the report's touch totals exactly; today-cost totals there are
+    close to touch, as expected when costs match.
 

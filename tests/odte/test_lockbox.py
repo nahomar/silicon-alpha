@@ -19,3 +19,20 @@ def test_reopening_a_block_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(lb, "LEDGER", ledger)
     with pytest.raises(SystemExit, match="REFUSED"):
         lb.open_block("data/odte_0dte", "2016H2", "x", "2016-01-01", "2022-05-13")
+
+
+def test_today_cost_reproduces_touch_pnl_when_given_the_touch_cost():
+    import numpy as np
+    import pandas as pd
+    cm, credit, W, intrinsic = np.array([5.0, 4.0]), np.array([4.8, 3.9]), np.array([12.0, 10.0]), np.array([1.0, 7.0])
+    dec = pd.DataFrame({"fly_credit_mid": cm, "W": W,
+                        "pnl_short_fly_mid": (cm - intrinsic) * 100,
+                        "pnl_short_fly": (credit - intrinsic) * 100 - lb.FEES4,
+                        "pnl_long_fly": (intrinsic - cm) * 100 - lb.FEES4})
+    frac = (cm - credit) / cm
+    for i in range(2):
+        got = lb.today_cost_pnl(dec.iloc[[i]], [1], cost=frac[i])[0]
+        want = (credit[i] - intrinsic[i]) * 100 - lb.FEES4
+        want = want / ((W[i] - credit[i]) * 100 + lb.FEES4) * 1000
+        assert np.isclose(got, want)
+    assert lb.today_cost_pnl(dec, [0, 0]).tolist() == [0.0, 0.0]

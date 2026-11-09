@@ -34,6 +34,59 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "docs" / "lockbox_ledger.json"
+# Today's entry cost, as a fraction of the fly's mid price: median over the
+# seen SPX fixed6 decisions 2022-07 -> 2026-09 (6,452 decisions; 2.0% in 2023,
+# 1.3% in 2026). Fixed 2026-11-08, after 2016H2 and before 2017H1 was opened.
+# 2016-2021 bid-ask was 4-15% of mid, so scoring those years at their own
+# touch measures old trading costs, not whether the model picks good days.
+TODAY_COST = 0.0169
+FEES4 = 4 * 1.20
+MULT = 100.0
+
+
+def today_cost_pnl(dec: pd.DataFrame, act, cost: float = TODAY_COST,
+                   risk_budget: float = 1000.0):
+    """Per-row P&L of the same decisions priced at mid -/+ today's cost.
+
+    Same rows tradable as at the touch; every trade sized to `risk_budget`
+    max loss, like expiry_edge._row_pnl."""
+    import numpy as np
+    cm = dec["fly_credit_mid"].to_numpy(float)
+    intrinsic = cm - dec["pnl_short_fly_mid"].to_numpy(float) / MULT
+    W = dec["W"].to_numpy(float)
+    cr, db = cm * (1 - cost), cm * (1 + cost)
+    s = (cr - intrinsic) * MULT - FEES4
+    l = (intrinsic - db) * MULT - FEES4
+    rs, rl = (W - cr) * MULT + FEES4, db * MULT + FEES4
+    ok = np.isfinite(dec["pnl_short_fly"].to_numpy(float)) & np.isfinite(dec["pnl_long_fly"].to_numpy(float))
+    a = np.where(ok, np.asarray(act), 0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(a == 1, s / rs * risk_budget, np.where(a == -1, l / rl * risk_budget, 0.0))
+
+
+def today_cost_results(dec: pd.DataFrame, names) -> dict:
+    """Total, Sharpe [CI], max drawdown and paired diff vs always-short."""
+    from odte.eval.expiry_edge import paired_diff
+    from odte.eval.panel_stats import day_block_bootstrap
+    tested = dec["tested6"].to_numpy(bool)
+
+    def daily(name):
+        pnl = today_cost_pnl(dec, dec[f"act6__{name}"].to_numpy())
+        return pd.Series(pnl[tested]).groupby(dec["day"].to_numpy()[tested]).sum()
+    ref = daily("always_short_fly")
+    out = {"always_short_fly": {"total": float(ref.sum())}}
+    for n in names:
+        d = daily(n)
+        b = day_block_bootstrap(d.to_numpy())
+        cum = d.cumsum()
+        pdf = paired_diff(d, ref)
+        out[n] = {"n_test_days": int(len(d)), "total": float(d.sum()), "sharpe": b["sharpe"],
+                  "sharpe_ci": [b["ci_low"], b["ci_high"]],
+                  "max_drawdown": float((cum - cum.cummax()).min()),
+                  "vs_always_short_per_day": pdf["mean"], "vs_always_short_ci": pdf["ci"]}
+    return out
+
+
 # Training-only warm-up: no earlier data exists to train on, so scoring it
 # would grade a model fit on a few weeks. Fixed before any block was opened.
 WARMUP = {("odte_0dte", "2016H1")}
@@ -107,8 +160,13 @@ def open_block(data_dir: str, block: str, strategy, first: str, last: str,
                          "max_drawdown": r["max_drawdown"], "worst_day": r["worst_day"],
                          "vs_always_short_per_day": cmp_.get("mean"),
                          "vs_always_short_ci": cmp_.get("ci")}
+    dec = pd.read_parquet(ROOT / "reports" / "expiry_edge" / f"decisions-{tag}.parquet")
+    if "tested6" not in dec:
+        raise SystemExit("decisions file lacks fixed6 actions; cannot score at today's cost")
+    today = today_cost_results(dec, strategies)
     entry = {
         "data": data_key, "block": block, "start": b["start"], "end": b["end"],
+        "primary": "today_cost", "today_cost_frac": TODAY_COST, "results_today_cost": today,
         "strategies": strategies, "commit": _git("rev-parse", "--short", "HEAD"),
         "opened_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         "always_short_total": ref["total_pnl"], "results": results,
@@ -146,7 +204,17 @@ def main() -> int:
     elif a.cmd == "open":
         e = open_block(a.data_dir, a.block, a.strategy, a.first, a.last,
                        sets=tuple(a.sets), force_reason=a.force_reason)
-        print(f"{e['data']} {e['block']} @ {e['commit']}  (always-short ${e['always_short_total']:,.0f})")
+        t = e["results_today_cost"]
+        print(f"{e['data']} {e['block']} @ {e['commit']}")
+        print(f"PRIMARY, at today's cost ({TODAY_COST:.2%} of mid + fees); always-short ${t['always_short_fly']['total']:,.0f}")
+        for name, r in t.items():
+            if name == "always_short_fly":
+                continue
+            ci = r["vs_always_short_ci"]
+            print(f"  {name:36s} {r['n_test_days']} days  total ${r['total']:,.0f}  Sharpe {r['sharpe']:+.2f} "
+                  f"[{r['sharpe_ci'][0]:+.2f}, {r['sharpe_ci'][1]:+.2f}]  max DD ${r['max_drawdown']:,.0f}  "
+                  f"vs always-short {r['vs_always_short_per_day']:+.1f}/day CI [{ci[0]:+.0f}, {ci[1]:+.0f}]")
+        print(f"also reported, at the real historical touch; always-short ${e['always_short_total']:,.0f}")
         for name, r in e["results"].items():
             ci = r["vs_always_short_ci"] or [float("nan")] * 2
             print(f"  {name:36s} {r['n_test_days']} days  total ${r['total']:,.0f}  Sharpe {r['sharpe']:+.2f} "
