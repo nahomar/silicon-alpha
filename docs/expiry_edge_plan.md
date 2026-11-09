@@ -498,4 +498,30 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     selling pays if we capture about half of the gap. Whether that is
     achievable is an execution question that only live (paper) trading can
     answer.
+- 2026-11-09, **Model improvement round (user asked), fixed before any run**
+  (`odte/eval/improve.py`).
+  - Development data: all seen SPX fixed6 rows (2016-01 → 2021-06 and
+    2022-05-16 → 2026-09-04; 1,901 days). Walk-forward by day: first 250
+    days training only, refit every 21 days.
+  - All strategies keep the no-short-within-60-min-after-event rule.
+  - Scoring: today's cost, entering at HALF the gap (mid × (1 − 0.0085)),
+    $1k worst case per trade. The full-gap touch (mid × (1 − 0.0169)) is
+    reported too.
+  - Baselines:
+    - C0: the current bot (ridge on realized/implied, 55 inputs, sell if < 0.85).
+    - Always-sell.
+  - Candidates:
+    - C1 profit target: ridge predicts the half-gap return on risk of
+      selling the fly; sell if > 0.
+    - C2 danger detector: logistic P(half-gap return on risk ≤ −0.5);
+      sell unless P > 2 × the training base rate.
+    - C3 small model: C0's rule on 22 inputs chosen by reasoning (the 12
+      base, plus ev_fomc, ev_cpi, ev_nfp, events_ahead,
+      minutes_to_next_event, vix_prev, vix1d_over_vix, vix_chg,
+      spx_ret_prev, spx_rv5, iv_vs_vix1d, megacap_earnings).
+  - Selection: the candidate with the highest development Sharpe at
+    half-gap that also beats both C0 and always-sell on paired mean daily
+    P&L. If none does, C0 stays.
+  - The winner then gets ONE test on the sealed SPX 2021H2 + 2022H1, gate
+    written before opening. If it passes, it joins the bot's shadow book.
 
