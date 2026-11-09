@@ -64,6 +64,43 @@ def fetch(start, end, max_usd: float) -> pd.DataFrame:
     return out
 
 
+CROSS = {"ZN": "10-yr Treasury", "ZT": "2-yr Treasury", "NQ": "Nasdaq-100", "RTY": "Russell 2000",
+         "CL": "crude oil", "6E": "euro/dollar", "GC": "gold"}
+
+
+def fetch_cross(start, end, max_usd: float, roots=tuple(CROSS)) -> None:
+    """Other markets' 1-minute bars (most-traded contract, `ROOT.v.0`), saved
+    one file per market as data/futures/<root>_1m.parquet (ts, instrument_id,
+    high, low, close, volume). The whole cost is checked against the cap first."""
+    import databento as db
+    c = db.Historical(os.environ["DATABENTO_API_KEY"])
+    kw = dict(dataset="GLBX.MDP3", schema="ohlcv-1m", stype_in="continuous")
+    costs = {r: float(c.metadata.get_cost(symbols=[f"{r}.v.0"], start=start, end=end, **kw)) for r in roots}
+    for r, x in costs.items():
+        print(f"  {r:4s} {CROSS[r]:15s} ${x:.2f}", flush=True)
+    print(f"total ${sum(costs.values()):.2f} (cap ${max_usd:.2f})", flush=True)
+    if sum(costs.values()) > max_usd:
+        raise SystemExit("ABORT: estimate exceeds the cap; nothing was downloaded.")
+    OUT.mkdir(parents=True, exist_ok=True)
+    for r in roots:
+        p = OUT / f"{r}_1m.parquet"
+        if p.exists():
+            continue
+        parts = []
+        for y0 in range(pd.Timestamp(start).year, pd.Timestamp(end).year + 1):
+            lo = max(pd.Timestamp(start), pd.Timestamp(f"{y0}-01-01"))
+            hi = min(pd.Timestamp(end), pd.Timestamp(f"{y0 + 1}-01-01"))
+            if lo < hi:
+                df = c.timeseries.get_range(symbols=[f"{r}.v.0"], start=lo.isoformat(),
+                                            end=hi.isoformat(), **kw).to_df().reset_index()
+                parts.append(df[["ts_event", "instrument_id", "high", "low", "close", "volume"]])
+        out = pd.concat(parts, ignore_index=True).drop_duplicates("ts_event").sort_values("ts_event")
+        out["ts"] = pd.to_datetime(out["ts_event"], utc=True).astype("int64") // 10**9
+        out.drop(columns="ts_event").to_parquet(p.with_suffix(".tmp"), index=False)
+        p.with_suffix(".tmp").replace(p)
+        print(f"  {r}: {len(out):,} bars -> {p}", flush=True)
+
+
 def _et(day, hhmm) -> int:
     return int(pd.Timestamp(f"{pd.Timestamp(day):%Y-%m-%d} {hhmm}").tz_localize(TZ)
                .tz_convert("UTC").timestamp())
@@ -109,12 +146,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = ap.add_subparsers(dest="cmd", required=True)
-    f = sp.add_parser("fetch")
-    f.add_argument("--start", default="2015-12-01")
-    f.add_argument("--end", default="2026-11-07")
-    f.add_argument("--max-usd", type=float, required=True)
+    for name in ("fetch", "fetch-cross"):
+        f = sp.add_parser(name)
+        f.add_argument("--start", default="2015-12-01")
+        f.add_argument("--end", default="2026-11-07")
+        f.add_argument("--max-usd", type=float, required=True)
     a = ap.parse_args()
-    fetch(a.start, a.end, a.max_usd)
+    (fetch if a.cmd == "fetch" else fetch_cross)(a.start, a.end, a.max_usd)
     return 0
 
 

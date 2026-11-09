@@ -897,7 +897,8 @@ def run_study(ds: pd.DataFrame, min_train_days: int = 8, margin: float = 0.15,
         if mode == "fixed6":
             LAST_FIXED6.clear()
             LAST_FIXED6.update(order=ds[["day", "t"]].copy(), tested=tested.copy(),
-                               actions={k: np.asarray(v) for k, v in strategies.items()})
+                               actions={k: np.asarray(v) for k, v in strategies.items()},
+                               preds={k: np.asarray(v, dtype=float) for k, v in model_preds.items()})
         res = {k: summarize(ds, v, tested, risk_budget) for k, v in strategies.items()}
         # Item 1: the same strategies with take-profit / stop-loss exits.
         exit_keys = [k for k in [ref_short, a_key, f"{b_name} skip" if b_name else None, *combos]
@@ -1425,6 +1426,7 @@ def _cli() -> int:
         out = ds.sort_values(["day", "t"]).reset_index(drop=True)   # run_study's row order
         if LAST_FIXED6 and out[["day", "t"]].equals(LAST_FIXED6["order"].reset_index(drop=True)):
             acts = {f"act6__{k}": v for k, v in LAST_FIXED6["actions"].items()}
+            acts.update({f"pred6__{k}": v for k, v in LAST_FIXED6.get("preds", {}).items()})
             out = pd.concat([out, pd.DataFrame(acts), pd.DataFrame({"tested6": LAST_FIXED6["tested"]})], axis=1)
         out.to_parquet(OUT / (f"decisions-{a.tag}.parquet" if a.tag else "decisions.parquet"))
         print(f"\nwrote {OUT/name}")

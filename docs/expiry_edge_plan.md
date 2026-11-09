@@ -459,4 +459,19 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - The most confident 20% capture +1.6 bp vs a 3.6 bp break-even.
   - 60 min: nothing (49.9%).
   - Headline content adds a little at 30 min, nowhere near enough.
+- 2026-11-08, **Pair-trade idea (user approved): relative value across SPX,
+  NDX and RUT 0DTE.**
+  - Each decision, sell the iron fly on the index the model thinks is most
+    overpriced (lowest predicted realized/implied) and buy it on the least
+    overpriced.
+  - Both legs are equal-premium sized, the pair scaled to $1k worst case.
+  - Crash days hit both legs, so most of the crash risk cancels.
+  - **Data split, fixed before any NDX or RUT data was looked at:**
+    - Develop: 2022-05-16 → 2024-12-31.
+    - Sealed, one test: 2025-01-01 → 2026-09-04.
+    - Exam (≥2026-09-08): stays locked.
+  - The SPX side of 2025-26 has been seen before, but the pair's result
+    depends on the unseen NDX and RUT legs.
+  - The final pair rule, benchmarks and gate are written here before the
+    sealed period is opened.
 
