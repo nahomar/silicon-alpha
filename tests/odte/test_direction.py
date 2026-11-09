@@ -40,4 +40,4 @@ def test_sequence_tokens_never_see_after_t():
     later = path.copy()
     later.loc[later.index > t, "F"] = 9999.0
     b, mb = ds.tokens(later, t)
-    assert np.array_equal(a, b) and np.array_equal(ma, mb) and ma.sum() == ds.L
+    assert np.array_equal(a, b) and np.array_equal(ma, mb) and ma.sum() == 91   # 09:30 .. 11:00, fewer than L minutes so far
