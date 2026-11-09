@@ -586,4 +586,18 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     gap (NDX/RUT gaps are 4-5x SPX's).
   - PASS → the event seller joins the live shadow book. FAIL → drop it.
   - NDX and RUT 2025-01 → 2026-09 are recorded in the ledger as opened.
+- 2026-11-09, **Event-day seller on sealed NDX/RUT 2025-01 → 2026-09: PASS.**
+  - NDX, 48 event days: event days +$784/day at mid, +$625 at half-gap,
+    +$483 at the touch; other days +$89 / −$104 / −$275.
+  - RUT, 48 event days: +$419 / +$175 / −$32 per day; other days
+    −$47 / −$308 / −$534.
+  - Pooled event-minus-other at mid: +$581/day, 95% CI [+53, +1088].
+  - Caveats:
+    - 48 event days per index.
+    - The same calendar days and market as the seen SPX 2025-26, and NDX/RUT
+      move with SPX. So this rules out an SPX-only artifact, but it is not
+      independent in time.
+    - The truly independent tests are the live paper days and the SPX exam
+      (≥2026-09-08).
+  - Next: the event seller joins the live bot's shadow book.
 

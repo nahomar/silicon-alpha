@@ -1689,5 +1689,201 @@
       "verdict": "FAIL"
     },
     "forced": null
+  },
+  {
+    "data": "odte_0dte_ndxp",
+    "block": "2025-01..2026-09",
+    "start": "2025-01-01",
+    "end": "2026-09-04",
+    "opened_at": "2026-11-09 13:54",
+    "commit": "625ba12",
+    "strategies": [
+      "event-day seller"
+    ],
+    "results_event_seller": {
+      "ndx": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 37615.02533395613,
+          "event_mean_day": 783.6463611240861,
+          "other_mean_day": 89.39355018795203,
+          "diff_mean_day": 694.252810936134,
+          "diff_ci": [
+            -18.512422991740504,
+            1369.4126086982765
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 30017.535211477447,
+          "event_mean_day": 625.3653169057801,
+          "other_mean_day": -104.00716868242988,
+          "diff_mean_day": 729.37248558821,
+          "diff_ci": [
+            39.625275591008645,
+            1387.5226811274722
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 23193.122080881512,
+          "event_mean_day": 483.1900433516982,
+          "other_mean_day": -275.4070669479645,
+          "diff_mean_day": 758.5971102996627,
+          "diff_ci": [
+            89.52103186722654,
+            1405.4849773384726
+          ]
+        }
+      },
+      "rut": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 20101.64276009902,
+          "event_mean_day": 418.7842241687296,
+          "other_mean_day": -46.90391326672543,
+          "diff_mean_day": 465.6881374354551,
+          "diff_ci": [
+            -379.14359263068525,
+            1252.8970830417104
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 8421.374050324004,
+          "event_mean_day": 175.4452927150834,
+          "other_mean_day": -307.942079762141,
+          "diff_mean_day": 483.3873724772244,
+          "diff_ci": [
+            -323.3348183828789,
+            1243.5006885047053
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": -1550.9595308501666,
+          "event_mean_day": -32.3116568927118,
+          "other_mean_day": -533.9651890997258,
+          "diff_mean_day": 501.65353220701394,
+          "diff_ci": [
+            -278.47143994411755,
+            1234.4529309962106
+          ]
+        }
+      },
+      "pooled_mid": {
+        "diff_mean_day": 580.5900081105885,
+        "diff_ci": [
+          52.87374938295659,
+          1088.412527607606
+        ]
+      },
+      "verdict": "PASS"
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte_rutw",
+    "block": "2025-01..2026-09",
+    "start": "2025-01-01",
+    "end": "2026-09-04",
+    "opened_at": "2026-11-09 13:54",
+    "commit": "625ba12",
+    "strategies": [
+      "event-day seller"
+    ],
+    "results_event_seller": {
+      "ndx": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 37615.02533395613,
+          "event_mean_day": 783.6463611240861,
+          "other_mean_day": 89.39355018795203,
+          "diff_mean_day": 694.252810936134,
+          "diff_ci": [
+            -18.512422991740504,
+            1369.4126086982765
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 30017.535211477447,
+          "event_mean_day": 625.3653169057801,
+          "other_mean_day": -104.00716868242988,
+          "diff_mean_day": 729.37248558821,
+          "diff_ci": [
+            39.625275591008645,
+            1387.5226811274722
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 23193.122080881512,
+          "event_mean_day": 483.1900433516982,
+          "other_mean_day": -275.4070669479645,
+          "diff_mean_day": 758.5971102996627,
+          "diff_ci": [
+            89.52103186722654,
+            1405.4849773384726
+          ]
+        }
+      },
+      "rut": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 20101.64276009902,
+          "event_mean_day": 418.7842241687296,
+          "other_mean_day": -46.90391326672543,
+          "diff_mean_day": 465.6881374354551,
+          "diff_ci": [
+            -379.14359263068525,
+            1252.8970830417104
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 8421.374050324004,
+          "event_mean_day": 175.4452927150834,
+          "other_mean_day": -307.942079762141,
+          "diff_mean_day": 483.3873724772244,
+          "diff_ci": [
+            -323.3348183828789,
+            1243.5006885047053
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": -1550.9595308501666,
+          "event_mean_day": -32.3116568927118,
+          "other_mean_day": -533.9651890997258,
+          "diff_mean_day": 501.65353220701394,
+          "diff_ci": [
+            -278.47143994411755,
+            1234.4529309962106
+          ]
+        }
+      },
+      "pooled_mid": {
+        "diff_mean_day": 580.5900081105885,
+        "diff_ci": [
+          52.87374938295659,
+          1088.412527607606
+        ]
+      },
+      "verdict": "PASS"
+    },
+    "forced": null
   }
 ]
