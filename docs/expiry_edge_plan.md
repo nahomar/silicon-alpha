@@ -373,4 +373,23 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - The block strategies are now #1, #3, #1 sell-only and #3 sell-only.
   - The originals are unchanged, so their record stays continuous.
   - The sell-only variants are judged only on blocks from 2017H2 on.
+- 2026-11-08, **Iron fly lockbox PAUSED after 2021H1 (user's call).**
+  - Ten blocks opened. Pooled at today's cost, the model is about equal to
+    always-short; the best variant (#1 sell-only) is −$5.3k over 637 days.
+  - SPX 2021H2 and 2022H1 stay sealed, reserved for the next strategy's
+    real test.
+- 2026-11-08, **New idea (user): buy calls or puts and sell them the same day,
+  based on market context and news. Step 1, written before any run:** can
+  the S&P's direction 30-60 minutes ahead be called at all?
+  (`odte/eval/direction.py`)
+  - Development days only: SPX 2016-01 → 2021-06 and 2022-05-16 →
+    2026-09-04. Sealed days are refused by the code.
+  - Models: logistic regression and LightGBM, walk-forward by day.
+  - PASS if, for H = 30 or 60 min, a model beats the best simple rule
+    (always-up / momentum / reversal) on both accuracy and average captured
+    move, each with a 99% day-resampled CI above 0.
+  - An option buyer's break-even move (today's spread plus the hour's decay)
+    is reported alongside.
+  - FAIL means stop: plan B is a sequence transformer on minute paths, then
+    TradeFM.
 
