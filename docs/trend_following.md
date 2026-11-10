@@ -75,3 +75,26 @@ Everything below is fixed: no parameter will be changed after seeing results.
 ## Test count
 - These are 2 gated tests (G1, G2) in a new family (different data and strategy).
 - Project running count: 288 + 2 = 290.
+
+## Result (run once, 2026-11-10)
+- Data: 20 ETFs, all eligible from 2008; evaluation 2005-01 .. 2026-10. Three daily moves
+  above 25% were checked and are real: USO 2020-03-09 and 2020-04-21, and SLV
+  2026-01-30 (silver crash, GLD −10.3% the same day).
+- **G1 FAIL.** Fund version A after publication (2013-01 .. 2026-10): net Sharpe −0.05,
+  95% CI [−0.61, +0.43]. Even with zero trading costs it was only +0.21 (gross), so
+  costs are not the whole story: trend was weak in this period. Full period: net
+  +0.01, gross +0.27.
+- **G2 PASS.** In the worst 10% of SPY months (27 months, SPY average −7.7%), A averaged
+  +2.2%, CI [+0.07%, +4.7%]. Big years: 2008 +20.3%, 2020 +24.9%, 2022 +23.7%.
+  Monthly correlation with SPY: −0.18.
+- **B (small account, report-only):** CAGR +3.2%, volatility 3.6%, Sharpe 0.41, maximum
+  drawdown −8.4%. That is a lower return than equal weight (+5.9%) and 60/40 (+8.2%,
+  Sharpe 0.73). Minimum-fee drag: 11%/yr on a $1k account, 2.3% on $5k, 0.45% on
+  $25k.
+- Costs: A turns over about 36× a year at about 3.8× gross leverage, so 10 bp costs
+  about 3.6%/yr.
+- **Verdict: insurance only.** It reliably made money in crashes, but did not make
+  money overall after 2013. It does not earn a shadow slot as a money engine. Possible
+  later use, only with enough capital for micro futures: a small crash hedge next to
+  the options book, sized as insurance, with its expected cost stated up front.
+- Running test count: 290.
