@@ -912,3 +912,17 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Report: touch-cost results, O1b − O1a paired difference, hit rate, mean by
     decision time, skipped counts.
   - Running count: 290 + 2 = 292.
+- 2026-11-10, **Edge #3b result (run once): FAIL, both strategies.**
+  - Data: 11,943 decisions, 10,733 eligible (34 had no quotes, 1,176 were post-event,
+    none had a net credit); average risk $2,256 per calendar. Today's gap / mid: 0DTE
+    straddle sell 0.80%, next straddle buy 0.46%, exit 0.67%.
+  - **O1a, always-calendar:** −$67.8/day, 97.5% CI [−139.3, +3.7], Sharpe −0.74; lost
+    in both eras.
+  - **O1b, signal-calendar:** +$1.3/day, CI [−41.5, +44.0], Sharpe +0.02; eras
+    +$3.8k / −$1.1k.
+  - At the touch both lose: −$134 and −$20 per day.
+  - **The signal is real but not enough.** O1b − O1a = +$69/day [+21, +117], which
+    confirms edge #3's ts_spread, but it only lifts a losing structure to breakeven.
+  - Why it loses: the long next-expiry straddle pays the option premium (holding
+    options costs money on average), which cancels what the short 0DTE leg earns.
+  - Closed. Running count: 292.
