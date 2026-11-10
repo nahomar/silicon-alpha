@@ -140,3 +140,68 @@ def test_vertical_quotes_and_payoff():
     up = vertical_pnl("put", v, settle=103.0)        # close above K: the put spread keeps its credit
     down = vertical_pnl("put", v, settle=90.0)       # close below K - W: max loss, = -budget at the touch
     assert up["mid"] > up["touch"] > 0 and down["touch"] == pytest.approx(-300.0)
+
+
+def test_trading_day_calendar():
+    from odte.live.runner import is_trading_day
+    assert not is_trading_day("2026-11-26")          # Thanksgiving
+    assert is_trading_day("2026-11-27")              # half day, still a session
+    assert not is_trading_day("2026-11-28")          # Saturday
+    assert not is_trading_day("2026-12-25")
+    assert not is_trading_day("2027-03-26")          # Good Friday
+    assert is_trading_day("2026-11-10")
+
+
+def test_crash_cancels_the_working_order_and_saves_quotes(tmp_path):
+    """A failure mid-day leaves no order working, keeps the quotes, and alerts."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class Disconnect(ReplayBroker):
+        cancelled = []
+
+        def filled(self, h):
+            raise ConnectionError("gateway lost")
+
+        def cancel(self, h):
+            self.cancelled.append(h)
+            super().cancel(h)
+
+    alerts = []
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP")
+    b = Disconnect("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6)
+    with pytest.raises(ConnectionError) as ei:
+        run_day(cfg, b, "2026-09-04", prev_settle=7700.0, alert=lambda t, x: alerts.append((t, x)))
+    assert getattr(ei.value, "_alerted", False)
+    assert len(b.cancelled) == 1
+    log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
+    assert '"kind": "crash"' in log and '"cancelled": true' in log
+    assert (tmp_path / "c" / "2026-09-04.parquet").exists()
+    assert alerts and alerts[0][0] == "bot stopped" and "Working order cancelled" in alerts[0][1]
+
+
+def test_notify_passes_text_as_arguments_not_script(tmp_path, monkeypatch):
+    import sys
+    from odte.live import notify as nt
+    calls = []
+    monkeypatch.setattr(nt.subprocess, "run", lambda args, **kw: calls.append(args))
+    monkeypatch.setattr(sys, "platform", "darwin")
+    text = 'he said "x" & do shell script "rm"'
+    nt.notify("bot FAILED", text, log=tmp_path / "alerts.log")
+    args = calls[0]
+    assert args[-2:] == ["bot FAILED", text]                  # data, not code
+    assert all(text not in a for a in args[:-2])
+    assert "bot FAILED" in (tmp_path / "alerts.log").read_text()
+
+
+def test_day_text():
+    from odte.live.notify import day_text
+    s = {"day": "2026-09-04", "orders": 6, "fills": 1, "pnl": -12.5,
+         "shadow": {"event_seller": {"half": 602.3}, "always_sell": {"half": 1.0}}}
+    t = day_text(s)
+    assert "6 orders, 1 filled, P&L $-12.50" in t and "event_seller $+602" in t and "always_sell" not in t

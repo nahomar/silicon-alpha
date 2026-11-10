@@ -57,6 +57,9 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
   - at most 2 filled trades and 6 order attempts per day;
   - pause for 10 sessions after a $1,500 drawdown.
 - Kill switch: create the file `data/live/STOP`, and no new orders are placed.
+- Crash or lost connection mid-day: the working order is cancelled, the day's quotes are saved, a `crash` line goes in the journal and an alert fires. A fly that already filled is defined-risk and settles in cash at the close, so nothing needs closing by hand. If the cancel itself fails, the alert says so: check IBKR.
+- Alerts: a Mac notification plus one line in `data/live/logs/alerts.log` when the day finishes (orders, fills, P&L, shadow results), when the bot fails, and when the early-close list has no entries for the current year.
+- Market holidays (NYSE rules, so future years too): the bot exits at once without connecting.
 - Orders start at the mid credit and step toward the touch, giving up at most half the gap. Unfilled orders are cancelled and logged, which is data too.
 
 ## One-time IBKR setup (account owner)
@@ -113,7 +116,8 @@ cp infra/live/com.siliconalpha.bot.*.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.daily.plist
 launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.weekly.plist
 ```
-- IB Gateway must be running and logged into the paper account, and the Mac must be awake.
+- IB Gateway must be running and logged into the paper account.
+- The schedules run under `caffeinate -is`, so the Mac does not idle-sleep while the bot runs. A laptop with the lid closed still sleeps unless it is on power with an external display: keep it plugged in with the lid open from 06:00 to 13:15 Pacific.
 - IBKR periodically asks you to log in again; turn on IB Gateway's auto-restart.
 - Logs are in `data/live/logs/`.
 - The morning context refresh (yesterday's VIX etc.) and yesterday's result are handled by the runner.
@@ -122,6 +126,7 @@ launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.weekly.plist
 - Retrain the model after new data is added: `python -m odte.live.model train`.
 - Calendar: verified releases through 2027-03 (BLS/Fed pages read 2026-11-09). JOLTS dates after 2026-12-01 were not listed yet. 2027 FOMC dates are tentative.
 - Rebuild the calendar with `python3 -m odte.data.calendar build` after adding dates.
+- Early closes: add each new year's half days to `configs/calendar/early_closes.csv` (2026 is listed; the bot warns when the current year is missing).
 
 ## Known limits (v1)
 - Shock detection (unscheduled big moves) is not in the live post-event rule yet; only scheduled releases are.
