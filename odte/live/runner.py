@@ -106,7 +106,7 @@ def is_trading_day(day) -> bool:
     """Weekday and not an NYSE full-day holiday (rule-based, works for future days)."""
     from odte.data.calendar import nyse_holidays
     day = pd.Timestamp(day).normalize()
-    return day.dayofweek < 5 and day not in nyse_holidays(day, day)
+    return day.day_of_week < 5 and day not in nyse_holidays(day, day)
 
 
 def _no_alert(title, text):
