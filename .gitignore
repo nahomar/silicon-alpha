@@ -85,3 +85,4 @@ data/market/logs/
 data/supply/.last_poll
 .venv-live/
 data/live/
+data/trend/
