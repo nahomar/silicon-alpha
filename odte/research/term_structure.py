@@ -109,5 +109,41 @@ def main() -> int:
     return 0
 
 
+TAIL_COMPOSITE = ["gex_flip_dist", "gex_net", "oi_pcr_0dte", "spx_ret_prev", "gex_0dte", "vix9d_over_vix",
+                  "iv_over_rv"]                        # factory T_tail survivors (reports/factory/composites.json)
+
+
+def incremental() -> dict:
+    """Post-gate diagnostic: does ts_spread add to the factory T_tail composite?"""
+    from odte.eval.expiry_edge import paired_diff
+    d = fx.load()
+    S = fx.signals(d)
+    d = pd.concat([d, S[[c for c in TAIL_COMPOSITE if c not in d.columns]]], axis=1)
+    d = d.join(build(d), how="inner")
+    d = d[np.isfinite(d["ts_spread"])].reset_index(drop=True)
+    res, sellers = {}, {}
+    for name, cols in (("base", TAIL_COMPOSITE), ("base_plus_ts", TAIL_COMPOSITE + ["ts_spread"])):
+        pred = fx.walk_forward_ridge(d, d[cols], d["T_tail"])
+        ok = np.isfinite(pred)
+        res[name] = {"oos_ic": fx.ic_test(pd.Series(pred[ok]), d["T_tail"][ok].reset_index(drop=True),
+                                          d["day"][ok].reset_index(drop=True))}
+        thr = np.nanquantile(pred, 0.8)
+        sell = ok & (pred < thr)
+        pnl = np.where(sell, d["T_fly"].to_numpy() * 1000, 0.0)
+        sellers[name] = fx.day_series(d[ok], pnl[ok])
+        res[name]["seller"] = fx.summarize(sellers[name])
+    res["always_sell"] = fx.summarize(fx.day_series(d[ok], d["T_fly"].to_numpy()[ok] * 1000))
+    res["plus_ts_minus_base"] = paired_diff(sellers["base_plus_ts"], sellers["base"])
+    by_time = {h: fx.ic_test(g["ts_spread"], g["T_tail"], g["day"]) for h, g in d.groupby("hhmm")}
+    res["ic_by_time"] = {h: {"ic": r["ic"], "t": r["t"]} for h, r in by_time.items()}
+    out = ROOT / "reports" / "factory" / "term_structure_incremental.json"
+    out.write_text(json.dumps(res, indent=2, default=float))
+    print(json.dumps(res, indent=2, default=float))
+    return res
+
+
 if __name__ == "__main__":
+    if "--incremental" in sys.argv:
+        incremental()
+        sys.exit(0)
     sys.exit(main())
