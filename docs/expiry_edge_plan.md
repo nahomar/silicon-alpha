@@ -878,3 +878,37 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     above, made in the safe direction). Not adding a signal cannot create a
     false edge, and every extra challenger raises the Bonferroni bar for the
     rest. Edge #3 closed: real but redundant.
+
+- 2026-11-10, **Edge #3b (term structure, traded): 0DTE / next-expiry calendar.
+  Fixed before running** (`odte/research/calendar.py`). Uses data already owned
+  (`data/odte_0dte`, `data/odte_next`); seen SPX 2016-01 .. 2026-09-04, exam excluded.
+  - Trade at each fixed decision time (10:00-15:00), skipping the 60 minutes after a
+    scheduled release:
+    - sell the 0DTE straddle at strike K (the decision row's fly body);
+    - buy the next-expiry straddle at the same K.
+  - Exit:
+    - the 0DTE legs settle on the official SPX close;
+    - the next-expiry straddle is sold at the last minute before the close
+      (close − 1 min) with quotes on both sides at K.
+    - Skip (and count) a decision if K has no two-sided quotes in either expiry.
+  - Pricing:
+    - each leg at mid ∓ half of today's typical gap (gap / mid, median over
+      2025-09-01 .. 2026-09-04, measured separately for: 0DTE straddle sold,
+      next-expiry straddle bought at t, next-expiry straddle sold at exit);
+    - full-gap ("touch") results reported too;
+    - fees 6 × $1.20.
+  - Risk = net debit × 100 + fees. At the same strike, the next-expiry straddle is
+    worth at least its intrinsic value, which covers the 0DTE intrinsic, so the most
+    you can lose is the debit. Skip and count decisions with a net credit. $1k of risk
+    per decision.
+  - **O1a, always-calendar:** every eligible decision.
+  - **O1b, signal-calendar:** only when ts_spread (edge #3 survivor: IV0 − IV1) is above
+    the 70th percentile of ts_spread at the same time of day over the previous 250
+    sessions. At least 120 are needed; otherwise no trade.
+  - **Gate, per strategy:** mean daily P&L with a day-resampled bootstrap 97.5% CI
+    (Bonferroni over 2) lower bound > 0, AND a positive total in both eras (2016-21,
+    2022-26). A pass earns a shadow slot. That needs next-expiry quotes live, which is
+    a broker change.
+  - Report: touch-cost results, O1b − O1a paired difference, hit rate, mean by
+    decision time, skipped counts.
+  - Running count: 290 + 2 = 292.
