@@ -868,3 +868,13 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     out-of-sample IC of each, and the "skip the riskiest 20%" fly seller
     for each with the paired daily difference and its 95% CI. Also the IC
     of ts_spread within each decision time (is it just time of day?).
+  - **Diagnostic result.** ts_spread predicts tails at every decision time
+    (IC −0.03 to −0.06, all negative), so it is not just time of day. But it
+    adds nothing to the danger composite: out-of-sample IC 0.0624 → 0.0589,
+    skip-riskiest-20% seller $57.4k → $51.7k; paired difference −$3.2/day,
+    95% CI [−15.7, +9.0]. It repeats what vix9d_over_vix and iv_over_rv
+    already say (short-dated vol rich vs longer-dated / vs realised).
+  - **Decision: not added as a live challenger** (a change from the line
+    above, made in the safe direction). Not adding a signal cannot create a
+    false edge, and every extra challenger raises the Bonferroni bar for the
+    rest. Edge #3 closed: real but redundant.
