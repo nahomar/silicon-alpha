@@ -832,4 +832,24 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Caveat: the T_dir signals were chosen by the factory on these same days.
   - Next: the `side_seller` shadow strategy in the live bot (verticals
     priced from the live chain).
+- 2026-11-09, **Edge #3 (term structure: same-day vs next expiration). Fixed
+  before the data arrives** (`odte/research/term_structure.py`).
+  - Data: SPXW next-expiry cbbo-1m quotes during each 0DTE session, ±4%
+    strikes (user approved, ~$18), stored in `data/odte_next/` by session
+    date.
+  - Signals at decision time t, with each implied vol annualised over its
+    own trading minutes left (next expiry: minutes to today's close plus
+    390 per trading day until its expiry):
+    - ts_ratio = IV0 / IV1; ts_spread = IV0 − IV1;
+    - ts_ratio_chg = ts_ratio(t) − ts_ratio(10:00);
+    - next-expiry skew (OTM put − OTM call one implied move away, over its
+      straddle) and skew0 − skew1;
+    - next-expiry straddle change since 10:00 (relative).
+  - Targets: the factory's four (T_fly, T_dir, T_size, T_tail).
+  - **Gate:** BH-FDR q ≤ 0.05 within this batch AND |t| ≥ 3.0 (stricter,
+    because ~264 tests have now been run across the project), AND the same
+    IC sign in 2016-21 and 2022-26.
+  - Survivors join the matching factory composite as live challengers.
+  - Running count of hypothesis tests on seen data: factory 240 + edge #1
+    (1) + this batch (24).
 

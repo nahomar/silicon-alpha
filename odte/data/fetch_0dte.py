@@ -74,8 +74,9 @@ def session_window(day: pd.Timestamp) -> tuple:
     return start.isoformat(), end.isoformat()
 
 
-def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
-    """Databento cbbo DataFrame -> canonical chain rows for `day`'s expiry.
+def reduce_frame(df: pd.DataFrame, day: pd.Timestamp, expiry=None) -> pd.DataFrame:
+    """Databento cbbo DataFrame -> canonical chain rows for `day`'s expiry
+    (or `expiry`, e.g. the next expiration quoted during `day`'s session).
 
     Symbols are OSI: 'SPXW  261106C05800000' = root(6) yymmdd C/P strike*1000(8).
     The quote time is ts_recv (when the consolidated quote was recorded),
@@ -84,7 +85,8 @@ def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
     if df.empty:
         return df.iloc[0:0]
     sym = df["symbol"].astype(str)
-    keep = sym.str.slice(6, 12) == pd.Timestamp(day).strftime("%y%m%d")
+    exp = pd.Timestamp(expiry if expiry is not None else day).normalize()
+    keep = sym.str.slice(6, 12) == exp.strftime("%y%m%d")
     if not keep.any():
         return df.iloc[0:0]
     d = df.loc[keep]
@@ -94,7 +96,7 @@ def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
     out = pd.DataFrame({
         "quote_datetime": ts.to_numpy(),
         "root": s.str.slice(0, 6).str.strip().to_numpy(),
-        "expiration": pd.Timestamp(day).normalize(),
+        "expiration": exp,
         "strike": s.str.slice(13, 21).astype(np.int64).to_numpy() / 1000.0,
         "option_type": s.str.slice(12, 13).to_numpy(),
         "bid": d["bid_px_00"].astype("float64").to_numpy(),
@@ -150,7 +152,7 @@ def fetch_raw(client, day: pd.Timestamp, out_dir: Path, symbols: list,
 
 
 def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
-                  parent: str = PARENT, symbols=None) -> pd.DataFrame:
+                  parent: str = PARENT, symbols=None, expiry=None) -> pd.DataFrame:
     import databento as db
     start, end = session_window(day)
     tmp = tmp_dir / f"{day:%Y%m%d}.dbn.zst"
@@ -166,7 +168,7 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
         parts = []
         for chunk in store.to_df(count=500_000, map_symbols=True):
             chunk = chunk.reset_index()
-            parts.append(reduce_frame(chunk, day))
+            parts.append(reduce_frame(chunk, day, expiry))
         chain = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     finally:
         tmp.unlink(missing_ok=True)
@@ -202,6 +204,9 @@ def main() -> int:
                     help="request only the session's own expiry near the money, "
                          "several sessions in parallel")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--next-expiry", action="store_true",
+                    help="with --fast: quote the NEXT expiration during each session "
+                         "(next date with a same-day file in data/odte_0dte)")
     ap.add_argument("--schema", default=SCHEMA,
                     help="cbbo-1m (minute quotes, reduced) or a tick schema such as cmbp-1")
     ap.add_argument("--keep-raw", action="store_true",
@@ -224,7 +229,7 @@ def main() -> int:
     days = list(pd.bdate_range(a.start, a.end))
     if a.days_file:
         days = sorted(pd.to_datetime(pd.read_csv(a.days_file)["date"]))
-    syms = {}
+    syms, nexp = {}, {}
     if a.fast:
         # Band centre = previous session's index close (known before the open).
         import yfinance as yf
@@ -232,10 +237,20 @@ def main() -> int:
                                      end=pd.Timestamp(a.end) + pd.Timedelta(days=1),
                                      auto_adjust=False)["Close"]
         h.index = pd.to_datetime(h.index).tz_localize(None).normalize()
+        if a.next_expiry:
+            expiries = pd.DatetimeIndex(sorted(pd.Timestamp(p.stem) for p in
+                                               (ROOT / "data" / "odte_0dte").glob("20??-??-??.parquet")))
         for d in days:
             prev = h[h.index < d]
-            if len(prev):
-                syms[d] = zero_dte_symbols(a.root, d, float(prev.iloc[-1]), a.band + 0.01)
+            if not len(prev):
+                continue
+            e = d
+            if a.next_expiry:
+                later = expiries[expiries > d]
+                if not len(later):
+                    continue
+                e = nexp[d] = later[0]
+            syms[d] = zero_dte_symbols(a.root, e, float(prev.iloc[-1]), a.band + 0.01)
     todo, costs = [], {}
     def done(d):
         if a.keep_raw:
@@ -292,7 +307,7 @@ def main() -> int:
                   f"(spent ${spent[0]:.2f})", flush=True)
             return
         chain = fetch_session(client, d, Path(td), a.band, parent=parent,
-                              symbols=syms.get(d) if a.fast else None)
+                              symbols=syms.get(d) if a.fast else None, expiry=nexp.get(d))
         if chain.empty:
             print(f"{d:%Y-%m-%d}  empty after filtering")
             return
