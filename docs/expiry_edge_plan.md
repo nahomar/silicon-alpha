@@ -853,3 +853,18 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Running count of hypothesis tests on seen data: factory 240 + edge #1
     (1) + this batch (24).
 
+
+- 2026-11-09, **Edge #3 result (run once).** Data: 2,087 of 2,088 sessions
+  ($18.51; 2020-03-16 empty, the open gapped outside the band); 2,041 days,
+  11,943 decisions with next-expiry quotes. **1 survivor:** ts_spread →
+  T_tail, IC −0.046, t −3.06, both eras negative (−0.055 / −0.039). In plain
+  words: when today's options are priced richer than tomorrow's, a big move
+  is *less* likely, so selling is safer. Near misses (not promoted):
+  ts_spread → T_size t −2.99 (fails |t| ≥ 3); ts_spread → T_fly t +2.12.
+  Running count: 264 + 24 = 288 tests.
+  - **Post-gate diagnostic, fixed before running** (does not change the
+    decision; it sets expectations): on the same rows, walk-forward the
+    factory T_tail composite with and without ts_spread; report the
+    out-of-sample IC of each, and the "skip the riskiest 20%" fly seller
+    for each with the paired daily difference and its 95% CI. Also the IC
+    of ts_spread within each decision time (is it just time of day?).
