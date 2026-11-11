@@ -311,3 +311,15 @@
   - Wins above 3× risk are about 1% of trades (81 of 8,497); every straddle averages −$65
     per trade in 2022-26.
   - **The sell-only model stays alone.**
+- **2026-11-11, exam readiness audit** (file counts and sizes only; no exam prices or results
+  read):
+  - All 44 exam sessions have SPX/NDX/RUT chains, next-expiry chains, OI files and
+    settlement dates. The event calendar runs to 2027-03-31 (40 events in the window).
+  - **Bug found:** the OI files for 2026-11-04/05/06 hold 918/580/280 contracts (normal
+    about 1,400), because the bulk fetcher took expiries from the settlement file, which
+    ends 2026-11-06. Only 1-3 of the 5 expiries were requested. This affects gex_net and
+    gex_flip_dist on 3 of 44 days; the 0DTE-only inputs are unaffected.
+  - Fixed in `odte/data/fetch_oi.py` (expiries from the session calendar). The corrected
+    request is about 1,500 contracts per day, quoted at **$0.0028 total; the re-fetch awaits
+    the owner's purchase approval.** The old files will be moved to data/oi/_partial/, not
+    deleted.

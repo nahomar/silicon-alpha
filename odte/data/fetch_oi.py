@@ -122,7 +122,11 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     todo = [d for d in days if not (OUT / f"{d:%Y-%m-%d}.parquet").exists()
             and len(st[st.index < d])]
-    syms = {d: _symbols(d, sessions, float(st[st.index < d].iloc[-1])) for d in todo}
+    # Expiries must come from the full session calendar: the settlement file ends at the last
+    # downloaded day, so near its end it hides later expiries (2026-11-04..06 got 1-3 of 5).
+    cal = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
+    exp_sessions = sessions.union(cal)
+    syms = {d: _symbols(d, exp_sessions, float(st[st.index < d].iloc[-1])) for d in todo}
 
     def price(d):
         s, e = _window(d)
