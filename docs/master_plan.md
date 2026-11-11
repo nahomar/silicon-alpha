@@ -181,3 +181,23 @@
   - Same pattern as term structure: what adds in 2022-26 subtracts before 2022.
 - **Development conclusion:** the leader stands as the final-model candidate (ridge alpha 1;
   session, calendar, context, flow, strategy, factory, identity). Freeze awaits the owner's go.
+- **2026-11-11, pre-freeze statistical audit (owner asked "are you mathematically confident").
+  Verdict: NOT ready to freeze.**
+  - **Deflated Sharpe** (Bailey & López de Prado), 2022-26: uncorrected probability the edge
+    is real 97%. Corrected for the search: 66% (10 independent tries), 40% (50), 23% (200),
+    8% (2,048).
+  - **Concentration:**
+    - 2022-26 total +$661k. Without the best 1 / 5 / 10 / 20 of 1,142 days: +$481k /
+      +$237k / +$19k (Sharpe 0.03) / −$300k.
+    - The best 10 days are long straddles (+$647k), e.g. 2024-04-04, a real afternoon
+      sell-off with labels checked by hand.
+    - Daily skew 4.3, kurtosis 61.
+    - The model's edge is "when to buy straddles", carried by about 10 events.
+  - **Exam power** (2,000 contiguous 44-day blocks from 2022-26):
+    - if the backtest is true: strong pass 9%, weak-or-strong 44%;
+    - if the edge is zero: 3% and 32%;
+    - confirming a Sharpe of 0.81 needs about 2,400 trading days; 44 days can only
+      confirm a Sharpe of about 6.
+    - The exam is therefore a disaster and leak detector, not proof.
+  - **Leak audit:** factory regime signals are fit on prior years only, and walk-forward
+    labels come strictly from earlier days. Clean.
