@@ -42,3 +42,25 @@ counts, no P&L) was done.
 - Breakeven-stop condors (MEIC/BEIC) are encoded as a whole-position stop of 0.2 × credit
   (the engine has no per-side stops). The literal 1.0 variant is kept as its own entry.
 - Running count: 341 + 66 = 407.
+
+## Result (run once, 2026-11-10): 0 of 66 survive
+- 2,041 days; today's ATM-straddle relative half-spread 0.67%. FDR passes: 0. Mean > 0:
+  18 rules. Positive in both eras: 14. Positive at the touch: 11.
+- **Best (none significant; with 66 rules, |t| ≈ 2.4 is the expected best by luck):**
+  - `house_with_move_pcs_1200` (credit spread with the morning move at 12:00): +$16.5/day,
+    t 2.2, both eras positive, touch +$27.8k. Its mirror `house_against_move_pcs_1200`
+    is −$9.7/day.
+  - `dev_short_straddle_1430` (Dim-Eraker-Vilkov intraday VRP, as a 3σ-capped fly):
+    +$11.3/day, t 1.8. The 13:00 and 15:00 versions are also positive.
+  - `vilkov_bull_call_spread_lowvix` +$15.6/day (t 1.2).
+  - `house_quiet_morning_ifly_1100` +$9.7/day; `house_low_vix_ifly_1000` +$8.8/day.
+- **Popular practitioner rules lose after costs:**
+  - tastylive-style ATM iron flies with 10-20% profit targets: −$110 to −$132/day;
+  - every OTM iron condor variant (11): negative;
+  - MEIC/BEIC: positive at half-gap, negative at the touch.
+- **Premium buying loses, as expected:** lottery strangles −$256/day; Chinese "buy OTM at the
+  open, exit early" rules −$130 to −$509/day; late-day butterflies negative.
+- By family, only the intraday short-straddle (VRP), breakeven multi-entry and house
+  families average above zero.
+- Verdict: no new shadow slots. Directional credit spreads are already shadowed by
+  `side_seller` (edge #1). Running count: 407.
