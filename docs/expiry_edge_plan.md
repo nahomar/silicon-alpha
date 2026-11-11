@@ -926,3 +926,32 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Why it loses: the long next-expiry straddle pays the option premium (holding
     options costs money on average), which cancels what the short 0DTE leg earns.
   - Closed. Running count: 292.
+
+- 2026-11-10, **Edge #9: overnight premium (Muravyev & Ni, "Why do option returns change
+  sign from day to night?", JFE 2020: S&P option holders lose overnight). Fixed before
+  running** (`odte/research/overnight.py`). Data already owned: `data/odte_next` (the
+  next expiry quoted during day d) and `data/odte_0dte` (the same contracts on their
+  expiry day d+1). Seen SPX; nights with d+1 ≥ 2026-09-08 are excluded (exam stays locked).
+  - Nights used: session d whose next expiration is the very next session d+1, with
+    both files present.
+  - **Enter** at day d's close − 1 min (12:59 on half days): sell the iron fly on the
+    d+1 expiry. Body K = the two-sided strike nearest the implied forward; wings W = the
+    smallest symmetric distance ≥ 1.5 × straddle (the bot's rule).
+  - **Exit** at 09:45 on d+1: buy the same fly back at its quotes. Skip and count nights
+    with a missing leg.
+  - Pricing:
+    - half of today's gap on both sides (gap / mid medians over 2025-09-01 ..
+      2026-09-04, entry and exit measured separately);
+    - fees 8 × $1.20;
+    - risk = (W − credit) × 100 + fees, at $1k of risk per night.
+    - Touch reported.
+  - **Gate (one test):** mean nightly P&L at half-gap with a day-bootstrap 95% CI lower
+    bound > 0, AND a positive total in both eras (2016-21, 2022-26).
+  - **Report only:**
+    - the short straddle (undefined risk);
+    - touch costs;
+    - Friday-to-Monday nights vs. weekday nights;
+    - nights with a scheduled release before 09:45 on d+1 vs. the rest.
+  - A pass earns a shadow slot: the bot would need to hold overnight (sell at the close,
+    buy back the next morning).
+  - Running count: 296 + 1 = 297.
