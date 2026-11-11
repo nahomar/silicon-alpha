@@ -955,3 +955,16 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - A pass earns a shadow slot: the bot would need to hold overnight (sell at the close,
     buy back the next morning).
   - Running count: 296 + 1 = 297.
+- 2026-11-10, **Edge #9 result (run once): FAIL.**
+  - Data: 1,364 nights (570 skipped because the next expiry was not the next session,
+    106 had no entry quotes, 2 had no exit quotes). Today's gap / mid: entry 1.07%, exit
+    0.89%.
+  - **Fly at half-gap:** −$15.2 per night, 95% CI [−29.6, −1.3]; win rate 58%; lost in
+    both eras (−$12.7k / −$8.1k).
+  - At the touch: −$26.3 per night.
+  - **The premium is there before costs:** the short straddle at mid keeps +1.68% of its
+    premium per night, CI [−0.20, +3.46]. The paper's effect shows up, but it is small.
+  - **Why it fails:** crossing the spread twice (about 1% of premium each way, half of it
+    paid), 8 legs of fees, and the bought wings (themselves overpriced) eat it.
+  - Friday-to-Monday nights are no different (−$14.2 vs −$15.8).
+  - Closed. Running count: 297.
