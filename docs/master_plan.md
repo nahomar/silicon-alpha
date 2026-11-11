@@ -299,3 +299,15 @@
   - **PASS (sleeve is added beside the sell-only model)** = primary tier mean per trade at
     half > 0 with a 2022-26 CI lower bound > 0, AND mean > 0 pre-2022, AND still > 0 in
     2022-26 without the 10 best days. Otherwise the sell-only model stays alone.
+- **2026-11-11, T3 result: FAIL** (reports/meta/t3.json). Per trade, $1k risk, half-gap.
+  - **Primary** (candidate's predicted straddle > $0):
+    - 2022-26: 8,497 trades, win rate 43%, average win 0.8× risk, mean +$47 [−4, +98];
+      without the top 10 days −$14.
+    - Pre-2022: mean −$40. All three criteria fail.
+  - Bar > $100: 2022-26 +$102 [+15, +200], but pre-2022 −$161 [−283, −30]; without the top
+    10 days −$25.
+  - Bar > $250: 2022-26 +$151 [−9, +293]; pre-2022 −$90; without the top 10 days −$147.
+  - Old leader's predictions: none significant.
+  - Wins above 3× risk are about 1% of trades (81 of 8,497); every straddle averages −$65
+    per trade in 2022-26.
+  - **The sell-only model stays alone.**
