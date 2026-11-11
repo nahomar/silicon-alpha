@@ -300,7 +300,8 @@ def cmd_run() -> dict:
         res["calibration_quotes"] = int(len(cl))
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "xmarket.json").write_text(json.dumps(res, indent=2, default=str))
-    tr.to_parquet(OUT / "xmarket_trades.parquet", index=False) if len(tr) else None
+    tr.drop(columns=["bucket"], errors="ignore").to_parquet(OUT / "xmarket_trades.parquet", index=False) \
+        if len(tr) else None
     print(json.dumps(res, indent=2, default=str))
     return res
 

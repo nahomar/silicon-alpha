@@ -1179,3 +1179,18 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Q2 earns a **live shadow slot** (`calm_seller`): it is consistent with edge #14's
     adverse-selection finding and costs nothing to record.
   - Running count: 339.
+- 2026-11-10, **Edge #12 result (run once): FAIL (too few trades to tell).**
+  - Data: 6,830 candidate markets on 901 days. Kalshi was cheap by ≥ 3¢ after fees only
+    **127 times** (82 days).
+  - Mean +9.7% per trade, 95% CI [−14.6%, +34.8%]; old era +11.5% (45 trades), KX era +8.7%
+    (82 trades).
+  - YES buys +24.8% (n = 60); NO buys −3.9% (n = 67).
+  - **Calibration: Kalshi is about as accurate as the options.** Brier score: Kalshi mid
+    0.1405 vs options 0.1397, over 17,215 quotes. The retail crowd prices the S&P close
+    well.
+  - 0 mismatches between Kalshi's results and the SPX close.
+  - **Maker variant +73% per trade (3,561) is NOT evidence:** it assumes every resting bid
+    fills, which edge #14 shows is exactly when it should not.
+  - The run wrote its results, then crashed saving the trade list (an interval column);
+    fixed. The results are unaffected.
+  - Running count: 339 + 1 = 340.
