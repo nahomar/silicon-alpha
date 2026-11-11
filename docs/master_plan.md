@@ -323,3 +323,31 @@
     request is about 1,500 contracts per day, quoted at **$0.0028 total; the re-fetch awaits
     the owner's purchase approval.** The old files will be moved to data/oi/_partial/, not
     deleted.
+
+## Phase 4: FREEZE (2026-11-11, owner: "approve $0.0028 and go")
+- **Frozen spec = `odte/research/exam.py` at the freeze commit.** It fixes:
+  - model: ridge alpha 1000 (median impute, standardise), one per trade, trained on all
+    development rows except post-event rows;
+  - inputs: calendar + gex + term + flow + identity (the column list comes from the
+    development matrix, and every column must exist in the exam rows);
+  - menu: fly, condor, put spread, call spread, or none;
+  - rule: best predicted > 0, never within 60 minutes after a release;
+  - cost: half-gap (primary), touch reported;
+  - outcome rules, unchanged from Phase 5: STRONG / WEAK / FAIL; "above always-sell" =
+    pooled mean > the always-fly mean on the same days;
+  - importance: drop each of calendar / gex / term / flow, refit, and report the change in
+    the exam mean.
+- **Pre-freeze checks:**
+  - OI for 2026-11-04/05/06 re-fetched (owner approved $0.0028; spent $0.0028):
+    1,506 / 1,384 / 1,320 contracts. Old files kept in data/oi/_partial/.
+  - `exam.py dryrun` on the last 44 development days: the exam builder reproduces the
+    development matrix exactly (1,584 rows, no differing inputs, labels or flags). The
+    exam's cost constant is the development value (the cost window holds no exam days).
+  - Dry-run score (development days, not evidence): +$1,813/day vs always-sell +$2,271/day,
+    which would be FAIL. A calm stretch can fail the "above always-sell" rule even when the
+    model makes money; this was included in the pre-exam power (53% / 16%).
+  - Test suite: 197 passed.
+  - Input fingerprints: `docs/exam_inputs_manifest.json` (229 files, sha256; manifest
+    e90d5d18ca67f5d1).
+- After the run, nothing in the spec changes. Any later model is new development and is judged
+  by live paper trading, not this exam.

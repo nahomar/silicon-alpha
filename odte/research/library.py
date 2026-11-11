@@ -66,21 +66,27 @@ def today_rel_spread(sym: str, files: list, settle: pd.Series) -> float:
     return float(np.median(vals)) if vals else 0.01
 
 
-def build_index(sym: str, limit_days: list | None = None) -> pd.DataFrame:
+def build_index(sym: str, limit_days: list | None = None, allow_exam: bool = False,
+                R_today: float | None = None) -> pd.DataFrame:
+    """allow_exam: include exam-window files (still refused by exam_guard unless unlocked).
+    R_today: cost-scaling constant to use (the exam must reuse the development value: the
+    COST_WINDOW holds no exam days)."""
     from odte.data import calendar as cal
     from odte.data import context as ctx
     from odte.eval.expiry_edge import implied_forward, load_early_closes, minute_grid, session_rows
     folder = DIRS[sym]
     settle = pd.read_csv(folder / "settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
     files = sorted(p for p in folder.glob("20??-??-??.parquet"))
-    files = [p for p in files if pd.Timestamp(p.stem) < eg.EXAM_FROM]           # development only
+    if not allow_exam:
+        files = [p for p in files if pd.Timestamp(p.stem) < eg.EXAM_FROM]       # development only
     if limit_days is not None:
         files = [p for p in files if pd.Timestamp(p.stem) in set(pd.to_datetime(limit_days))]
     eg.check([p.stem for p in files])
     events, wide, early = cal.load(), ctx.load(), load_early_closes()
     timed = events[events["session_time"].notna()]
     marks_by_day = {pd.Timestamp(d): sorted(set(g["session_time"])) for d, g in timed.groupby("session")}
-    R_today = today_rel_spread(sym, files, settle)
+    if R_today is None:
+        R_today = today_rel_spread(sym, files, settle)
     rows, prev_ratio = [], np.nan
     for p in files:
         day = pd.Timestamp(p.stem)
