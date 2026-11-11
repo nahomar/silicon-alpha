@@ -256,3 +256,64 @@ def test_watch_finished_and_backup(tmp_path):
     assert (dest / "live/journal/2026-11-11.jsonl").exists()
     assert not (dest / "live/journal/2026-11-11-replay.jsonl").exists()
     assert watch.backup(cfg, dest, push=False) == "backup: nothing new"
+
+
+def test_xindex_rule():
+    from odte.live.xshadow import xindex_side
+    assert xindex_side(0.7, {"NDX": 0.8, "RUT": 0.9}, False)[0] == 1
+    assert xindex_side(0.85, {"NDX": 0.8, "RUT": 0.9}, False)[0] == 0
+    assert xindex_side(0.7, {"NDX": 0.8}, False)[0] == 0                 # an index missing: no trade
+    assert xindex_side(0.7, {"NDX": 0.8, "RUT": 0.9}, True)[0] == 0       # after a release
+
+
+def test_replay_day_with_ndx_rut_shadows(tmp_path):
+    """NDX/RUT are recorded and shadow-traded on their own quotes; SPX decisions are unchanged."""
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    need = [root / f"data/{d}/2026-09-04.parquet" for d in ("odte_0dte", "odte_0dte_ndxp", "odte_0dte_rutw")]
+    if not all(p.exists() for p in need) or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live import xshadow
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    mdir = tmp_path / "m"
+    for sym in ("NDX", "RUT"):
+        xshadow.train(sym, path=mdir / f"model_{sym.lower()}.pkl")
+    (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())
+    base = dict(mode="replay", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP", model_path=mdir / "model.pkl")
+    a = run_day(Config(**base, journal_dir=tmp_path / "ja", shadow_indexes=()),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    b = run_day(Config(**base, journal_dir=tmp_path / "jb"),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    assert (a["orders"], a["fills"], a["pnl"]) == (b["orders"], b["fills"], b["pnl"])   # SPX path untouched
+    recs = [json.loads(l) for l in (tmp_path / "jb" / "2026-09-04.jsonl").read_text().splitlines()]
+    kinds = {r["kind"] for r in recs}
+    assert {"shadow_index", "settle_index"} <= kinds
+    names = {r.get("strategy") for r in recs if r["kind"] == "shadow_settle"}
+    assert {"event_seller:NDX", "event_seller:RUT", "always_sell:RUT"} <= names      # Sep 4: jobs report
+    assert any(r.get("strategy") == "xindex_spx" for r in recs if r["kind"] == "shadow")
+    assert (tmp_path / "c" / "ndx" / "2026-09-04.parquet").exists()
+
+
+def test_index_shadows_fail_safe_without_models(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+    (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())    # no NDX/RUT models here
+    s = run_day(Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                       kill_switch=tmp_path / "STOP", model_path=mdir / "model.pkl"),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    assert s["decisions"] == 6
+    notes = [json.loads(l)["text"] for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()
+             if json.loads(l)["kind"] == "note"]
+    assert any("NDX shadow off today" in t for t in notes)

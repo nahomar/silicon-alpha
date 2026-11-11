@@ -41,7 +41,8 @@ def _sources(cfg: Config) -> list:
     live = cfg.journal_dir.parent
     out = [(p, Path("journal") / p.name) for p in sorted(cfg.journal_dir.glob("20??-??-??.jsonl"))]
     out += [(p, Path("chains") / p.name) for p in sorted(cfg.chain_dir.glob("20??-??-??.parquet"))]
-    out += [(p, Path("chains/xsp") / p.name) for p in sorted((cfg.chain_dir / "xsp").glob("20??-??-??.parquet"))]
+    for sub in ("xsp", "ndx", "rut"):
+        out += [(p, Path("chains") / sub / p.name) for p in sorted((cfg.chain_dir / sub).glob("20??-??-??.parquet"))]
     for name in ("registry.json", "logs/alerts.log"):
         if (live / name).exists():
             out.append((live / name, Path(name)))

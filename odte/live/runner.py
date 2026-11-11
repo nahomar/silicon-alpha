@@ -148,6 +148,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                    if cfg.symbol == "XSP" else [])
     broker.subscribe(day, strikes, xsp_strikes)
     j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes), n_xsp_strikes=len(xsp_strikes))
+    from odte.live import xshadow
+    xsides = xshadow.setup(cfg, broker, day, spot, prev_settle, j)     # NDX/RUT, shadow only
 
     chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
     ratio_ref = None
@@ -161,6 +163,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 chain.append(broker.snapshot())
                 if cfg.symbol == "XSP":
                     xchain.append(broker.snapshot_xsp())
+                xshadow.record(xsides, broker)
                 last_snap = minute
             hhmm = now.strftime("%H:%M")
             if hhmm in times and hhmm not in done and now.second >= 2:
@@ -216,6 +219,19 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                                         "xfly": xfly})
                         j.log(now, "shadow", strategy=f"model:{name}", hhmm=hhmm, side=side,
                               pred=round(cp, 4) if np.isfinite(cp) else None)
+                    if xsides:                                  # NDX/RUT shadows + edge #10
+                        try:
+                            xp = xshadow.decide(xsides, hhmm, dctx, bool(recent), now, j, shadows)
+                            spx_ratio = pred if bundle.get("kind", "ratio") == "ratio" else (
+                                predict(cands["ratio_ridge_full"], r) if "ratio_ridge_full" in cands else np.nan)
+                            xs, xwhy = xshadow.xindex_side(spx_ratio, xp, bool(recent))
+                            shadows.append({"strategy": "xindex_spx", "hhmm": hhmm, "side": xs, "row": r,
+                                            "xfly": xfly})
+                            j.log(now, "shadow", strategy="xindex_spx", hhmm=hhmm, side=xs, reason=xwhy,
+                                  preds={k: round(v, 4) for k, v in {"SPX": spx_ratio, **xp}.items()
+                                         if np.isfinite(v)})
+                        except Exception as e:
+                            j.log(now, "note", text=f"index shadows failed at {hhmm}: {e!r}")
                     why = None
                     wants = [n for n in order_strats if sides.get(n) == 1]
                     if not wants:
@@ -292,6 +308,10 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 cancelled = False
                 j.log(broker.now(), "note", text=f"cancel failed: {ce!r}")
         _save_chains(cfg, day, tag, chain, xchain)
+        try:
+            xshadow.save(xsides, cfg, day, tag)
+        except Exception:
+            pass
         j.log(broker.now(), "crash", error=repr(e), working_order=active is not None, cancelled=cancelled,
               fills=len(fills))
         alert("bot stopped", f"{day:%Y-%m-%d} {broker.now():%H:%M}: {e!r}. "
@@ -307,10 +327,18 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     if active is not None:
         broker.cancel(active["h"])
     _save_chains(cfg, day, tag, chain, xchain)
+    xshadow.save(xsides, cfg, day, tag)
     if side_b is not None and len(skew_hist) and not tag:      # never let replays touch live history
         sp = cfg.journal_dir.parent / "side" / "skew_history.parquet"
         skew_hist[skew_hist["day"] >= day - pd.Timedelta(days=60)].to_parquet(sp, index=False)
     settle = broker.settlement(day)
+    try:
+        xset = xshadow.settles(xsides, broker, day) if xsides else {}
+    except Exception as e:
+        xset = {}
+        j.log(broker.now(), "note", text=f"index settlements failed: {e!r}")
+    for k, (v, src) in xset.items():
+        j.log(broker.now(), "settle_index", sym=k, settle=round(v, 2), source=src)
     s = 0.1 if cfg.symbol == "XSP" else 1.0
     pnl = 0.0
     for f in fills:
@@ -319,8 +347,13 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         j.log(broker.now(), "settle", hhmm=f["hhmm"], settle=settle, pnl=round(p, 2))
     book = {}
     for sh in shadows:
-        p = (vertical_pnl(sh["structure"], sh["vq"], settle) if sh.get("structure")
-             else shadow_pnl(sh["side"], sh["row"], settle))
+        if sh.get("index"):                               # NDX/RUT: their own fly and close
+            if sh["index"] not in xset:
+                continue
+            p = shadow_pnl(sh["side"], sh["row"], xset[sh["index"]][0])
+        else:
+            p = (vertical_pnl(sh["structure"], sh["vq"], settle) if sh.get("structure")
+                 else shadow_pnl(sh["side"], sh["row"], settle))
         if p and sh.get("xfly"):                          # same trade on XSP's own bid/ask
             px = shadow_pnl(sh["side"], sh["xfly"], settle / 10.0)
             p.update({f"xsp_{k}": v for k, v in px.items()})

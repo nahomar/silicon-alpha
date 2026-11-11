@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 
 TZ = "America/New_York"
+ROOTS = {"SPX": "SPXW", "XSP": "XSP", "NDX": "NDXP", "RUT": "RUTW"}     # PM-settled 0DTE classes
+REPLAY_DIRS = {"NDX": "data/odte_0dte_ndxp", "RUT": "data/odte_0dte_rutw"}
 CHAIN_COLS = ["quote_datetime", "root", "expiration", "strike", "option_type",
               "bid", "ask", "bid_size", "ask_size"]
 
@@ -124,6 +126,30 @@ class ReplayBroker:
                 if np.isfinite(tc) and tc >= o["price"] - 1e-9:
                     o.update(filled=o["order"].qty, avg=o["price"], live=False)
 
+    def subscribe_extra(self, sym, day, strikes):
+        """Another index's own 0DTE quotes (shadow only), from its history folder."""
+        if not hasattr(self, "extra"):
+            self.extra = {}
+        h = pd.read_parquet(f"{REPLAY_DIRS[sym]}/{self.day:%Y-%m-%d}.parquet")
+        h["quote_datetime"] = pd.to_datetime(h["quote_datetime"])
+        self.extra[sym] = (h[h["strike"].isin(set(strikes))], set(strikes))
+
+    def snapshot_extra(self, sym):
+        h, _ = self.extra[sym]
+        v = h[h["quote_datetime"] <= self.t]
+        last = v.sort_values("quote_datetime").groupby(["option_type", "strike"]).tail(1).copy()
+        last["quote_datetime"] = self.t
+        return last[CHAIN_COLS]
+
+    def settlement_extra(self, sym, day):
+        st = pd.read_csv(f"{REPLAY_DIRS[sym]}/settlements.csv", parse_dates=["date"]).set_index("date")
+        return float(st.loc[pd.Timestamp(day).normalize(), "spx_close"])
+
+    def prev_close_extra(self, sym, day):
+        st = pd.read_csv(f"{REPLAY_DIRS[sym]}/settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
+        st = st[st.index < pd.Timestamp(day).normalize()]
+        return float(st.iloc[-1]) if len(st) else float("nan")
+
     def reconcile(self, day) -> dict:
         """End-of-day broker view (replay: from the simulated order book)."""
         return {"open_orders": sum(1 for o in self.orders.values() if o["live"]),
@@ -172,7 +198,7 @@ class IBKRBroker:
 
     def _option(self, symbol, day, k, right):
         from ib_async import Option
-        tc = "SPXW" if symbol == "SPX" else "XSP"
+        tc = ROOTS[symbol]
         return Option(symbol, f"{pd.Timestamp(day):%Y%m%d}", k, right, "SMART",
                       multiplier="100", currency="USD", tradingClass=tc)
 
@@ -188,7 +214,7 @@ class IBKRBroker:
     def _rows(self, sym):
         now = self.now()
         num = lambda x: float(x) if x is not None and math.isfinite(x) and x >= 0 else np.nan
-        root = {"SPX": "SPXW", "XSP": "XSP"}[sym]
+        root = ROOTS[sym]
         rows = [{"quote_datetime": now, "root": root, "expiration": self.day, "strike": k,
                  "option_type": r, "bid": num(t.bid), "ask": num(t.ask),
                  "bid_size": num(t.bidSize), "ask_size": num(t.askSize)}
@@ -197,6 +223,36 @@ class IBKRBroker:
 
     def snapshot(self):
         return self._rows(self.cfg.signal_symbol)
+
+    def subscribe_extra(self, sym, day, strikes):
+        """Another index's 0DTE quotes for the shadow book (uses extra quote lines)."""
+        cons = [self._option(sym, day, k, r) for k in strikes for r in ("C", "P")]
+        cons = [c for c in (self.ib.qualifyContracts(*cons) if cons else []) if c and c.conId]
+        if not cons:
+            raise RuntimeError(f"no {sym} 0DTE contracts resolved")
+        for c in cons:
+            self.tickers[(sym, c.right, float(c.strike))] = self.ib.reqMktData(c, "", False, False)
+
+    def snapshot_extra(self, sym):
+        return self._rows(sym)
+
+    def settlement_extra(self, sym, day):
+        """Official close from Yahoo (no index data subscription needed)."""
+        import yfinance as yf
+        day = pd.Timestamp(day).normalize()
+        h = yf.Ticker({"NDX": "^NDX", "RUT": "^RUT"}[sym]).history(start=day, end=day + pd.Timedelta(days=1),
+                                                                 auto_adjust=False)
+        if h.empty:
+            raise RuntimeError(f"no {sym} close for {day:%Y-%m-%d} yet")
+        return float(h["Close"].iloc[-1])
+
+    def prev_close_extra(self, sym, day):
+        import yfinance as yf
+        day = pd.Timestamp(day).normalize()
+        h = yf.Ticker({"NDX": "^NDX", "RUT": "^RUT"}[sym]).history(start=day - pd.Timedelta(days=10), end=day,
+                                                                 auto_adjust=False)
+        h = h[pd.DatetimeIndex(h.index).tz_localize(None).normalize() < day]
+        return float(h["Close"].iloc[-1]) if len(h) else float("nan")
 
     def snapshot_xsp(self):
         return self._rows("XSP")

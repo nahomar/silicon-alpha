@@ -51,6 +51,16 @@ def main() -> int:
     except Exception as e:
         print(f"5. {cfg.symbol} contracts: FAIL ({e})")
         ok = False
+    for sym in cfg.shadow_indexes:                   # shadow-only indexes (need extra quote lines)
+        try:
+            from odte.live.broker import ROOTS
+            prev = b.prev_close_extra(sym, day)
+            k = round(prev / 50) * 50 if sym == "NDX" else round(prev / 5) * 5
+            q = b.ib.qualifyContracts(b._option(sym, day, k, "C"))
+            print(f"6. {ROOTS[sym]} 0DTE contract resolves: {'yes' if q and q[0].conId else 'NO'} "
+                  f"(prev close {prev:,.2f}; shadow only)")
+        except Exception as e:
+            print(f"6. {sym} shadow contracts: FAIL ({e}); the SPX bot is unaffected")
     b.ib.disconnect()
     print("\nREADY for paper trading." if ok else "\nNot ready yet; see the lines above.")
     return 0 if ok else 1

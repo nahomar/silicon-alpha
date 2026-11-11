@@ -39,6 +39,15 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
   - `size_filter` (factory T_size composite, rank rule).
 - Promotion bar: a paired advantage ≥ max(1.5, Bonferroni z at 10% / number of challengers) standard errors, about 2.13 with 6.
 
+## NDX and RUT (shadow only, `odte/live/xshadow.py`)
+- Each day the bot also records NDXP and RUTW 0DTE quotes (NDX every 50 points, RUT every 5, about ±2.5%; 22 strikes each). That needs IBKR's Quote Booster (+100 lines, $30/month): SPX + XSP use 95 of the default 100 lines, and the total with NDX/RUT is about 183. Without it, the index shadows log "no quotes" and the SPX bot is unaffected.
+- Shadows, no orders:
+  - `event_seller:NDX` and `event_seller:RUT`: the event-day seller on each index's own fly. This is the live evidence the go/no-go rules require per index.
+  - `always_sell:NDX/RUT`: the baselines.
+  - `xindex_spx`: edge #10, sell SPX only when its predicted realized/implied is the lowest of the three. The live models were trained on different periods (SPX 2016-22, NDX/RUT 2022-24), so the levels can differ. Watch its trade rate: it was 25% in the backtest, and if it trades almost always it is just always-sell.
+- Models: `python -m odte.live.xshadow train` (ridge, same features as SPX, pair-trade development rows 2022-05 .. 2024-12) writes `data/live/model_ndx.pkl` and `model_rut.pkl`.
+- Closes: Yahoo after the close, else the last implied forward (logged as `settle_index` with its source).
+
 ## XSP pricing
 - The bot records XSP's own quotes (nearest-the-money ±8 strikes) alongside SPX's. The quote-line budget is split: 34 lines XSP, the rest SPX.
 - Orders and an extra shadow P&L (`xsp_mid/half/touch`) are priced on XSP's own bid/ask. If XSP quotes are missing, SPX/10 is used, and the journal records `priced_on`.

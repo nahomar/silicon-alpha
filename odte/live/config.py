@@ -47,6 +47,7 @@ class Config:
     band: float = 0.03
     outer_step: float = 25.0
     max_lines: int = 95                 # IBKR default: 100 simultaneous quote lines (SPX + XSP)
+    shadow_indexes: tuple = ("NDX", "RUT")   # shadow only, extra quote lines (odte/live/xshadow.py)
     xsp_halfwidth: int = 8              # XSP strikes recorded: nearest-the-money +/- 8 points, every 1
 
     def spx_lines(self) -> int:
