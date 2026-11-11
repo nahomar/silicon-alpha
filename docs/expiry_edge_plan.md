@@ -1032,3 +1032,54 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - This confirms the bot's hold-to-expiry design: exits pay the gap a second time and
     give up the flies that pin near K.
   - Closed. Running count: 299.
+
+- 2026-11-10, **Edge #12: Kalshi S&P 500 close markets vs SPX 0DTE option fair value.
+  Fixed before any Kalshi S&P price or outcome is looked at** (`kalshi/xmarket.py`).
+  Only tickers, strike types and titles were listed, to size the data.
+  - Idea: the SPX options market prices the probability of every S&P 500 closing range.
+    Kalshi's daily S&P markets settle on the same official close but trade mostly among
+    retail traders. Buy a Kalshi contract when it is clearly cheaper than the options
+    say it is worth.
+  - **Caveat stated in advance:** option prices give risk-neutral probabilities, which
+    overstate crash odds (investors pay for protection). So "Kalshi is cheap" on downside
+    tails may be right, and realized P&L decides. Results are reported by bet type.
+  - **Markets:**
+    - Kalshi markets that settle on that session's official S&P 500 close: series INX,
+      INXD, INXU, INXDU (2022-24), KXINX, and KXINXU tickers containing `H1600`;
+    - close_time = that session's close (early closes included);
+    - strike types between / greater / greater_or_equal / less;
+    - lifetime volume ≥ 100 contracts;
+    - KXINXU thinned to thresholds that are multiples of 25 points (selection by strike
+      only, to limit API calls).
+    - Sessions 2022-05-16 .. 2026-09-04 (the SPX exam period stays locked).
+  - **Thresholds:**
+    - between: the two numbers in the title, lo ≤ S ≤ hi;
+    - greater (_or_equal): S > T, with T from the ticker's `-T`;
+    - less: S < T.
+    - Markets whose title does not parse are dropped and counted.
+  - **Decision times:** 11:00, 13:00, 15:00 ET.
+  - **Fair value p\*** from the SPX 0DTE chain at t:
+    - call prices from out-of-the-money mids (puts converted by parity, C = P + F − K,
+      with F the implied forward);
+    - P(S > x) = −ΔC/ΔK at strike midpoints, clipped to [0, 1], made non-increasing,
+      linearly interpolated;
+    - NaN outside the quoted strikes;
+    - between = P(S > lo) − P(S > hi); less = 1 − P(S > T).
+  - **Pre-filter** (options only, no Kalshi prices or outcomes): keep markets with p\* in
+    [0.05, 0.95] at one or more decision times. Hourly candles are fetched only for these,
+    08:00-16:00 ET on the day.
+  - **Kalshi quote at t:** the latest hourly candle ending at or before t and within 6 h;
+    0 < bid < ask < 1.
+  - **Trade:** the first decision time where either
+    - YES: ask + fee(ask) ≤ p\* − 0.03; or
+    - NO: (1 − bid) + fee(1 − bid) ≤ (1 − p\*) − 0.03.
+    - Fee = today's taker fee 0.07 × P × (1 − P), multiplier 1, rounded up to $0.0001.
+    - One trade per market, one contract.
+  - **Return** on capital per trade = (payoff − price − fee) / (price + fee). The payoff
+    comes from Kalshi's `result`; mismatches against the SPX close are reported.
+  - **Gate (one test):** mean return per trade, day-clustered bootstrap (10,000, seed 0)
+    95% CI lower bound > 0, AND a positive mean in both eras (before 2024-10-24, the
+    INX family; from then, the KX family).
+  - **Report:** YES vs NO; by p\* bucket; by decision time; calibration (Brier score)
+    of Kalshi mid vs. options p\* against outcomes; volume; a maker variant (optimistic).
+  - Running count: 299 + 1 = 300.
