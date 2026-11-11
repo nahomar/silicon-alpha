@@ -18,5 +18,5 @@ def test_daily_signal_math():
     c = pd.DataFrame({"vix": 20.0, "vvix": 100.0, "skew": np.linspace(120, 144, 25), "move": 100.0,
                       "ovx": 40.0, "gvz": 15.0, "vxn": 25.0}, index=idx)
     s = st.daily_signals(c)
-    assert s["vvix_over_vix"].iloc[-1] == 5.0 and s["vxn_over_vix"].iloc[-1] == 1.25
-    assert s["move_chg5"].iloc[-1] == 0.0 and s["skew_z20"].iloc[-1] > 1
+    assert s["g_vvix_over_vix"].iloc[-1] == 5.0 and s["g_vxn_over_vix"].iloc[-1] == 1.25
+    assert s["g_move_chg5"].iloc[-1] == 0.0 and s["g_skew_z20"].iloc[-1] > 1

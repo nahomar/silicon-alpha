@@ -1100,3 +1100,6 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - **Post-gate diagnostic for any survivor** (does not change the verdict): out-of-sample
     IC of the matching factory composite with and without it.
   - Running count: 300 + 36 = 336.
+  - Bug fixed before any result: the first run crashed on a column-name clash (the SKEW
+    index signal was named `skew`, like the 0DTE option-skew feature). The signals are now
+    prefixed `g_`. No IC was computed in the crashed run.

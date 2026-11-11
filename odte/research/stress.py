@@ -17,8 +17,8 @@ from odte.research import factory as fx
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "research" / "stress.parquet"
 TICKERS = ["^VIX", "^VVIX", "^SKEW", "^MOVE", "^OVX", "^GVZ", "^VXN"]
-SIGNALS = ["vvix", "vvix_over_vix", "skew", "skew_z20", "move", "move_chg5",
-           "ovx_over_vix", "gvz_over_vix", "vxn_over_vix"]
+SIGNALS = ["g_vvix", "g_vvix_over_vix", "g_skew", "g_skew_z20", "g_move", "g_move_chg5",
+           "g_ovx_over_vix", "g_gvz_over_vix", "g_vxn_over_vix"]      # g_: not the 0DTE "skew" feature
 T_MIN = 3.0
 
 
@@ -49,7 +49,7 @@ def daily_signals(c: pd.DataFrame) -> pd.DataFrame:
     s["ovx_over_vix"] = c["ovx"] / c["vix"]
     s["gvz_over_vix"] = c["gvz"] / c["vix"]
     s["vxn_over_vix"] = c["vxn"] / c["vix"]
-    return s
+    return s.add_prefix("g_")
 
 
 def as_of_previous_close(sig: pd.DataFrame, days: pd.Series) -> pd.DataFrame:
