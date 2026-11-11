@@ -45,6 +45,7 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - The key live metric is `share_of_gap_paid` per fill, on XSP's book.
 
 ## Before any real money (binding, from the plan)
+- Full rules, including stop rules: `docs/go_no_go.md`.
 - The event-day seller must pass the SPX exam AND at least 60 live event days.
 - Both are scored at the touch on the traded symbol's own quotes, per index.
 - Then one XSP lot per trade until at least a year of live data.
@@ -60,6 +61,9 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - Crash or lost connection mid-day: the working order is cancelled, the day's quotes are saved, a `crash` line goes in the journal and an alert fires. A fly that already filled is defined-risk and settles in cash at the close, so nothing needs closing by hand. If the cancel itself fails, the alert says so: check IBKR.
 - Alerts: a Mac notification plus one line in `data/live/logs/alerts.log` when the day finishes (orders, fills, P&L, shadow results), when the bot fails, and when the early-close list has no entries for the current year.
 - Market holidays (NYSE rules, so future years too): the bot exits at once without connecting.
+- End-of-day reconciliation: the bot asks IBKR for open orders, today's executions and any option positions expiring after today, and compares them with its journal. A mismatch raises an alert.
+- Every journal starts with the exact code version (git commit, `+dirty` if `odte/` had local edits).
+- Live market data is shared with the paper account only while the LIVE login is not in use: stay logged out of the live website and app during market hours (IBKR error 10197 otherwise).
 - Orders start at the mid credit and step toward the touch, giving up at most half the gap. Unfilled orders are cancelled and logged, which is data too.
 
 ## One-time IBKR setup (account owner)
@@ -111,10 +115,12 @@ The final exam (SPX ≥ 2026-09-08) is never used for training.
 ## Running it automatically (owner installs; schedules are in `infra/live/`)
 - Daily, Mon-Fri 06:00 Pacific (= 09:00 Eastern): the bot starts, waits for the open, trades and settles.
 - Weekly, Saturday 08:00 Pacific: the learning loop.
+- Evening, Mon-Fri 13:30 Pacific (`odte.live.watch`): alerts if today's run did not finish or the disk has under 10 GB free, then backs up journals, recorded quotes, alerts and the registry to the PRIVATE repo `nahomar/silicon-alpha-records` (local clone `~/projects/silicon-alpha-records`). The quotes are IBKR market data for personal use: keep that repo private.
 ```
 cp infra/live/com.siliconalpha.bot.*.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.daily.plist
 launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.weekly.plist
+launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.evening.plist
 ```
 - IB Gateway must be running and logged into the paper account.
 - The schedules run under `caffeinate -is`, so the Mac does not idle-sleep while the bot runs. A laptop with the lid closed still sleeps unless it is on power with an external display: keep it plugged in with the lid open from 06:00 to 13:15 Pacific.

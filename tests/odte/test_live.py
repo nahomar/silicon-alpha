@@ -205,3 +205,54 @@ def test_day_text():
          "shadow": {"event_seller": {"half": 602.3}, "always_sell": {"half": 1.0}}}
     t = day_text(s)
     assert "6 orders, 1 filled, P&L $-12.50" in t and "event_seller $+602" in t and "always_sell" not in t
+
+
+def test_reconcile_flags_every_kind_of_mismatch():
+    from odte.live.runner import reconcile_problems
+    ok = {"open_orders": 0, "orders_with_fills": 1, "later_expiry_positions": 0}
+    assert reconcile_problems(ok, 1) == []
+    assert "still open" in reconcile_problems({**ok, "open_orders": 1}, 1)[0]
+    assert "journal has 0" in reconcile_problems(ok, 0)[0]
+    assert "expiring after today" in reconcile_problems({**ok, "later_expiry_positions": 2}, 1)[0]
+
+
+def test_replay_day_reconciles_and_logs_the_code_version(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP")
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["reconcile_ok"] is True
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    assert recs[0]["kind"] == "start" and recs[0]["code"] not in ("", None)
+    rec = [r for r in recs if r["kind"] == "reconcile"][0]
+    assert rec["ok"] and rec["orders_with_fills"] == rec["journal_fills"] == s["fills"]
+
+
+def test_watch_finished_and_backup(tmp_path):
+    import json
+    import subprocess
+    from odte.live import watch
+    cfg = Config(mode="paper", journal_dir=tmp_path / "live/journal", chain_dir=tmp_path / "live/chains")
+    cfg.journal_dir.mkdir(parents=True)
+    assert not watch.finished(cfg, "2026-11-11")
+    p = cfg.journal_dir / "2026-11-11.jsonl"
+    p.write_text(json.dumps({"kind": "start"}) + "\n")
+    assert not watch.finished(cfg, "2026-11-11")
+    p.write_text(p.read_text() + json.dumps({"kind": "day_summary", "pnl": 0}) + "\n")
+    assert watch.finished(cfg, "2026-11-11")
+    (cfg.journal_dir / "2026-11-11-replay.jsonl").write_text("{}\n")      # tests are not backed up
+    dest = tmp_path / "records"
+    subprocess.run(["git", "init", "-q", str(dest)], check=True)
+    subprocess.run(["git", "-C", str(dest), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(dest), "config", "user.name", "t"], check=True)
+    assert "1 file(s)" in watch.backup(cfg, dest, push=False)
+    assert (dest / "live/journal/2026-11-11.jsonl").exists()
+    assert not (dest / "live/journal/2026-11-11-replay.jsonl").exists()
+    assert watch.backup(cfg, dest, push=False) == "backup: nothing new"

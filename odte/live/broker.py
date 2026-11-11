@@ -124,6 +124,12 @@ class ReplayBroker:
                 if np.isfinite(tc) and tc >= o["price"] - 1e-9:
                     o.update(filled=o["order"].qty, avg=o["price"], live=False)
 
+    def reconcile(self, day) -> dict:
+        """End-of-day broker view (replay: from the simulated order book)."""
+        return {"open_orders": sum(1 for o in self.orders.values() if o["live"]),
+                "orders_with_fills": sum(1 for o in self.orders.values() if o["filled"] > 0),
+                "later_expiry_positions": 0}
+
     def settlement(self, day):
         if self._settle is not None:
             return self._settle
@@ -223,6 +229,25 @@ class IBKRBroker:
         self.ib.sleep(0)
         s = trade.orderStatus
         return int(s.filled or 0), float(s.avgFillPrice or float("nan"))
+
+    def reconcile(self, day) -> dict:
+        """End of day, read-only: what IBKR itself shows, to compare with the journal.
+        open orders left; distinct orders with executions today; option positions
+        expiring after today (the bot only trades same-day options, so expect 0)."""
+        day = pd.Timestamp(day).normalize()
+        self.ib.sleep(1)
+        open_orders = len(self.ib.openTrades())
+        ids = set()
+        for f in self.ib.reqExecutions():
+            t = pd.Timestamp(f.execution.time)
+            t = (t.tz_localize("UTC") if t.tzinfo is None else t).tz_convert(TZ).tz_localize(None)
+            if t.normalize() == day and f.contract.secType in ("BAG", "OPT"):
+                ids.add(f.execution.orderId)
+        later = [p for p in self.ib.positions()
+                 if p.contract.secType == "OPT" and p.position != 0
+                 and str(p.contract.lastTradeDateOrContractMonth)[:8] > f"{day:%Y%m%d}"]
+        return {"open_orders": open_orders, "orders_with_fills": len(ids),
+                "later_expiry_positions": len(later)}
 
     def settlement(self, day):
         bars = self.ib.reqHistoricalData(self.index, endDateTime="", durationStr="2 D",

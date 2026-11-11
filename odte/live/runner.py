@@ -126,7 +126,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     close_t = day + pd.Timedelta(hours=int(close_hhmm[:2]), minutes=int(close_hhmm[3:]))
     times = [h for h in cfg.decision_times if h < close_hhmm]
     events = [day + pd.Timedelta(hours=int(h[:2]), minutes=int(h[3:])) for h in dctx["event_times"]]
-    j.log(broker.now(), "start", config={k: str(v) for k, v in asdict(cfg).items()},
+    j.log(broker.now(), "start", code=code_version(), config={k: str(v) for k, v in asdict(cfg).items()},
           model=bundle.get("name"), model_kind=bundle.get("kind", "ratio"),
           model_rows=bundle["n_rows"], events=dctx["event_times"], close=close_hhmm)
     is_paused = paused(cfg, day)
@@ -340,8 +340,52 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                "share_of_gap_paid": [round((f["o"].mid - f["credit"]) / (f["o"].mid - f["o"].touch), 3)
                                      if f["o"].mid > f["o"].touch else None for f in fills],
                "pnl": round(pnl, 2), "settle": settle}
+    summary["reconcile_ok"] = _reconcile(broker, day, fills, j, alert)
     j.log(broker.now(), "day_summary", **summary)
     return summary
+
+
+def reconcile_problems(rec: dict, journal_fills: int) -> list:
+    out = []
+    if rec["open_orders"]:
+        out.append(f"{rec['open_orders']} order(s) still open at IBKR")
+    if rec["orders_with_fills"] != journal_fills:
+        out.append(f"IBKR shows {rec['orders_with_fills']} filled order(s), journal has {journal_fills}")
+    if rec["later_expiry_positions"]:
+        out.append(f"{rec['later_expiry_positions']} option position(s) expiring after today")
+    return out
+
+
+def _reconcile(broker, day, fills, j, alert):
+    """Funds check their own records against the broker every night; so do we."""
+    if not hasattr(broker, "reconcile"):
+        return None
+    try:
+        rec = broker.reconcile(day)
+    except Exception as e:
+        j.log(broker.now(), "note", text=f"reconcile failed: {e!r}")
+        alert("bot reconcile failed", f"{day:%Y-%m-%d}: {e!r}. Check IBKR by hand.")
+        return False
+    problems = reconcile_problems(rec, len(fills))
+    j.log(broker.now(), "reconcile", **rec, journal_fills=len(fills), ok=not problems, problems=problems)
+    if problems:
+        alert("bot reconcile MISMATCH", f"{day:%Y-%m-%d}: " + "; ".join(problems))
+    return not problems
+
+
+def code_version() -> str:
+    """Short git commit of the code that ran (+dirty if odte/ had local edits)."""
+    import subprocess
+    from pathlib import Path
+    root = str(Path(__file__).resolve().parents[2])
+    try:
+        h = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"], capture_output=True,
+                           text=True, timeout=5).stdout.strip()
+        dirty = subprocess.run(["git", "-C", root, "status", "--porcelain", "--", "odte"],
+                               capture_output=True, text=True, timeout=5).stdout.strip()
+        return (h or "unknown") + ("+dirty" if dirty else "")
+    except Exception:
+        return "unknown"
 
 
 def load_databento_key() -> None:
