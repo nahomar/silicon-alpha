@@ -149,3 +149,21 @@
     decisions).
   - It often gains when always-sell loses badly (Nov 2025, Apr and Jun 2026).
   - **Warning recorded before the exam:** 2026 year-to-date is negative.
+- **2026-11-11, new ideas, pre-registered before any result.** Base = the leader (ridge alpha 1;
+  session, calendar, context, flow, strategy, factory). "Worse era" = min(Sharpe 2022-26,
+  Sharpe 2018-21), half-gap; the leader's is 0.64.
+  - **N1 path shape** (`odte/research/paths.py`, group `path`, 7 inputs from the minute path
+    up to the decision only):
+    - inputs: trend vs reversion (1-minute autocorrelation, 5-minute variance ratio); implied-
+      vol surprise vs square-root-of-time decay; 15-minute straddle momentum; minutes since
+      the day's high and low; drop from the high in implied moves;
+    - **kept if** leader + path raises the worse-era Sharpe by ≥ 0.05 and lowers neither era's
+      Sharpe by more than 0.05.
+  - **N2 sequence model on Sol GPU** (`odte/research/seq.py`):
+    - a 1-D convolutional network over the day's minute path (future minutes masked out),
+      joined with the leader's inputs, predicting all five trades' returns;
+    - same walk-forward (start after 500 days, refit every 63); 3 seeds averaged;
+    - **kept if** its worse-era Sharpe beats the leader's; then also tested as a 50/50 blend
+      with the leader's predictions.
+  - These are the last development candidates for path data. A candidate that is kept joins the
+    final model; otherwise the leader stands.
