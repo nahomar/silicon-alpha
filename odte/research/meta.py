@@ -282,8 +282,34 @@ def search(task: int) -> dict:
     return res
 
 
+def search_daily(task: int) -> Path:
+    """T2: the same grid point as search(task), saving its daily P&L (half and touch)."""
+    n = 2 ** len(SEARCH_GROUPS)
+    mask, alpha = task % n, SEARCH_ALPHAS[task // n]
+    d = load()
+    groups = feature_groups(d.columns)
+    keep = [g for i, g in enumerate(SEARCH_GROUPS) if mask >> i & 1] + ["identity"]
+    feats = [c for g in keep for c in groups.get(g, [])]
+    X = d[feats].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+    Y = {k: d[f"y_{k}_half"].to_numpy(float) for k in TRADES}
+    preds = walk_forward(d, X, Y, f"ridge_a{alpha:g}")
+    cols = {}
+    for tag in ("half", "touch"):
+        dec = decide(d, preds, tag)
+        cols[tag] = dec[dec["tested"]].groupby("day")["ret"].sum()
+    out = OUT / "search_daily"
+    out.mkdir(parents=True, exist_ok=True)
+    f = out / f"s{task:05d}.parquet"
+    pd.DataFrame(cols).rename_axis("day").reset_index().to_parquet(f, index=False)
+    return f
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["search"]:
+    if sys.argv[1:2] == ["search_daily"]:
+        for t in [int(x) for x in sys.argv[2:]]:
+            if not (OUT / "search_daily" / f"s{t:05d}.parquet").exists():
+                search_daily(t)
+    elif sys.argv[1:2] == ["search"]:
         tasks = [int(x) for x in sys.argv[2:]]
         for t in tasks:
             if not (OUT / "search" / f"s{t:05d}.json").exists():
