@@ -167,3 +167,8 @@
       with the leader's predictions.
   - These are the last development candidates for path data. A candidate that is kept joins the
     final model; otherwise the leader stands.
+- **2026-11-11, N1 result (path shape): NOT KEPT** (reports/meta/n1.json).
+  - leader: 2022-26 Sharpe 0.81 (+$579/day); 2018-21 0.64 (+$186); touch +$181. Worse era 0.64.
+  - leader + path: 2022-26 0.63 (+$455); 2018-21 0.78 (+$229); touch +$59. Worse era 0.63.
+  - The worse era changes by −0.01 (rule: ≥ +0.05), and 2022-26 drops 0.18 (rule: ≤ 0.05).
+  - Path inputs alone: 2022-26 −$134/day, Sharpe −0.34; 2018-21 −0.02.
