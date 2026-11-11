@@ -233,7 +233,11 @@
 - **Sell-only menu** (same leader predictions, straddle removed from the menu):
   - 2022-26: +$497/day, Sharpe 1.15; capped 1.12; without the top 10 days 0.83; touch +$183
     (0.43). Mix: fly 44%, call spread 30%, put spread 21%, condor 6%; takes 73%.
-  - 2018-21: −$68/day, Sharpe −0.31, vs always-fly −$114 (−0.36).
+  - 2018-21: −$68/day, Sharpe −0.31, vs always-fly on the same days −$73 (−0.23): an excess
+    of only +$4.7/day. (Corrected: an earlier draft compared it with always-fly over a
+    different set of days, −$114.)
+  - Note for every "2018-21" figure in this log: walk-forward predictions start after 500
+    days, so the evaluated pre-2022 window is 2019-06-26 .. 2021-12-31 (402 days).
   - The leader's positive 2018-21 came from straddles (without its top 10 days: −1.00).
 - **Amended selection rule, fixed before T2's results** (T2 re-run saves both menus):
   - Menu = sell-only (fly, condor, put spread, call spread, or no trade).
