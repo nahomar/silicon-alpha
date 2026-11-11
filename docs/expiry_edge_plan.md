@@ -1213,3 +1213,18 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - AND a positive total over 2016-21 (also walk-forward).
   - Report: ridge; the share of rows sold; the touch.
   - Running count: 407 + 1 = 408.
+- 2026-11-11, **Edge #16 result (run once): FAIL (LightGBM, the gated model).** The ridge on
+  the same inputs (report-only) is the strongest modern-era result so far.
+  - Inputs: 84 after removing duplicates (live feature list + factory signals + term
+    structure); 10,762 rows.
+  - **LightGBM:** sells 50% of rows. 2022-26: +$39.4/day [−62.5, +141.7] vs. always-sell
+    +$38.8; difference +$0.6 [−110, +113]. 2016-21 walk-forward: −$15.1k. IC 0.026.
+  - **Ridge (report only, not a gated result):**
+    - 2022-26: +$158.7/day [+59.2, +258.8]; vs. always-sell +$119.9/day [+8.9, +232.3];
+      touch 2022-26 +$152k; IC 0.060.
+    - **But 2016-21 walk-forward: −$43.2k.**
+    - It works in the daily-expiry era (2022+) and not before. It is pre-registered as
+      report-only, so it is NOT a pass.
+    - Closest live proxy: `model:profit_ridge_full` (ridge, profit target, live features),
+      already shadowed. The term-structure inputs would need next-expiry quotes live.
+  - Running count: 408.
