@@ -55,7 +55,8 @@ def load() -> pd.DataFrame:
         d = pd.read_parquet(p)
         d = d[d["day"] < eg.EXAM_FROM].reset_index(drop=True)
         eg.check(d["day"])
-        for c in ("es_on_range", "es_on_rv", "gex_0dte", "gex_flip_dist", "gex_net", "maxoi_dist", "oi_pcr_0dte"):
+        for c in ("es_on_range", "es_on_rv", "es_on_ret", "es_on_vol", "es_last15", "gex_0dte", "gex_flip_dist",
+                  "gex_net", "maxoi_dist", "oi_pcr_0dte"):
             if c not in d.columns:
                 d[c] = np.nan                                             # not available for this index
         d = d.sort_values(["day", "hhmm"]).reset_index(drop=True)
