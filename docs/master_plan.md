@@ -351,3 +351,28 @@
     e90d5d18ca67f5d1).
 - After the run, nothing in the spec changes. Any later model is new development and is judged
   by live paper trading, not this exam.
+
+## Phase 5: EXAM RESULT (run once, 2026-11-11; freeze commit ebadab6; inputs 229/229 fingerprints unchanged)
+- **Outcome: WEAK PASS** (docs/exam_result.json). 44 sessions, 2026-09-08 .. 2026-11-06,
+  1,584 decisions.
+- **Half-gap (primary):** +$323/day, 90% CI [−$1,162, +$1,682], total +$14,229; 61% of days
+  positive.
+  - Always-sell over the same days: −$1,022/day.
+  - **Model − always-sell: +$1,346/day [−$244, +$3,078].**
+- **Touch:** −$121/day [−$1,575, +$1,220]; always-sell −$1,733/day. **Model − always-sell
+  +$1,612/day [+$110, +$3,280]**: the CI is above 0.
+- **By index** ($/day): SPX +$558, NDX −$191, RUT −$44.
+- **Trades:** takes 64% of decisions; per trade +$14 with a 68% win rate. Mix: fly 57%, call
+  spread 35%, put spread 8%, condor 0.1%.
+- **Importance** (exam $/day lost when the group is removed): gex +$334, calendar +$313,
+  flow +$105, term −$8.
+- **Reading:**
+  - Sellers had a bad two months (always-sell −$45k over 44 days). The model stayed positive
+    by sitting out 36% of decisions and choosing shapes.
+  - The edge is in SPX, as in development.
+  - Term structure, central in development, added nothing here; dealer gamma and the event
+    calendar carried it.
+  - Probability the edge is real: about 60% before → about 83% after a pass (power 53% if
+    real vs 16% if not).
+- **Per the plan: a weak pass makes this model the live bot's lead shadow.** Real money
+  still requires docs/go_no_go.md.
