@@ -71,26 +71,23 @@ def similarities(f: pd.DataFrame) -> pd.DataFrame:
 def monthly_panel(daily: pd.DataFrame, month_ends: pd.DatetimeIndex) -> tuple:
     """(next-month return, close at t, 21-day median dollar volume at t) per (t, symbol).
     A stock that stops trading earns its last price (cash) for the rest of the month."""
-    rets, closes, dvs = {}, {}, {}
+    parts = []
     for sym, g in daily.groupby("symbol"):
         g = g.set_index("date").sort_index()
+        g = g[~g.index.duplicated(keep="last")]
         r = split_adjusted_returns(g["close"])
         wealth = (1 + r.fillna(0)).cumprod()
         dv = (g["close"] * g["volume"]).rolling(21, min_periods=15).median()
-        w_at = wealth.reindex(month_ends, method="ffill")
-        last_day = g.index.max()
-        for i, t in enumerate(month_ends[:-1]):
-            if t < g.index.min() or t > last_day:
-                continue
-            t1 = month_ends[i + 1]
-            w0 = w_at.iloc[i]
-            w1 = wealth[wealth.index <= t1].iloc[-1]          # last price if delisted mid-month
-            rets[(t, sym)] = w1 / w0 - 1
-            closes[(t, sym)] = g["close"][g.index <= t].iloc[-1]
-            dvs[(t, sym)] = dv[dv.index <= t].iloc[-1] if (dv.index <= t).any() else np.nan
-    idx = pd.MultiIndex.from_tuples(list(rets), names=["t", "symbol"])
-    return pd.DataFrame({"ret": list(rets.values()), "close": [closes[k] for k in rets],
-                         "dv": [dvs[k] for k in rets]}, index=idx)
+        w_at = wealth.reindex(month_ends, method="ffill")       # last price on or before each month-end
+        c_at = g["close"].reindex(month_ends, method="ffill")
+        d_at = dv.reindex(month_ends, method="ffill")
+        ok = (month_ends[:-1] >= g.index.min()) & (month_ends[:-1] <= g.index.max())
+        if not ok.any():
+            continue
+        ret = w_at.to_numpy()[1:] / w_at.to_numpy()[:-1] - 1      # delisted mid-month: ffill = last price
+        parts.append(pd.DataFrame({"t": month_ends[:-1][ok], "symbol": sym, "ret": ret[ok],
+                                   "close": c_at.to_numpy()[:-1][ok], "dv": d_at.to_numpy()[:-1][ok]}))
+    return pd.concat(parts, ignore_index=True).set_index(["t", "symbol"])
 
 
 # ---------------------------------------------------------------------------
