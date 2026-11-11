@@ -117,3 +117,21 @@
   alpha {1, 10, 100, 1000} = 2,048 walk-forward runs on development data. It will be ranked by
   the **worse of the two eras' Sharpe** (robust objective) before any freeze. Caveat recorded
   now: searching 2,048 configurations on the same data overfits it; the exam is the judge.
+- **2026-11-11, Phase 3 search result** (2,048 runs, development; reports/meta/search_summary.csv):
+  - 410 of 2,048 are positive in both eras.
+  - **Leading robust family:** session + calendar + context + flow + strategy + factory
+    (± gex, ± cross), ridge alpha 1.
+    - 2022-26: Sharpe 0.81, +$579/day.
+    - 2018-21: Sharpe 0.64, +$186/day.
+    - Touch 2022-26: +$181/day.
+    - Its neighbours (adding or removing gex / cross) score almost the same: a plateau, not
+      a lone spike.
+  - **Term structure appears in none of the top 50 robust configurations.** The best
+    2022-26-only configurations all use it (calendar + gex + term + flow, Sharpe 1.74,
+    +$1,027/day), and all lose in 2018-21 (Sharpe −0.5 to −0.9).
+    - Likely mechanism: before 2022, SPX had Mon/Wed/Fri expiries, so the "next expiry"
+      was often two days away, and the term signal meant something else.
+  - Top-50 robust: alpha 1 in 27, alpha 10 in 17. Groups: session / context / factory 34
+    each, strategy 32, calendar 28, cross 27, gex 26, flow 24, term 0.
+  - Caveat: the leader was selected from 2,048 runs on the same data, so its Sharpe is
+    optimistic. The exam decides.
