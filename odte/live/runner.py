@@ -152,6 +152,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     xsides = xshadow.setup(cfg, broker, day, spot, prev_settle, j)     # NDX/RUT, shadow only
 
     chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
+    from odte.live import flowshadow
+    pending_flow = []                                    # edge #15 calm seller, decided at t+5
     ratio_ref = None
     opened_worst, n_trades = 0.0, 0
     last_snap = None
@@ -191,6 +193,9 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         ratio_ref = (r["K"], r["straddle_mid"])
                     t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
                     recent = [e for e in events if 0 <= (t_dec - e).total_seconds() / 60 <= cfg.post_event_min]
+                    pending_flow.append({"hhmm": hhmm, "t0": t_dec, "t5": t_dec + pd.Timedelta(minutes=5),
+                                         "K": r["K"], "W": r["W"], "mid0": r["fly_credit_mid"],
+                                         "recent": bool(recent)})
                     sides = {}
                     for name, rule in STRATEGIES.items():          # shadow book: no orders
                         side, reason = rule(sig, bool(recent), r)
@@ -275,6 +280,15 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         j.log(now, "order", hhmm=hhmm, symbol=o.symbol, K=o.K, W=o.W, qty=o.qty,
                               price=o.ladder[0], mid=o.mid, touch=o.touch, ladder=o.ladder,
                               worst_case=round(o.worst_case, 2))
+            for pf in [p for p in pending_flow if now >= p["t5"] + pd.Timedelta(seconds=2)]:
+                pending_flow.remove(pf)
+                try:
+                    fside, row5, fwhy = flowshadow.decide(pf, chain)
+                    if row5 is not None:
+                        shadows.append({"strategy": "calm_seller", "hhmm": pf["hhmm"], "side": fside, "row": row5})
+                    j.log(now, "shadow", strategy="calm_seller", hhmm=pf["hhmm"], side=fside, reason=fwhy)
+                except Exception as e:
+                    j.log(now, "note", text=f"calm_seller failed at {pf['hhmm']}: {e!r}")
             if active is not None:
                 q, avg = broker.filled(active["h"])
                 o = active["o"]

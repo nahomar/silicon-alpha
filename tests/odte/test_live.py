@@ -317,3 +317,41 @@ def test_index_shadows_fail_safe_without_models(tmp_path):
     notes = [json.loads(l)["text"] for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()
              if json.loads(l)["kind"] == "note"]
     assert any("NDX shadow off today" in t for t in notes)
+
+
+def test_calm_seller_burst_rule():
+    import pandas as pd
+    from odte.live import flowshadow as fs
+    t0 = pd.Timestamp("2026-09-04 10:00:02")
+
+    def snap(t, body_bid):
+        rows = [("C", 100.0, body_bid, body_bid + 0.2), ("P", 100.0, body_bid, body_bid + 0.2),
+                ("C", 110.0, 0.5, 0.6), ("P", 90.0, 0.5, 0.6)]
+        return pd.DataFrame([{"quote_datetime": t, "option_type": r, "strike": k, "bid": b, "ask": a}
+                             for r, k, b, a in rows])
+    pf = {"t0": t0, "t5": t0 + pd.Timedelta(minutes=5), "K": 100.0, "W": 10.0, "mid0": 3.0, "recent": False}
+    calm = [snap(t0 + pd.Timedelta(minutes=m, seconds=56), 2.0) for m in range(5)]   # touch credit 2.8
+    side, row, why = fs.decide(pf, calm)
+    assert side == 1 and why == "calm" and abs(row["fly_credit"] - 2.8) < 1e-9
+    burst = calm[:2] + [snap(t0 + pd.Timedelta(minutes=2, seconds=56), 2.2)] + calm[3:]  # touch 3.2 >= 3.05
+    assert fs.decide(pf, burst)[0] == 0
+    assert fs.decide({**pf, "recent": True}, calm)[0] == 0
+    early = [snap(t0 - pd.Timedelta(minutes=1), 2.0)]                                  # before t0: ignored
+    assert fs.decide(pf, early)[2] == "no quotes in the 5 minutes"
+
+
+def test_replay_day_logs_calm_seller(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+    run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+            "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    calm = [r for r in recs if r["kind"] == "shadow" and r.get("strategy") == "calm_seller"]
+    assert len(calm) == 6 and {r["hhmm"] for r in calm} == {"10:00", "11:00", "12:00", "13:00", "14:00", "15:00"}

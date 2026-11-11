@@ -35,6 +35,6 @@ def day_text(s: dict) -> str:
     sh = s.get("shadow", {})
     parts = [f"{k} ${v.get('half', 0):+,.0f}" for k, v in sh.items()
              if k in ("event_seller", "sell_only", "side_seller", "event_seller:NDX", "event_seller:RUT",
-                      "xindex_spx")]
+                      "xindex_spx", "calm_seller")]
     return (f"{s['day']}: {s['orders']} orders, {s['fills']} filled, P&L ${s['pnl']:+,.2f}"
             + (f". Shadow (half-gap): {', '.join(parts)}" if parts else ""))

@@ -48,6 +48,9 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - Models: `python -m odte.live.xshadow train` (ridge, same features as SPX, pair-trade development rows 2022-05 .. 2024-12) writes `data/live/model_ndx.pkl` and `model_rut.pkl`.
 - Closes: Yahoo after the close, else the last implied forward (logged as `settle_index` with its source).
 
+## Calm seller (edge #15 Q2, shadow only, `odte/live/flowshadow.py`)
+- At each decision the fly's mid is noted. Five minutes later, if the fly's touch credit reached that mid + $0.05 at any minute (a burst: informed flow), it stands aside; otherwise it shadow-sells the same fly at the t+5 quotes. Backtest near-miss: +$23/day vs always-sell [−21, +67].
+
 ## XSP pricing
 - The bot records XSP's own quotes (nearest-the-money ±8 strikes) alongside SPX's. The quote-line budget is split: 34 lines XSP, the rest SPX.
 - Orders and an extra shadow P&L (`xsp_mid/half/touch`) are priced on XSP's own bid/ask. If XSP quotes are missing, SPX/10 is used, and the journal records `priced_on`.
