@@ -293,10 +293,12 @@ def search_daily(task: int) -> Path:
     X = d[feats].apply(pd.to_numeric, errors="coerce").to_numpy(float)
     Y = {k: d[f"y_{k}_half"].to_numpy(float) for k in TRADES}
     preds = walk_forward(d, X, Y, f"ridge_a{alpha:g}")
+    sell = dict(preds, long_straddle=np.full(len(d), np.nan))     # T1 consequence: sell-only menu
     cols = {}
-    for tag in ("half", "touch"):
-        dec = decide(d, preds, tag)
-        cols[tag] = dec[dec["tested"]].groupby("day")["ret"].sum()
+    for prefix, pr in (("", preds), ("sell_", sell)):
+        for tag in ("half", "touch"):
+            dec = decide(d, pr, tag)
+            cols[prefix + tag] = dec[dec["tested"]].groupby("day")["ret"].sum()
     out = OUT / "search_daily"
     out.mkdir(parents=True, exist_ok=True)
     f = out / f"s{task:05d}.parquet"

@@ -222,3 +222,26 @@
     - Rank by the worse era. Also reported: the Sharpe without the best 10 days.
     - **The new leader is the top configuration**, checked for a plateau (its neighbours ±1
       group score close) and with a deflated Sharpe reported.
+- **2026-11-11, T1 result: FAIL** (reports/meta/skill_t1.json).
+  - E1 stratified AUC: 2022-26 0.529 [0.514, 0.546]; 2018-21 0.529 [0.497, 0.563], so the
+    lower bound misses 0.5 by 0.003.
+  - One-input benchmark (−iv_over_rv): 0.516 and 0.536.
+  - E2 (straddle doubles): 2022-26 0.544 [0.517, 0.572]; 2018-21 0.511 [0.459, 0.571].
+  - Straddle picks' lift on E1: 1.07× [1.03, 1.11] and 1.18× [1.08, 1.27].
+  - Reading: a small, consistent timing skill, not proven, about the same as one simple
+    input. **Per the rule, the final model's trade menu excludes long straddles.**
+- **Sell-only menu** (same leader predictions, straddle removed from the menu):
+  - 2022-26: +$497/day, Sharpe 1.15; capped 1.12; without the top 10 days 0.83; touch +$183
+    (0.43). Mix: fly 44%, call spread 30%, put spread 21%, condor 6%; takes 73%.
+  - 2018-21: −$68/day, Sharpe −0.31, vs always-fly −$114 (−0.36).
+  - The leader's positive 2018-21 came from straddles (without its top 10 days: −1.00).
+- **Amended selection rule, fixed before T2's results** (T2 re-run saves both menus):
+  - Menu = sell-only (fly, condor, put spread, call spread, or no trade).
+  - **Primary = 2022-26 Sharpe with the best 1% of days capped** (today's daily-expiry
+    market, the plan's primary era).
+  - **Guard:** the 2018-21 daily P&L must beat always-fly (mean excess > 0), so the model's
+    choices add value even in the older market where selling itself lost.
+  - Plateau check and deflated Sharpe reported. The 5-trade T2 ranking is reported as
+    pre-registered.
+  - Honest cost: every change of criterion is one more degree of freedom; the deflated
+    Sharpe will include it.
