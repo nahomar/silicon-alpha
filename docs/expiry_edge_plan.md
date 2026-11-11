@@ -999,3 +999,25 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - It earns a **live shadow candidate** note only. It needs NDX and RUT option quotes in
     the live bot, so the costs and IBKR quote-line limits must be checked first.
   - Running count: 298.
+
+- 2026-11-10, **Edge #11: early exit (take profit at 50%). Fixed before running**
+  (`odte/research/early_exit.py`). Seen SPX decisions 2016-01 .. 2026-09-04 (exam
+  excluded), skipping the 60 minutes after a scheduled release.
+  - Same short iron fly as every test (decision row K, W). Entry at mid minus half of
+    today's gap (1.69% of mid); fees 4 × $1.20; risk = (W − credit) × 100 + fees, $1k of
+    risk per decision.
+  - **E1:** from the next minute until close − 1 min, buy the fly back the first minute
+    its mid value is ≤ 50% of the entry mid credit.
+    - Exit price: mid + half of that minute's quoted gap (touch − mid), scaled to today's
+      level by the decision's ratio (today's gap / its own quoted entry gap).
+    - Exit fees: 4 × $1.20.
+    - If the exit never triggers, hold to expiry (cash settlement).
+  - Baseline: hold every fly to expiry (same rows, same entry price).
+  - **Gate (one test):** E1 mean daily P&L, day-bootstrap 95% CI lower bound > 0, AND a
+    positive total in both eras (2016-21, 2022-26).
+  - **Report only:**
+    - E1 − hold (paired);
+    - E2, stop-loss when the buy-back mid is ≥ 2× the entry credit;
+    - E1 + E2 together;
+    - exit rates.
+  - Running count: 298 + 1 = 299.
