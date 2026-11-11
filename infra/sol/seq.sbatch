@@ -3,7 +3,6 @@
 #   sbatch infra/sol/seq.sbatch      -> reports/meta/seq/preds_seed{0,1,2}.parquet
 #SBATCH -J meta-seq
 #SBATCH -p public
-#SBATCH -q public
 #SBATCH --gres=gpu:1
 #SBATCH -c 4
 #SBATCH --mem=32G
