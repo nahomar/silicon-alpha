@@ -31,3 +31,14 @@ counts, no P&L) was done.
 - The full table (mean/day, t, p, totals by era, touch total, trade days), and family-level
   summaries.
 - Running count: 341 + number of rules.
+
+## Frozen batch (2026-11-10, before the run)
+- `docs/strategy_zoo_catalog.json`: 80 entries; **66 testable rules** (58 from public
+  sources, compiled by a research agent, plus 8 `house` ideas from this project's
+  findings). sha256 prefix 39295746a84fc88d.
+- Sources: `docs/strategy_zoo_sources.md`. Reddit blocks automated reading, so no
+  subreddit is covered; Zhihu and Xueqiu were blocked too (not worked around).
+  13 entries come from Chinese sources (8 testable).
+- Breakeven-stop condors (MEIC/BEIC) are encoded as a whole-position stop of 0.2 × credit
+  (the engine has no per-side stops). The literal 1.0 variant is kept as its own entry.
+- Running count: 341 + 66 = 407.
