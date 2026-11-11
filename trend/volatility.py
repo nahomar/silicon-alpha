@@ -47,7 +47,6 @@ def strategy(px: pd.DataFrame, thr: float, cost_bp: float = COST_BP) -> pd.DataF
 
 
 def run() -> dict:
-    px = tb.load.__wrapped__() if hasattr(tb.load, "__wrapped__") else None
     px = pd.read_parquet(DATA)
     big = px["SVXY"].pct_change(fill_method=None)
     res = {"svxy_daily_moves_over_25pct": {str(k.date()): round(float(v), 4) for k, v in big[big.abs() > 0.25].items()}}
