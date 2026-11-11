@@ -1083,3 +1083,20 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - **Report:** YES vs NO; by p\* bucket; by decision time; calibration (Brier score)
     of Kalshi mid vs. options p\* against outcomes; volume; a maker variant (optimistic).
   - Running count: 299 + 1 = 300.
+
+- 2026-11-10, **Edge #13: new stress gauges (free daily closes from Yahoo). Fixed before
+  any of these series is joined to outcomes** (`odte/research/stress.py`). Only
+  availability (first and last dates) was checked.
+  - Series: ^VIX, ^VVIX, ^SKEW, ^MOVE, ^OVX, ^GVZ, ^VXN. ^COR1M, ^COR3M and ^RVX are not on
+    Yahoo and are dropped.
+  - All signals use the **previous session's close** (known before the open):
+    - vvix, vvix_over_vix, skew, skew_z20 (SKEW vs its own 20-session mean and sd);
+    - move, move_chg5 (5-session log change);
+    - ovx_over_vix, gvz_over_vix, vxn_over_vix.
+  - Targets: the factory's four (T_fly, T_dir, T_size, T_tail); seen SPX decisions
+    2016-01 .. 2026-09-04.
+  - **Gate** (same as edge #3): BH-FDR q ≤ 0.05 within this batch of 36 AND |t| ≥ 3.0 AND
+    the same IC sign in 2016-21 and 2022-26.
+  - **Post-gate diagnostic for any survivor** (does not change the verdict): out-of-sample
+    IC of the matching factory composite with and without it.
+  - Running count: 300 + 36 = 336.
