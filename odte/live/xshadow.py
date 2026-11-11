@@ -150,9 +150,8 @@ def save(sides: list, cfg: Config, day, tag: str) -> None:
     for s in sides:
         rows = [c for c in s.chain if len(c)]
         if rows:
-            d = cfg.chain_dir / s.sym.lower()
-            d.mkdir(parents=True, exist_ok=True)
-            pd.concat(rows, ignore_index=True).to_parquet(d / f"{pd.Timestamp(day):%Y-%m-%d}{tag}.parquet")
+            from odte.live.runner import merge_save
+            merge_save(rows, cfg.chain_dir / s.sym.lower() / f"{pd.Timestamp(day):%Y-%m-%d}{tag}.parquet")
 
 
 if __name__ == "__main__":

@@ -40,6 +40,8 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
 - Promotion bar: a paired advantage ≥ max(1.5, Bonferroni z at 10% / number of challengers) standard errors, about 2.13 with 6.
 
 ## What is logged, and the study report (`odte/live/report.py`)
+- Decisions: orders only at the six tested times (10:00 .. 15:00 ET). Shadow-only decisions also run at 10:30 .. 15:30 (`shadow_times`), so the shadow book gets twice the evidence and a time-of-day study. Same-day decisions are correlated: the real unit of evidence is still days.
+- Restarts never wipe a day: the journal appends (with a `restart` line) and quote files merge.
 - The journal (`data/live/journal/YYYY-MM-DD.jsonl`) has one line per event:
   - start (code version, config), guards (shock threshold), subscribed, shadow_index;
   - every model input at each decision (`row`), decision (prediction, prices, SPX and XSP fly quotes, action, reason);

@@ -68,7 +68,7 @@ def test_replay_day_order_fill_and_settlement(tmp_path):
             o.update(filled=o["order"].qty, avg=price, live=False)
 
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP", max_trades_per_day=1)
+                 kill_switch=tmp_path / "STOP", shadow_times=(), max_trades_per_day=1)
     s = run_day(cfg, SecondRung("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
                 "2026-09-04", prev_settle=7700.0)
     assert s["fills"] == 1 and s["decisions"] == 6
@@ -173,7 +173,7 @@ def test_crash_cancels_the_working_order_and_saves_quotes(tmp_path):
 
     alerts = []
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP")
+                 kill_switch=tmp_path / "STOP", shadow_times=())
     b = Disconnect("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6)
     with pytest.raises(ConnectionError) as ei:
         run_day(cfg, b, "2026-09-04", prev_settle=7700.0, alert=lambda t, x: alerts.append((t, x)))
@@ -225,7 +225,7 @@ def test_replay_day_reconciles_and_logs_the_code_version(tmp_path):
     from odte.live.broker import ReplayBroker
     from odte.live.runner import run_day
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP")
+                 kill_switch=tmp_path / "STOP", shadow_times=())
     s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
                 "2026-09-04", prev_settle=7700.0)
     assert s["reconcile_ok"] is True
@@ -281,7 +281,7 @@ def test_replay_day_with_ndx_rut_shadows(tmp_path):
     for sym in ("NDX", "RUT"):
         xshadow.train(sym, path=mdir / f"model_{sym.lower()}.pkl")
     (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())
-    base = dict(mode="replay", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP", model_path=mdir / "model.pkl")
+    base = dict(mode="replay", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP", shadow_times=(), model_path=mdir / "model.pkl")
     a = run_day(Config(**base, journal_dir=tmp_path / "ja", shadow_indexes=()),
                 ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
                 prev_settle=7700.0)
@@ -310,7 +310,7 @@ def test_index_shadows_fail_safe_without_models(tmp_path):
     mdir.mkdir()
     (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())    # no NDX/RUT models here
     s = run_day(Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                       kill_switch=tmp_path / "STOP", model_path=mdir / "model.pkl"),
+                       kill_switch=tmp_path / "STOP", shadow_times=(), model_path=mdir / "model.pkl"),
                 ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
                 prev_settle=7700.0)
     assert s["decisions"] == 6
@@ -349,7 +349,7 @@ def test_replay_day_logs_calm_seller(tmp_path):
     from odte.live.broker import ReplayBroker
     from odte.live.runner import run_day
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
     run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
             "2026-09-04", prev_settle=7700.0)
     recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
@@ -399,7 +399,7 @@ def test_replay_shock_blocks_orders(tmp_path):
     from odte.live.runner import run_day
     alerts = []
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
     run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
             "2026-09-04", prev_settle=7700.0, shock_thr=0.0002, alert=lambda t, x: alerts.append(t))
     recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
@@ -432,7 +432,7 @@ def test_replay_logs_rows_unfilled_outcomes_and_report(tmp_path):
     from odte.live.report import day_report
     from odte.live.runner import run_day
     cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
-                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
     s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
                 "2026-09-04", prev_settle=7700.0)
     recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
@@ -443,3 +443,42 @@ def test_replay_logs_rows_unfilled_outcomes_and_report(tmp_path):
     rep = day_report(recs)
     assert rep["orders"] == s["orders"] and rep["unfilled_would_have_pnl"] == s["unfilled_would_have_pnl"]
     assert "always_sell" in rep["shadow"] and rep["spx_fly_gap_median"] > 0
+
+
+def test_shadow_only_half_hours_place_no_orders(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    dec = [r for r in recs if r["kind"] == "decision"]
+    assert s["decisions"] == 12 and len(dec) == 12
+    half = [d for d in dec if d["hhmm"].endswith(":30")]
+    assert len(half) == 6 and all(d["reason"] == "shadow-only time (every 30 min, evidence only)" for d in half)
+    assert all(r["hhmm"].endswith(":00") for r in recs if r["kind"] == "order")
+    assert any(r["kind"] == "shadow" and r.get("hhmm") == "13:30" for r in recs)
+
+
+def test_journal_and_quotes_survive_a_restart(tmp_path):
+    import pandas as pd
+    from odte.live.runner import Journal, merge_save
+    cfg = Config(mode="paper", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c")
+    j1 = Journal(cfg, "2026-11-12")
+    j1.log(pd.Timestamp("2026-11-12 10:00"), "start")
+    j2 = Journal(cfg, "2026-11-12")                       # restart the same day
+    j2.log(pd.Timestamp("2026-11-12 11:00"), "start")
+    assert j2.restarted and len(j2.path.read_text().splitlines()) == 2
+    q = lambda t: pd.DataFrame([{"quote_datetime": pd.Timestamp(t), "option_type": "C", "strike": 7000.0,
+                                 "bid": 1.0, "ask": 1.1}])
+    f = tmp_path / "c" / "2026-11-12.parquet"
+    merge_save([q("2026-11-12 10:01")], f)
+    merge_save([q("2026-11-12 11:01")], f)
+    assert len(pd.read_parquet(f)) == 2
+    assert not Journal(cfg, "2026-11-12", tag="-replay").restarted   # replays still start fresh

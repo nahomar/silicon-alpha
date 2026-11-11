@@ -23,6 +23,7 @@ class Config:
 
     # strategy: #1 sell-only (ridge + calendar + context), the best unseen-data variant
     decision_times: tuple = ("10:00", "11:00", "12:00", "13:00", "14:00", "15:00")
+    shadow_times: tuple = ("10:30", "11:30", "12:30", "13:30", "14:30", "15:30")   # shadow book only, no orders
     margin: float = 0.15                # sell only if predicted realized/implied < 1 - margin
     post_event_min: int = 60            # no new short within 60 min after a scheduled event
 

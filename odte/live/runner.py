@@ -34,7 +34,9 @@ class Journal:
     def __init__(self, cfg: Config, day, tag=""):
         cfg.journal_dir.mkdir(parents=True, exist_ok=True)
         self.path = cfg.journal_dir / f"{pd.Timestamp(day):%Y-%m-%d}{tag}.jsonl"
-        self.path.write_text("")
+        self.restarted = bool(not tag and self.path.exists() and self.path.stat().st_size > 0)
+        if not self.restarted:                     # a live day is never wiped by a restart: append
+            self.path.write_text("")
 
     def log(self, t, kind, **kw):
         rec = {"t": str(t), "kind": kind, **{k: (None if isinstance(v, float) and not np.isfinite(v) else v)
@@ -92,14 +94,24 @@ def default_oi(day, spot):
     return gamma._load(day)
 
 
+def merge_save(frames: list, path) -> None:
+    """Write the day's quotes; if a file from an earlier run today exists (restart), keep both."""
+    from pathlib import Path
+    path = Path(path)
+    new = pd.concat([f for f in frames if len(f)], ignore_index=True)
+    if path.exists():
+        new = pd.concat([pd.read_parquet(path), new], ignore_index=True).drop_duplicates(
+            ["quote_datetime", "option_type", "strike"], keep="last")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new.sort_values("quote_datetime").to_parquet(path)
+
+
 def _save_chains(cfg: Config, day, tag, chain, xchain) -> None:
     """The day's recorded quotes (also written on a crash: they are training data)."""
-    if chain:
-        cfg.chain_dir.mkdir(parents=True, exist_ok=True)
-        pd.concat(chain, ignore_index=True).to_parquet(cfg.chain_dir / f"{day:%Y-%m-%d}{tag}.parquet")
+    if any(len(x) for x in chain):
+        merge_save(chain, cfg.chain_dir / f"{day:%Y-%m-%d}{tag}.parquet")
     if any(len(x) for x in xchain):
-        (cfg.chain_dir / "xsp").mkdir(parents=True, exist_ok=True)
-        pd.concat(xchain, ignore_index=True).to_parquet(cfg.chain_dir / "xsp" / f"{day:%Y-%m-%d}{tag}.parquet")
+        merge_save(xchain, cfg.chain_dir / "xsp" / f"{day:%Y-%m-%d}{tag}.parquet")
 
 
 def is_trading_day(day) -> bool:
@@ -117,6 +129,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             oi_provider=default_oi, alert=_no_alert, shock_thr: float | None = None) -> dict:
     day = pd.Timestamp(day).normalize()
     j = Journal(cfg, day, tag)
+    if j.restarted:
+        j.log(broker.now(), "restart", text="bot restarted today: journal and quote files continue")
     bundle = load_model(cfg)
     cands = load_candidates(cfg)
     side_b, skew_hist = load_side(cfg)
@@ -124,7 +138,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     dctx = day_context(day)
     close_hhmm = dctx["close_hhmm"] or "16:00"
     close_t = day + pd.Timedelta(hours=int(close_hhmm[:2]), minutes=int(close_hhmm[3:]))
-    times = [h for h in cfg.decision_times if h < close_hhmm]
+    times = sorted({h for h in (*cfg.decision_times, *cfg.shadow_times) if h < close_hhmm})
     events = [day + pd.Timedelta(hours=int(h[:2]), minutes=int(h[3:])) for h in dctx["event_times"]]
     j.log(broker.now(), "start", code=code_version(), config={k: str(v) for k, v in asdict(cfg).items()},
           model=bundle.get("name"), model_kind=bundle.get("kind", "ratio"),
@@ -280,7 +294,9 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                             j.log(now, "note", text=f"index shadows failed at {hhmm}: {e!r}")
                     why = None
                     wants = [n for n in order_strats if sides.get(n) == 1]
-                    if not wants:
+                    if hhmm not in cfg.decision_times:
+                        why = "shadow-only time (every 30 min, evidence only)"
+                    elif not wants:
                         why = "no order strategy says sell"
                     elif recent:
                         why = "within 60 min after a scheduled event"
