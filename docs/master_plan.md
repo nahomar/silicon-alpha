@@ -286,3 +286,16 @@
     - confirming it needs about 707 days.
 - **Status: the sell-only leader (task 1594) is the freeze candidate. Freeze awaits the
   owner's go.**
+- **2026-11-11, owner's goal: "win big when we win." Pre-registered before running: T3,
+  confident-straddle sleeve.**
+  - Buy a long straddle ($1k risk) only when the model's own predicted straddle return
+    clears a fixed bar, decided at the decision time (no look-ahead thresholds).
+  - Primary tier: predicted > $0, the model's own break-even. Secondary tiers: > $100,
+    > $250.
+  - Score = the freeze candidate's straddle predictions (task 1594 inputs, ridge 1000);
+    the old leader's predictions are reported as secondary.
+  - Per era: trades, win rate, average win as a multiple of risk, mean per trade at half and
+    touch, 90% day-bootstrap CI, and the mean without the 10 best days.
+  - **PASS (sleeve is added beside the sell-only model)** = primary tier mean per trade at
+    half > 0 with a 2022-26 CI lower bound > 0, AND mean > 0 pre-2022, AND still > 0 in
+    2022-26 without the 10 best days. Otherwise the sell-only model stays alone.
