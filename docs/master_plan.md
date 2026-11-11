@@ -249,3 +249,40 @@
     pre-registered.
   - Honest cost: every change of criterion is one more degree of freedom; the deflated
     Sharpe will include it.
+- **2026-11-11, T2 result** (reports/meta/t2_table.csv; odte/research/t2.py):
+  - **5-trade menu (as pre-registered):** the top remains the old leader family, worse-era
+    capped Sharpe 0.44, without the top 10 days 0.03. It is straddle-dependent.
+  - **Sell-only menu (amended rule):**
+    - Across all 2,048 configurations, 98% have a positive 2022-26 capped Sharpe (median
+      1.06). Index and time of day alone give −0.11, so the market inputs carry it.
+    - 672 pass the pre-2022 guard; the guard excesses are tiny ($0-7/day), so it is a weak
+      filter.
+  - **New leader = task 1594: calendar + gex + term + flow (+ identity), ridge alpha 1000,
+    sell-only.**
+    - 2022-26: capped Sharpe 1.45 (raw 1.48), +$641/day; without the top 10 days 1.21;
+      touch +$264/day.
+    - By year: 2022 +$163k (2.03), 2023 +$164k (1.51), 2024 +$195k (1.79), 2025 +$153k
+      (1.38), 2026 to Sep 4 +$56k (0.68). 77% of 57 months positive; worst month −$50k
+      (Jun 2026 −$33k).
+    - By index: SPX 2.23, NDX 0.73, RUT 0.73. Mix: fly 51%, call spread 23%, put spread
+      22%, condor 3%; takes 75%. By time: positive 10:00-15:00, 15:30 −$19.
+    - Pre-2022 (SPX only, 2019-06-26 .. 2021): Sharpe −0.34 (2019 +$9k, 2020 −$12k, 2021
+      −$23k), about equal to always-fly (+$6.7/day). **The edge appears only in the
+      daily-expiry era.**
+    - Deflated Sharpe probability real: 96% / 89% / 80% / 62% for N = 10 / 50 / 200 / 2,048
+      (old leader: 66% / 40% / 23% / 8%).
+    - Plateau: 9 one-group neighbours, median 1.21 (0.63-1.50).
+    - Daily skew −1.04, kurtosis 5.0 (seller tail).
+  - **Leak audit of the leader's inputs (code read):**
+    - flow = fly mid change over the 5/15 minutes before t;
+    - term = next-expiry quotes at t; the "change" inputs compare with 10:00 of the same day;
+    - gex = OPRA open interest received between 00:00 and 09:35 ET of the same day (the
+      prior close's OI);
+    - calendar = scheduled events.
+    - All are known at t.
+  - **Exam power for this leader** (2,000 44-day blocks):
+    - mean > 0: 81% if real vs 46% if zero edge;
+    - weak-or-strong pass: 53% vs 16%; strong pass: 7% vs 1%;
+    - confirming it needs about 707 days.
+- **Status: the sell-only leader (task 1594) is the freeze candidate. Freeze awaits the
+  owner's go.**
