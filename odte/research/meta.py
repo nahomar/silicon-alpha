@@ -103,8 +103,18 @@ def build_matrix() -> pd.DataFrame:
 # models
 # ---------------------------------------------------------------------------
 
+SEARCH_GROUPS = ("session", "calendar", "context", "gex", "term", "flow", "strategy", "cross", "factory")
+SEARCH_ALPHAS = (1.0, 10.0, 100.0, 1000.0)
+
+
 def make(name: str):
     from odte.eval.expiry_edge import _make_model
+    if name.startswith("ridge_a"):
+        from sklearn.impute import SimpleImputer
+        from sklearn.linear_model import Ridge
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        return make_pipeline(SimpleImputer(strategy="median"), StandardScaler(), Ridge(alpha=float(name[7:])))
     if name in ("ml_ridge", "ml_lgbm"):
         return _make_model(name)
     if name == "enet":
@@ -248,8 +258,33 @@ def ablate(model: str, drop: str | None) -> dict:
     return res
 
 
+def search(task: int) -> dict:
+    """One point of the group-subset x ridge-strength grid (identity always kept). task in
+    [0, 2**len(SEARCH_GROUPS) * len(SEARCH_ALPHAS)). Development data only; scored on both eras."""
+    n = 2 ** len(SEARCH_GROUPS)
+    mask, alpha = task % n, SEARCH_ALPHAS[task // n]
+    d = load()
+    groups = feature_groups(d.columns)
+    keep = [g for i, g in enumerate(SEARCH_GROUPS) if mask >> i & 1] + ["identity"]
+    feats = [c for g in keep for c in groups.get(g, [])]
+    X = d[feats].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+    Y = {k: d[f"y_{k}_half"].to_numpy(float) for k in TRADES}
+    preds = walk_forward(d, X, Y, f"ridge_a{alpha:g}")
+    res = {"task": task, "mask": mask, "groups": keep, "alpha": alpha, "features": len(feats),
+           "half": score(decide(d, preds, "half")), "touch": score(decide(d, preds, "touch"))}
+    out = OUT / "search"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"s{task:05d}.json").write_text(json.dumps(res, default=float))
+    return res
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["matrix"]:
+    if sys.argv[1:2] == ["search"]:
+        tasks = [int(x) for x in sys.argv[2:]]
+        for t in tasks:
+            if not (OUT / "search" / f"s{t:05d}.json").exists():
+                search(t)
+    elif sys.argv[1:2] == ["matrix"]:
         m = build_matrix()
         m.to_parquet(MATRIX, index=False)
         print(f"{len(m):,} rows x {m.shape[1]} columns -> {MATRIX}")
