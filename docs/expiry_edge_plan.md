@@ -986,3 +986,16 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     both halves (split 2023-09-01).
   - Report: always-sell SPX; SPX's own model rule (pred < 0.95); the touch.
   - Running count: 297 + 1 = 298.
+- 2026-11-10, **Edge #10 result (run once): FAIL, but the closest near-miss so far.**
+  - Data: 2,607 rows, 438 days. R1 trades 25% of the rows.
+  - **R1 at half-gap:** +$114.9/day, 95% CI [−8.6, +231.8]; positive in both halves
+    (+$16.7k / +$33.6k).
+  - **At the touch:** still +$100.7/day [−21.5, +216.8].
+  - **Fails on significance:** R1 − always-sell is +$80/day with CI [−155, +319].
+  - Benchmarks at half-gap: always-sell SPX +$34.9/day [−247, +303]; SPX's own model
+    +$55.6/day.
+  - **Not confirmed on the 2025-26 rows,** by the same rule used for the pair trade (a
+    failed development gate does not open later data).
+  - It earns a **live shadow candidate** note only. It needs NDX and RUT option quotes in
+    the live bot, so the costs and IBKR quote-line limits must be checked first.
+  - Running count: 298.
