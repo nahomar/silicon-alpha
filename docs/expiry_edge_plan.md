@@ -1021,3 +1021,14 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - E1 + E2 together;
     - exit rates.
   - Running count: 298 + 1 = 299.
+- 2026-11-10, **Edge #11 result (run once): FAIL. Holding to expiry is better.**
+  - Data: 10,762 decisions, 2,041 days. Only 11% of flies ever reach 50% profit before
+    the close.
+  - **E1, take profit:** −$19.4/day [−137, +93]; lost in both eras. E1 − hold:
+    −$27.3/day [−75.4, +6.0].
+  - **E2, stop at 2× credit:** −$4.3/day vs hold, CI [−10.7, −0.1]. Stops cost money.
+  - Hold to expiry, same rows: +$7.9/day [−104, +118] (−$28k in 2016-21, +$44k in
+    2022-26).
+  - This confirms the bot's hold-to-expiry design: exits pay the gap a second time and
+    give up the flies that pin near K.
+  - Closed. Running count: 299.
