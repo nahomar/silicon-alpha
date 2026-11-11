@@ -45,7 +45,20 @@ def feature_groups(cols) -> dict:
     return {k: [c for c in dict.fromkeys(v) if c in cols] for k, v in g.items()}
 
 
+MATRIX = LIB / "meta_matrix.parquet"
+
+
 def load() -> pd.DataFrame:
+    """Combined development table. Uses the cached matrix if present (e.g. on Sol, where the raw
+    option files are not copied); `python3 -m odte.research.meta matrix` rebuilds it."""
+    if MATRIX.exists():
+        d = pd.read_parquet(MATRIX)
+        eg.check(d["day"])
+        return d
+    return build_matrix()
+
+
+def build_matrix() -> pd.DataFrame:
     from odte.research import term_structure as ts
     parts = []
     for sym in INDEXES:
@@ -220,8 +233,30 @@ def run_zoo(models=("ml_ridge", "enet", "ml_lgbm", "mlp")) -> dict:
     return res
 
 
+def ablate(model: str, drop: str | None) -> dict:
+    """Walk-forward with one feature group removed (drop=None: all groups). Phase 3."""
+    d = load()
+    groups = feature_groups(d.columns)
+    feats = [c for g, cols in groups.items() if g != drop for c in cols]
+    X = d[feats].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+    Y = {k: d[f"y_{k}_half"].to_numpy(float) for k in TRADES}
+    preds = walk_forward(d, X, Y, model)
+    res = {"model": model, "dropped": drop or "none", "features": len(feats),
+           "half": score(decide(d, preds, "half")), "touch": score(decide(d, preds, "touch"))}
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / f"ablate_{model}_{drop or 'none'}.json").write_text(json.dumps(res, indent=2, default=float))
+    return res
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["zoo"]:
+    if sys.argv[1:2] == ["matrix"]:
+        m = build_matrix()
+        m.to_parquet(MATRIX, index=False)
+        print(f"{len(m):,} rows x {m.shape[1]} columns -> {MATRIX}")
+    elif sys.argv[1:2] == ["ablate"]:
+        r = ablate(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != "none" else None)
+        print(json.dumps(r, default=float))
+    elif sys.argv[1:2] == ["zoo"]:
         r = run_zoo()
         print(json.dumps({k: v for k, v in r.items() if k not in ("ml_ridge", "enet", "ml_lgbm", "mlp")}, indent=2,
                          default=float))
