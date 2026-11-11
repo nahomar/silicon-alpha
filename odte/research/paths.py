@@ -106,6 +106,34 @@ def build(sym: str) -> None:
     print(f"{sym}: {len(days)} days -> paths_{sym}.npz")
 
 
+FEATURE_TABLE = OUT / "path_features.parquet"
+
+
+def feature_table() -> pd.DataFrame:
+    """Path-shape features for every row of the meta matrix (keys: day, index, hhmm)."""
+    from odte.research import meta
+    from odte.research.seq import decision_minute
+    d = pd.read_parquet(meta.MATRIX, columns=["day", "index", "hhmm", "implied_move"])
+    eg.check(d["day"])
+    paths = {}
+    for sym in meta.INDEXES:
+        z = np.load(OUT / f"paths_{sym}.npz")
+        paths[sym] = (z["paths"], {s: i for i, s in enumerate(z["days"])})
+    rows = []
+    for sym, day, hhmm, im in zip(d["index"], d["day"].dt.strftime("%Y-%m-%d"), d["hhmm"], d["implied_move"]):
+        arr, pos = paths[sym]
+        j = pos.get(day)
+        rows.append(path_features(arr[j], decision_minute(hhmm), float(im)) if j is not None
+                    else {k: np.nan for k in PATH_FEATURES})
+    out = pd.concat([d[["day", "index", "hhmm"]].reset_index(drop=True), pd.DataFrame(rows)], axis=1)
+    out.to_parquet(FEATURE_TABLE, index=False)
+    return out
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "build":
         build(sys.argv[2])
+    elif sys.argv[1:2] == ["features"]:
+        f = feature_table()
+        print(f"{len(f):,} rows -> {FEATURE_TABLE}")
+        print(f[PATH_FEATURES].describe().round(3).to_string())

@@ -41,7 +41,8 @@ def feature_groups(cols) -> dict:
          "gex": list(GEX_FEATURES), "term": list(TS), "flow": ["fly_chg5", "fly_chg15"],
          "strategy": ["sig_event_day", "sig_morning_dir", "sig_calm5"],
          "cross": [c for c in cols if c.startswith("x_")], "factory": [c for c in cols if c.startswith("f_")],
-         "identity": ["is_SPX", "is_NDX", "is_RUT", "tod"]}
+         "identity": ["is_SPX", "is_NDX", "is_RUT", "tod"],
+         "path": [c for c in cols if c.startswith("pth_")]}
     return {k: [c for c in dict.fromkeys(v) if c in cols] for k, v in g.items()}
 
 
@@ -54,6 +55,9 @@ def load() -> pd.DataFrame:
     if MATRIX.exists():
         d = pd.read_parquet(MATRIX)
         eg.check(d["day"])
+        pf = LIB / "path_features.parquet"          # N1 path-shape group, merged when built
+        if pf.exists():
+            d = d.merge(pd.read_parquet(pf), on=["day", "index", "hhmm"], how="left", validate="one_to_one")
         return d
     return build_matrix()
 
