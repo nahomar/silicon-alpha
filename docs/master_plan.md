@@ -172,3 +172,12 @@
   - leader + path: 2022-26 0.63 (+$455); 2018-21 0.78 (+$229); touch +$59. Worse era 0.63.
   - The worse era changes by −0.01 (rule: ≥ +0.05), and 2022-26 drops 0.18 (rule: ≤ 0.05).
   - Path inputs alone: 2022-26 −$134/day, Sharpe −0.34; 2018-21 −0.02.
+- **2026-11-11, N2 result (GPU sequence model, 3 seeds on Sol): NOT KEPT** (reports/meta/n2.json).
+  - Seed average: 2022-26 Sharpe 0.58 (+$264/day); 2018-21 −0.34 (−$76); touch 2022-26 −$152.
+    Worse era −0.34 vs the leader's 0.64.
+  - Seeds disagree: 2018-21 Sharpe −0.45 / −0.60 / +0.16.
+  - 50/50 blend with the leader: 2022-26 Sharpe 1.07 (+$590), 2018-21 −0.84 (−$203). Not kept.
+  - Prediction correlation with the leader: 0.40-0.57.
+  - Same pattern as term structure: what adds in 2022-26 subtracts before 2022.
+- **Development conclusion:** the leader stands as the final-model candidate (ridge alpha 1;
+  session, calendar, context, flow, strategy, factory, identity). Freeze awaits the owner's go.
