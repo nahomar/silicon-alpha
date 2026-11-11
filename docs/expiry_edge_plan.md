@@ -1167,3 +1167,15 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - **Report:** always-buy and always-sell at t + 5 (same rows); Q2 − always-sell (paired);
     the burst rate; the touch.
   - Running count: 337 + 2 = 339.
+- 2026-11-10, **Edge #15 result (run once): both FAIL; Q2 is a near-miss.**
+  - Data: 10,762 rows, burst rate 20.2%, none skipped.
+  - **Q1, follow the burst** (buy at t + 5): −$6.1/day [−44.4, +31.8]. The move is
+    already priced by t + 5.
+  - **Q2, calm seller:** +$34.6/day [−70.4, +137.2]; positive in both eras (+$7.9k /
+    +$62.7k).
+  - **Q2 vs always-sell at t + 5:** +$23.0/day [−20.7, +67.0]; at the touch +$40.0/day
+    [−3.1, +83.6].
+  - Always-buy at t + 5 loses $167/day (buying options pays the premium).
+  - Q2 earns a **live shadow slot** (`calm_seller`): it is consistent with edge #14's
+    adverse-selection finding and costs nothing to record.
+  - Running count: 339.
