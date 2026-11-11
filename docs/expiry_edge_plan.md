@@ -1109,3 +1109,21 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - VVIX, SKEW, MOVE, gold/oil/Nasdaq volatility add nothing the factory signals did not
     already have.
   - Closed. Running count: 336.
+
+- 2026-11-10, **Edge #14: passive-only seller (post at mid, never cross). Fixed before
+  running** (`odte/research/passive.py`). Seen SPX decisions 2016-01 .. 2026-09-04,
+  skipping the 60 minutes after a scheduled release.
+  - Rule: rest a sell of the fly at the decision's mid credit for 5 minutes. It fills
+    only if the existing strict rule `fill_mid_short` holds (the fly's touch credit
+    reaches mid + $0.05 within 5 minutes: the market came through our price). If it
+    fills: P&L at mid, held to expiry. If not: no trade. Fees 4 × $1.20, $1k of risk per
+    trade.
+  - Baseline: always-sell at half of today's gap (T_fly), same rows.
+  - **Gate (one test):** mean daily P&L, day-bootstrap 95% CI lower bound > 0, AND a
+    positive total in both eras.
+  - **Report:**
+    - the fill rate by era;
+    - adverse selection: the mid P&L of filled rows vs. all rows;
+    - passive + the model's sell signal (pred < 0.85, the bot's rule);
+    - passive on event days only.
+  - Running count: 336 + 1 = 337.
