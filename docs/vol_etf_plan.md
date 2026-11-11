@@ -37,3 +37,20 @@ Written before any of this data was downloaded or looked at in this project.
 - The one-day lag misses same-day exits on crash days, on purpose: that is the realistic
   risk.
 - Running count: 340 + 1 = 341.
+
+## Result (run once, 2026-11-10)
+- SVXY daily moves above 25% (real): 2016-06-24 (Brexit) −26%; 2018-02-05 −32% and
+  2018-02-06 −83% (Volmageddon).
+- **FAIL.** V1 after 2018-03: CAGR +7.0%, Sharpe 0.29, 95% CI [−0.36, +1.05]; maximum
+  drawdown −56%.
+- The full period passes only because of 2011-17, the old short-volatility era: Sharpe
+  0.57 [0.09, 1.06].
+- V2 (ratio < 0.90, report only): avoided the crashes (Feb 2018 +0.1%, Mar 2020 0%,
+  Aug 2024 +0.3%) but lost money after 2018 (CAGR −2.1%).
+- V1 in the crashes: Feb 2018 −40%, Mar 2020 −18%, Aug 2024 −25%. The last is worse than
+  buy-and-hold: it took the drop, then sat out the rebound.
+- SPY buy-and-hold beat every variant after 2018: CAGR +14.3%, Sharpe 0.74, maximum
+  drawdown −24%.
+- Verdict: closed. The cheaper ETF route does not rescue the volatility premium after
+  2018. This is the same pattern as trend (after 2012) and crypto carry (after 2023):
+  the edge was real and has shrunk since.
