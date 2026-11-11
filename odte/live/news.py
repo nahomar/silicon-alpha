@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -67,7 +68,7 @@ class NewsRecorder:
                 if key in self.seen:
                     continue
                 self.seen.add(key)
-                head = str(getattr(x, "headline", ""))
+                head = re.sub(r"^\{[^}]*\}", "", str(getattr(x, "headline", ""))).strip()   # drop "{A:...:L:en}"
                 hot = is_hot(head)
                 fh.write(json.dumps({"seen_at": str(pd.Timestamp.now(tz="America/New_York").tz_localize(None)),
                                      "time": str(getattr(x, "time", "")), "provider": getattr(x, "providerCode", ""),

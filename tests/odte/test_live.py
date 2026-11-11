@@ -417,5 +417,6 @@ def test_news_record_alerts_only_on_fresh_hot_headlines(tmp_path):
     rec.path, rec.alert, rec.seen, rec.alerts, rec.seeded = tmp_path / "n.jsonl", lambda t, x: alerts.append(x), set(), 0, set()
     old = [NS(articleId="a1", time="t", providerCode="DJ-RT", headline="Missile attack reported")]
     assert rec.record(old, "SPY") == 1 and alerts == []                 # first answer: recorded, no alert
-    new = [NS(articleId="a2", time="t", providerCode="DJ-RT", headline="Exchange declares trading halt")]
+    new = [NS(articleId="a2", time="t", providerCode="DJ-RT", headline="{A:800015:L:en}Exchange declares trading halt")]
     assert rec.record(new + old, "SPY") == 1 and len(alerts) == 1        # fresh + hot -> one alert, no duplicate
+    assert alerts[0] == "Exchange declares trading halt"                # metadata prefix stripped
