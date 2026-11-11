@@ -1146,3 +1146,24 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - Live data must measure this. Compare later outcomes of filled vs. unfilled orders
       (the journal has both) before any real money. This is now a go/no-go item.
   - Running count: 337.
+
+- 2026-11-10, **Edge #15: quote-flow signal (turn adverse selection into a signal). Fixed
+  before running** (`odte/research/flow.py`). Seen SPX decisions 2016-01 .. 2026-09-04,
+  skipping the 60 minutes after a scheduled release.
+  - **Signal at t + 5 min:** "burst" = the existing `fill_mid_short` flag. The fly's
+    touch credit reached its decision-time mid + $0.05 within minutes 1-5, so the fly got
+    more expensive fast. Known at t + 5, the time we act.
+  - **Q1, follow the burst:** if burst, BUY the fly at t + 5. **Q2, calm seller:** if no
+    burst, SELL the fly at t + 5.
+  - Both are held to expiry: the fly pays min(|S − K|, W).
+  - **Prices at t + 5:**
+    - from that minute's quotes (same K, W as the decision): mid ± half of that
+      minute's quoted gap, scaled to today's level by the decision's ratio (today's gap /
+      its quoted entry gap), as in edge #11;
+    - fees 4 × $1.20; $1k of risk per trade;
+    - rows without all 8 quotes at t + 5 are skipped and counted.
+  - **Gates, each (Bonferroni over 2 → 97.5% CI):** mean daily P&L, day-bootstrap CI lower
+    bound > 0, AND a positive total in both eras.
+  - **Report:** always-buy and always-sell at t + 5 (same rows); Q2 − always-sell (paired);
+    the burst rate; the touch.
+  - Running count: 337 + 2 = 339.
