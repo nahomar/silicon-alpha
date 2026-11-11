@@ -201,3 +201,24 @@
     - The exam is therefore a disaster and leak detector, not proof.
   - **Leak audit:** factory regime signals are fit on prior years only, and walk-forward
     labels come strictly from earlier days. Clean.
+- **2026-11-11, pre-registered before running: two pre-freeze tests** (owner: "yes").
+  - **T1, straddle-timing skill** (`odte/research/skill.py`, leader's walk-forward predictions,
+    non-post rows):
+    - Score = the leader's predicted long-straddle return.
+    - Events: E1 = the straddle is profitable at half-gap (base rate 37% in 2022-26); E2 = it at
+      least doubles (y > +$1,000 per $1k; base rate 8.9%).
+    - **Metric: stratified AUC** (pairs compared only within the same index and decision time,
+      so time of day cannot fake skill), per era (2022-26; 2018-21).
+    - 90% CI from a day-block bootstrap (500 resamples of days).
+    - Reported alongside:
+      - the lift of the model's actual straddle picks (event rate / same-stratum base rate);
+      - a one-input benchmark, score = −iv_over_rv (cheap vs. realized so far).
+    - **PASS = E1 AUC with a 90% CI lower bound > 0.5 in both eras.** FAIL means the straddle
+      profits are not shown to be skill, and the final model must not rely on them.
+  - **T2, tail-robust re-ranking** of the same 2,048-point grid (re-run on Sol, saving every
+    configuration's daily P&L):
+    - Metric = Sharpe of daily P&L with the **best 1% of days capped** at that era's 99th
+      percentile (upside only; losing days are never trimmed).
+    - Rank by the worse era. Also reported: the Sharpe without the best 10 days.
+    - **The new leader is the top configuration**, checked for a plateau (its neighbours ±1
+      group score close) and with a deflated Sharpe reported.
