@@ -420,3 +420,26 @@ def test_news_record_alerts_only_on_fresh_hot_headlines(tmp_path):
     new = [NS(articleId="a2", time="t", providerCode="DJ-RT", headline="{A:800015:L:en}Exchange declares trading halt")]
     assert rec.record(new + old, "SPY") == 1 and len(alerts) == 1        # fresh + hot -> one alert, no duplicate
     assert alerts[0] == "Exchange declares trading halt"                # metadata prefix stripped
+
+
+def test_replay_logs_rows_unfilled_outcomes_and_report(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.report import day_report
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    rows = [r for r in recs if r["kind"] == "row"]
+    assert len(rows) == 6 and "implied_move" in rows[0] and "skew" in rows[0]
+    uns = [r for r in recs if r["kind"] == "unfilled_settle"]
+    assert len(uns) == s["unfilled"] == s["orders"] - s["fills"] and len(uns) > 0
+    rep = day_report(recs)
+    assert rep["orders"] == s["orders"] and rep["unfilled_would_have_pnl"] == s["unfilled_would_have_pnl"]
+    assert "always_sell" in rep["shadow"] and rep["spx_fly_gap_median"] > 0

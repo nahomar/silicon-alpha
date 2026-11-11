@@ -154,6 +154,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
     from odte.live import flowshadow
     pending_flow = []                                    # edge #15 calm seller, decided at t+5
+    unfilled = []                                        # cancelled orders: what they would have made
     from odte.live import guards
     thr, thr_src = (guards.shock_threshold(day) if getattr(broker, "live", False) and shock_thr is None
                     else (shock_thr or guards.FALLBACK_THR, "given" if shock_thr else "fallback (replay)"))
@@ -226,6 +227,10 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         ratio_ref = (r["K"], r["straddle_mid"])
                     t_dec = day + pd.Timedelta(hours=int(hhmm[:2]), minutes=int(hhmm[3:]))
                     recent = [e for e in events if 0 <= (t_dec - e).total_seconds() / 60 <= cfg.post_event_min]
+                    j.log(now, "row", hhmm=hhmm, **{k: (float(v) if isinstance(v, (np.floating, np.integer)) else v)
+                                                    for k, v in r.items()
+                                                    if isinstance(v, (int, float, np.floating, np.integer))
+                                                    and not isinstance(v, bool)})
                     pending_flow.append({"hhmm": hhmm, "t0": t_dec, "t5": t_dec + pd.Timedelta(minutes=5),
                                          "K": r["K"], "W": r["W"], "mid0": r["fly_credit_mid"],
                                          "recent": bool(recent)})
@@ -349,6 +354,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         opened_worst -= o.worst_case
                         j.log(now, "unfilled", hhmm=active["hhmm"], last_price=o.ladder[-1], mid=o.mid,
                               touch=o.touch)
+                        unfilled.append({"hhmm": active["hhmm"], "o": o})
                         active = None
             broker.sleep(1)
     except BaseException as e:                       # crash or Ctrl-C: leave nothing working
@@ -379,6 +385,7 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
 
     if active is not None:
         broker.cancel(active["h"])
+        unfilled.append({"hhmm": active["hhmm"], "o": active["o"]})
     _save_chains(cfg, day, tag, chain, xchain)
     xshadow.save(xsides, cfg, day, tag)
     if side_b is not None and len(skew_hist) and not tag:      # never let replays touch live history
@@ -398,6 +405,13 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         p = fly.settle_pnl(f["credit"], f["qty"], f["o"].K, f["o"].W, settle * s)
         pnl += p
         j.log(broker.now(), "settle", hhmm=f["hhmm"], settle=settle, pnl=round(p, 2))
+    unfilled_pnl = 0.0
+    for u in unfilled:                                   # adverse-selection evidence (go/no-go)
+        o = u["o"]
+        p = fly.settle_pnl(o.ladder[-1], o.qty, o.K, o.W, settle * s)
+        unfilled_pnl += p
+        j.log(broker.now(), "unfilled_settle", hhmm=u["hhmm"], at_price=o.ladder[-1], mid=o.mid, touch=o.touch,
+              would_have_pnl=round(p, 2))
     book = {}
     for sh in shadows:
         if sh.get("index"):                               # NDX/RUT: their own fly and close
@@ -425,7 +439,8 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                "shadow": book,
                "share_of_gap_paid": [round((f["o"].mid - f["credit"]) / (f["o"].mid - f["o"].touch), 3)
                                      if f["o"].mid > f["o"].touch else None for f in fills],
-               "pnl": round(pnl, 2), "settle": settle}
+               "pnl": round(pnl, 2), "settle": settle, "unfilled": len(unfilled),
+               "unfilled_would_have_pnl": round(unfilled_pnl, 2)}
     summary["reconcile_ok"] = _reconcile(broker, day, fills, j, alert)
     j.log(broker.now(), "day_summary", **summary)
     return summary

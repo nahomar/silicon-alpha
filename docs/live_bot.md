@@ -39,6 +39,16 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
   - `size_filter` (factory T_size composite, rank rule).
 - Promotion bar: a paired advantage ≥ max(1.5, Bonferroni z at 10% / number of challengers) standard errors, about 2.13 with 6.
 
+## What is logged, and the study report (`odte/live/report.py`)
+- The journal (`data/live/journal/YYYY-MM-DD.jsonl`) has one line per event:
+  - start (code version, config), guards (shock threshold), subscribed, shadow_index;
+  - every model input at each decision (`row`), decision (prediction, prices, SPX and XSP fly quotes, action, reason);
+  - order, reprice, fill (`share_of_gap_paid`), unfilled, and **unfilled_settle** (what each cancelled order would have made: the adverse-selection check);
+  - every shadow decision and its settlement (mid / half / touch, and XSP's own book);
+  - shock, big_day, notes, settle_index (NDX/RUT closes), reconcile, day_summary.
+- Quotes: `data/live/chains/` (SPX), `chains/xsp`, `chains/ndx`, `chains/rut`. News: `data/live/news/`. All are backed up nightly to the private records repo.
+- `python -m odte.live.report` prints each day plus running totals per strategy, filled vs unfilled outcomes, and SPX vs XSP quoted gaps: what the go/no-go rules need.
+
 ## Safety guards (`odte/live/guards.py`; paper orders only, the shadow book keeps its research rules)
 - **Surprise move:** a 5-minute SPX move at or above the 99.9th percentile of 5-minute moves over the previous 20 sessions (Yahoo 5-minute bars each morning; 0.25% fallback). It uses the research rule: searched 09:35-14:55, at most 2 a day, 30 min apart. No new orders for 60 minutes after one, plus an alert. The price comes from the latest option snapshot (put-call parity).
 - **Big day:** SPX ±4% vs yesterday's close means no new orders for the rest of the day, plus an alert.
