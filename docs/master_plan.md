@@ -102,3 +102,18 @@
   - Under the selection rule as written, ridge is excluded (negative 2018-21). Development
     continues before any freeze.
 - Phase 3 group ablation for ridge and MLP submitted to Sol (job arrays 1095832, 1095833).
+- **2026-11-11, Phase 3 group ablation, development** ($/day change in 2022-26 when the group
+  is removed; minus = the group helps):
+  - **ridge** (base +$537):
+    - helps: identity −69, strategy signals −58, calendar −24, term −21, session −9;
+    - neutral: gex ~0;
+    - hurts: flow +17, cross +42, factory +71, context +124 (but removing context makes
+      2018-21 −$196);
+    - **removing term turns 2018-21 positive (+$103) while 2022-26 stays +$516.**
+  - **MLP** (base +$97): helps gex −146, context −112, identity −67, term −41; hurts
+    calendar +64, strategy +164.
+  - **Elastic net** (all inputs): +$517/day, Sharpe 0.73; 2018-21 −$78.
+- **Phase 3 search** (Sol array 1096783): every subset of 9 groups (identity always kept) × ridge
+  alpha {1, 10, 100, 1000} = 2,048 walk-forward runs on development data. It will be ranked by
+  the **worse of the two eras' Sharpe** (robust objective) before any freeze. Caveat recorded
+  now: searching 2,048 configurations on the same data overfits it; the exam is the judge.
