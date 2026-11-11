@@ -86,7 +86,7 @@
 - **Real money still requires `docs/go_no_go.md`.**
 
 ## Freeze record
-- Freeze commit: (to be filled at Phase 4)
+- Freeze commit: ebadab696ba01cf27951dfb32b7769869b725f02
 
 ## Development log
 - **2026-11-11, Phase 2 zoo (walk-forward, 136 inputs, best-of-five trades).** Pooled daily
