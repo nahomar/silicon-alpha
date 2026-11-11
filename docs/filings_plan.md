@@ -43,3 +43,14 @@ Written before any price data was bought or any return computed. Text features
 - **H2:** AI-read tone and guidance change in 8-K earnings releases vs. the price reaction
   (underreaction drift).
 - **H3:** sector growth / shrink from XBRL financial data (fundamental momentum by sector).
+
+## H1 clarifications (2026-11-11, before any return was computed)
+- **Price file:** Databento XNAS.ITCH ohlcv-1d, every symbol (bought 2026-11-10, $30.08). Tickers
+  come from the free symbology map: one stable instrument_id per symbol, delisted symbols included.
+- **No same-day look-ahead:** a 10-K counts for the month-end formation date t only if it was
+  filed strictly before t.
+- **Ticker:** only the filing's own cover-page ticker (no carrying forward from older filings).
+- **Costs:** 0.20% × Σ|Δweight| for each leg at each rebalance (every share bought or sold
+  pays 20 bp).
+- **Returns:** each month from the last close on or before month-end t to the last close on or
+  before month-end t + 1. Daily ratios within 2% of a split ratio count as splits.
