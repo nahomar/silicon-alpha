@@ -355,3 +355,67 @@ def test_replay_day_logs_calm_seller(tmp_path):
     recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
     calm = [r for r in recs if r["kind"] == "shadow" and r.get("strategy") == "calm_seller"]
     assert len(calm) == 6 and {r["hhmm"] for r in calm} == {"10:00", "11:00", "12:00", "13:00", "14:00", "15:00"}
+
+
+def test_shock_watch_rules():
+    import pandas as pd
+    from odte.live import guards
+    day = pd.Timestamp("2026-09-04")
+    w = guards.ShockWatch(0.002, day)
+    t = day + pd.Timedelta(hours=10)
+    for m in range(6):
+        assert w.update(t + pd.Timedelta(minutes=m), 7000.0) is None
+    hit = w.update(t + pd.Timedelta(minutes=10), 7000.0)              # no 5-min-ago price yet
+    assert hit is None
+    for m in range(11, 15):
+        w.update(t + pd.Timedelta(minutes=m), 7000.0)
+    assert w.update(t + pd.Timedelta(minutes=15), 7000.0 * 1.0025) is not None    # +0.25% in 5 min
+    assert w.update(t + pd.Timedelta(minutes=20), 7000.0 * 1.006) is None        # within 30 min of the last
+    early = guards.ShockWatch(0.002, day)
+    for m in range(10):                                                          # 09:25 .. 09:34
+        early.update(day + pd.Timedelta(hours=9, minutes=25 + m), 7000.0 * (1.01 if m == 9 else 1))
+    assert early.marks == []                                                     # 09:34 jump: before 09:35, ignored
+
+
+def test_big_day_wide_spread_and_parity_price():
+    import pandas as pd
+    from odte.live import guards
+    assert guards.big_day(7280.0, 7000.0) and not guards.big_day(7200.0, 7000.0)
+    assert guards.too_wide({"fly_credit_mid": 10.0, "fly_credit": 9.4}) and not guards.too_wide(
+        {"fly_credit_mid": 10.0, "fly_credit": 9.9})
+    snap = pd.DataFrame([{"option_type": r, "strike": k, "bid": b, "ask": b + 0.2}
+                         for r, k, b in (("C", 7000.0, 12.0), ("P", 7000.0, 10.0), ("C", 7005.0, 9.4), ("P", 7005.0, 12.4))])
+    assert abs(guards.parity_price(snap) - 7002.0) < 1e-9
+
+
+def test_replay_shock_blocks_orders(tmp_path):
+    """With a tiny threshold the guard fires and orders after it are skipped; shadows are untouched."""
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    alerts = []
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+    run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+            "2026-09-04", prev_settle=7700.0, shock_thr=0.0002, alert=lambda t, x: alerts.append(t))
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    assert any(r["kind"] == "shock" for r in recs) and "surprise move" in alerts
+    reasons = [r.get("reason") for r in recs if r["kind"] == "decision"]
+    assert "within 60 min after a surprise move" in reasons
+
+
+def test_news_record_alerts_only_on_fresh_hot_headlines(tmp_path):
+    from types import SimpleNamespace as NS
+    from odte.live.news import NewsRecorder, is_hot
+    assert is_hot("Trading halted in S&P futures") and not is_hot("Apple shares rise 1%")
+    rec = NewsRecorder.__new__(NewsRecorder)
+    alerts = []
+    rec.path, rec.alert, rec.seen, rec.alerts, rec.seeded = tmp_path / "n.jsonl", lambda t, x: alerts.append(x), set(), 0, set()
+    old = [NS(articleId="a1", time="t", providerCode="DJ-RT", headline="Missile attack reported")]
+    assert rec.record(old, "SPY") == 1 and alerts == []                 # first answer: recorded, no alert
+    new = [NS(articleId="a2", time="t", providerCode="DJ-RT", headline="Exchange declares trading halt")]
+    assert rec.record(new + old, "SPY") == 1 and len(alerts) == 1        # fresh + hot -> one alert, no duplicate

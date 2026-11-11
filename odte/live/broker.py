@@ -182,8 +182,22 @@ class IBKRBroker:
         self.idx_ticker = self.ib.reqMktData(self.index, "", False, False)
         self.tickers = {}
 
+    live = True
+
     def now(self):
         return pd.Timestamp.now(tz=TZ).tz_localize(None)
+
+    def start_news(self, day, path, alert):
+        from odte.live.news import NewsRecorder
+        self.ib.RequestTimeout = 15
+        try:
+            self.news = NewsRecorder(self.ib, day, path, alert)
+        finally:
+            self.ib.RequestTimeout = 0
+
+    def poll_news(self, now):
+        if getattr(self, "news", None) is not None:
+            self.news.poll(now)
 
     def sleep(self, seconds):
         self.ib.sleep(seconds)

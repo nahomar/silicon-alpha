@@ -39,6 +39,16 @@ The first goal is **measuring execution**: how much of the bid-ask gap a mid-pri
   - `size_filter` (factory T_size composite, rank rule).
 - Promotion bar: a paired advantage ≥ max(1.5, Bonferroni z at 10% / number of challengers) standard errors, about 2.13 with 6.
 
+## Safety guards (`odte/live/guards.py`; paper orders only, the shadow book keeps its research rules)
+- **Surprise move:** a 5-minute SPX move at or above the 99.9th percentile of 5-minute moves over the previous 20 sessions (Yahoo 5-minute bars each morning; 0.25% fallback). It uses the research rule: searched 09:35-14:55, at most 2 a day, 30 min apart. No new orders for 60 minutes after one, plus an alert. The price comes from the latest option snapshot (put-call parity).
+- **Big day:** SPX ±4% vs yesterday's close means no new orders for the rest of the day, plus an alert.
+- **Wide spread:** the SPX fly's quoted gap above 5% of mid means the order is skipped.
+
+## Live news (`odte/live/news.py`, record only)
+- IBKR's free Dow Jones and Briefing.com headlines for SPY, QQQ and the largest S&P names, every 3 minutes, without blocking the trading loop. Saved to `data/live/news/YYYY-MM-DD.jsonl` and backed up.
+- Not used in decisions: headlines failed their backtest. This builds the live dataset to test them honestly later.
+- High-severity words (halt, circuit breaker, attack, missile, war, emergency, default, ...) in a newly arrived headline raise an alert, at most 5 a day.
+
 ## NDX and RUT (shadow only, `odte/live/xshadow.py`)
 - Each day the bot also records NDXP and RUTW 0DTE quotes (NDX every 50 points, RUT every 5, about ±2.5%; 22 strikes each). That needs IBKR's Quote Booster (+100 lines, $30/month): SPX + XSP use 95 of the default 100 lines, and the total with NDX/RUT is about 183. Without it, the index shadows log "no quotes" and the SPX bot is unaffected.
 - Shadows, no orders:
@@ -147,5 +157,5 @@ launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.evening.plist
 - Early closes: add each new year's half days to `configs/calendar/early_closes.csv` (2026 is listed; the bot warns when the current year is missing).
 
 ## Known limits (v1)
-- Shock detection (unscheduled big moves) is not in the live post-event rule yet; only scheduled releases are.
+- Surprise moves now pause paper orders (guards above). The shadow book still follows the research rules (scheduled releases only), so the guard's value can be measured.
 - Paper fills are simulated by IBKR and say nothing about real fill quality. Measuring that needs tiny real XSP orders, only with the owner's go.

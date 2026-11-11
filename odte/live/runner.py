@@ -114,7 +114,7 @@ def _no_alert(title, text):
 
 
 def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag="",
-            oi_provider=default_oi, alert=_no_alert) -> dict:
+            oi_provider=default_oi, alert=_no_alert, shock_thr: float | None = None) -> dict:
     day = pd.Timestamp(day).normalize()
     j = Journal(cfg, day, tag)
     bundle = load_model(cfg)
@@ -154,6 +154,19 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
     from odte.live import flowshadow
     pending_flow = []                                    # edge #15 calm seller, decided at t+5
+    from odte.live import guards
+    thr, thr_src = (guards.shock_threshold(day) if getattr(broker, "live", False) and shock_thr is None
+                    else (shock_thr or guards.FALLBACK_THR, "given" if shock_thr else "fallback (replay)"))
+    watch = guards.ShockWatch(thr, day)
+    shocks, big_day_hit = [], False
+    j.log(broker.now(), "guards", shock_threshold=round(thr, 5), source=thr_src,
+          big_day_move=guards.BIG_DAY_MOVE, wide_gap=guards.WIDE_GAP)
+    if hasattr(broker, "start_news"):
+        try:
+            broker.start_news(day, cfg.journal_dir.parent / "news" / f"{day:%Y-%m-%d}{tag}.jsonl", alert)
+            j.log(broker.now(), "note", text="news recorder on (record only)")
+        except Exception as e:
+            j.log(broker.now(), "note", text=f"news recorder off: {e!r}")
     ratio_ref = None
     opened_worst, n_trades = 0.0, 0
     last_snap = None
@@ -166,6 +179,26 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 if cfg.symbol == "XSP":
                     xchain.append(broker.snapshot_xsp())
                 xshadow.record(xsides, broker)
+                try:                                                     # safety guards (orders only)
+                    px_now = guards.parity_price(chain[-1]) if chain and len(chain[-1]) else float("nan")
+                    sm = watch.update(now, px_now)
+                    if sm is not None:
+                        shocks.append(sm)
+                        j.log(now, "shock", minute=str(sm), price=round(px_now, 2), threshold=round(thr, 5))
+                        alert("surprise move", f"{day:%Y-%m-%d} {sm:%H:%M}: SPX moved >= {thr:.2%} in 5 min; "
+                                               "no new orders for 60 min")
+                    if not big_day_hit and guards.big_day(px_now, prev_settle):
+                        big_day_hit = True
+                        j.log(now, "big_day", price=round(px_now, 2), prev_close=prev_settle)
+                        alert("big day", f"{day:%Y-%m-%d}: SPX {px_now / prev_settle - 1:+.1%} vs yesterday; "
+                                         "no new orders today")
+                except Exception as e:
+                    j.log(now, "note", text=f"guard check failed: {e!r}")
+                if hasattr(broker, "poll_news"):
+                    try:
+                        broker.poll_news(now)
+                    except Exception as e:
+                        j.log(now, "note", text=f"news poll failed: {e!r}")
                 last_snap = minute
             hhmm = now.strftime("%H:%M")
             if hhmm in times and hhmm not in done and now.second >= 2:
@@ -247,6 +280,12 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         why = "paused after drawdown"
                     elif cfg.kill_switch.exists():
                         why = "kill switch present"
+                    elif big_day_hit:
+                        why = "big day move (>= 4%): no new orders today"
+                    elif any(0 <= (t_dec - sm).total_seconds() / 60 <= cfg.post_event_min for sm in shocks):
+                        why = "within 60 min after a surprise move"
+                    elif guards.too_wide(r):
+                        why = "SPX fly spread too wide (> 5% of mid)"
                     elif len(fills) >= cfg.max_trades_per_day:
                         why = "max filled trades today"
                     elif n_trades >= cfg.max_attempts_per_day:
