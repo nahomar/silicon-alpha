@@ -197,3 +197,20 @@ seeing results. The honest answer may be "no"; that is a fine outcome.
   added: for markets dropped as gaps, candles are refetched over
   [max(open_time, D − 30 days), D] and the latest candle at or before D (the standing quote) is
   used. K1 and K2 are reported on that extended set, with the same statistics, no gate.
+
+## Result (run once, 2026-11-10, by the main session after the agent's network failure)
+- Data: the 20,000-market sample, 16,953 with a valid quote at D − 24 h (505 had no candle
+  in the window; 2,542 had an invalid quote). Most trades fall in the second half: Kalshi
+  volume grew in 2025-26.
+- **K1, fade long shots (buy NO when YES is 3-15¢): FAIL.** Mean return per trade −4.05%,
+  97.5% CI [−5.40%, −2.73%], n = 3,052. H1 −5.1% (n = 72); H2 −4.0%.
+- **K2, buy favorites (85-97¢): FAIL.** −2.63% [−5.00%, −0.41%], n = 905. H1 −2.9%; H2 −2.6%.
+- Without any fee both are still negative (K1 −3.6%, K2 −2.1%): taking the ask, not the
+  fee, is what costs money.
+- **Maker variant (optimistic, assumes a fill at the bid):** K1 +0.7% [−0.7%, +2.1%];
+  K2 +2.5% [+0.0%, +4.9%]. That is only a lead, because resting orders get filled mostly
+  when the price is moving against them.
+- **Calibration:** Kalshi prices are close to fair in this sample, and there is no
+  long-shot bias at the low end. Contracts priced 5-10¢ won 8.5% of the time (priced
+  7.2%); the largest gap is at 25-35¢ (+5.2 points).
+- Verdict: closed (both K1 and K2 fail).
