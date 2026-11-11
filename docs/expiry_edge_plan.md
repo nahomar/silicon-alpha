@@ -1103,3 +1103,9 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - Bug fixed before any result: the first run crashed on a column-name clash (the SKEW
     index signal was named `skew`, like the 0DTE option-skew feature). The signals are now
     prefixed `g_`. No IC was computed in the crashed run.
+- 2026-11-10, **Edge #13 result (run once after the name fix): 0 survivors of 36.**
+  - Nothing passes FDR. The strongest was OVX/VIX → T_tail, t −2.77, but almost all of it
+    came from 2016-21 (−0.091 vs −0.009).
+  - VVIX, SKEW, MOVE, gold/oil/Nasdaq volatility add nothing the factory signals did not
+    already have.
+  - Closed. Running count: 336.
