@@ -1194,3 +1194,22 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
   - The run wrote its results, then crashed saving the trade list (an interval column);
     fixed. The results are unaffected.
   - Running count: 339 + 1 = 340.
+
+- 2026-11-11, **Edge #16: one walk-forward model on every options signal ("combine
+  everything"). Fixed before running** (`odte/research/combo.py`).
+  - Inputs, about 160: the live bot's feature list (base + calendar + context +
+    iv_vs_vix1d), the factory's signals (`fx.signals`, including the GEX family), and the
+    six term-structure signals (edge #3).
+  - Target: T_fly (half-gap return on risk of selling the fly at today's cost).
+  - Rows: seen SPX decisions 2016-01 .. 2026-09-04, skipping the 60 minutes after a
+    scheduled release (excluded from training and trading).
+  - **Model:** LightGBM (`ml_lgbm`), walk-forward, expanding window, first fit after 500
+    days, refit every 63 days. Ridge (`ml_ridge`) on the same inputs is reported, not
+    gated.
+  - **Strategy:** sell the fly when the predicted T_fly > 0. $1k of risk per decision.
+  - **Gate (one test):** in **2022-01 .. 2026-09-04**:
+    - mean daily P&L, day-bootstrap 95% CI lower bound > 0;
+    - AND the paired difference vs. always-sell (same rows) has a CI lower bound > 0;
+    - AND a positive total over 2016-21 (also walk-forward).
+  - Report: ridge; the share of rows sold; the touch.
+  - Running count: 407 + 1 = 408.
