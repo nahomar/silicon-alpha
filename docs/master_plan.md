@@ -87,3 +87,18 @@
 
 ## Freeze record
 - Freeze commit: (to be filled at Phase 4)
+
+## Development log
+- **2026-11-11, Phase 2 zoo (walk-forward, 136 inputs, best-of-five trades).** Pooled daily
+  P&L at half-gap over 2022-26, summed over indexes and decisions, $1k risk each:
+  - **ridge: +$537/day, Sharpe 0.75 [−0.13, 1.55].** By index-day: SPX +$425, NDX +$54,
+    RUT +$81. 2018-21 −$59/day. Takes 92% of decisions: fly 33%, long straddle 32%, put
+    spread 15%, call spread 14%, condor 6%.
+  - MLP (PyTorch): +$97/day, Sharpe 0.20; 2018-21 +$47/day.
+  - LightGBM: −$18/day, Sharpe −0.03; 2018-21 −$123/day.
+  - elastic net: pending.
+  - Baselines, every decision: always fly +$113 (Sharpe 0.16); condor −$140; put spread
+    −$95; call spread −$104; long straddle −$1,990.
+  - Under the selection rule as written, ridge is excluded (negative 2018-21). Development
+    continues before any freeze.
+- Phase 3 group ablation for ridge and MLP submitted to Sol (job arrays 1095832, 1095833).
