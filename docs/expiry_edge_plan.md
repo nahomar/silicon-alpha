@@ -1127,3 +1127,22 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     - passive + the model's sell signal (pred < 0.85, the bot's rule);
     - passive on event days only.
   - Running count: 336 + 1 = 337.
+- 2026-11-10, **Edge #14 result (run once): FAIL, with the clearest execution lesson so far.**
+  - Fill rate under the strict rule: 20.2% (8.4% in 2016-21, 28.7% in 2022-26).
+  - **Adverse selection is severe.** Mid return on risk:
+    - rows whose resting order fills: −5.8%;
+    - all rows: +1.0%;
+    - rows that never fill: +2.7%.
+  - Orders filled at mid are exactly the bad trades: the market comes through your price
+    when the fly is about to lose.
+  - **Passive-only:** −$61.7/day, 95% CI [−99.3, −24.7]; lost in both eras.
+  - Passive + model signal: −$7.7/day [−14.7, −1.1]. Passive on event days: −$0.5/day.
+  - Always-sell at half-gap (same rows): +$7.9/day [−104, +118].
+  - **Meaning for the bot:**
+    - The half-gap assumption in every backtest is optimistic if fills that better the
+      touch come mainly from adverse moves.
+    - The strict rule only sees fills where the whole market moved, the worst subset;
+      real resting orders also get uninformed fills. So the truth lies in between.
+    - Live data must measure this. Compare later outcomes of filled vs. unfilled orders
+      (the journal has both) before any real money. This is now a go/no-go item.
+  - Running count: 337.

@@ -29,6 +29,8 @@ count as cost evidence.
     (paired SE, Bonferroni over the candidates).
 - **Anything else:** pre-registered first, then the same bar.
 
+- **Adverse-selection check (added 2026-11-10 from edge #14, before any live result):** over at least 60 live days, the settled outcome of decisions whose orders filled must not be clearly worse than that of decisions whose orders went unfilled. Backtests show resting fills at mid lose (−5.8% vs +2.7% on risk). If live fills look the same, the strategy's edge is not capturable at any spread.
+
 ## 3. How real money would start (incubation)
 - One XSP lot per trade, at most $300 risk per trade and $600 per day, for at least one
   year of live data.
