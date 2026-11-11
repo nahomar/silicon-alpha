@@ -54,3 +54,19 @@ Written before any price data was bought or any return computed. Text features
   pays 20 bp).
 - **Returns:** each month from the last close on or before month-end t to the last close on or
   before month-end t + 1. Daily ratios within 2% of a split ratio count as splits.
+
+## H1 result (run once, 2026-11-11): FAIL
+- Data: 81 formation months (2019-08 .. 2026-07); on average 527 stocks qualified each month.
+  55,398 year-over-year 10-K pairs; 28,831 have a cover-page ticker.
+- **Long/short (least changed minus most changed), after costs:** +0.25%/month (+3.0%/yr),
+  Newey-West t 0.63. Positive in both halves (+0.03% / +0.44% per month), but nowhere near
+  significant.
+- **The paper's direction does show up, in the "changers" only:** quintile mean monthly
+  returns are Q1 (most changed) 0.47%; Q2 1.03%; Q3 1.04%; Q4 0.96%; Q5 1.11%.
+  Q1 lags the rest by about 0.55%/month before costs.
+- **Costs:** 0.39%/month for the two legs (each month's portfolio is mostly new names),
+  which eats most of the spread.
+- **Long-only** (Q5 vs. all qualifying stocks): 0.00%/month.
+- Verdict: closed as pre-registered. A possible later, separately pre-registered variant:
+  "avoid / short the most-changed" with lower turnover (hold 6-12 months). The original
+  paper reports the effect lasting that long.
