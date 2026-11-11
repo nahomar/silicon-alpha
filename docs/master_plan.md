@@ -135,3 +135,17 @@
     each, strategy 32, calendar 28, cross 27, gex 26, flow 24, term 0.
   - Caveat: the leader was selected from 2,048 runs on the same data, so its Sharpe is
     optimistic. The exam decides.
+- **2026-11-11, robustness of the leading family** (ridge alpha 1; session, calendar, context,
+  flow, strategy, factory):
+  - **By year:** 2019 +$15.6k, 2020 +$51.5k, 2021 +$7.8k, 2022 +$66.5k, 2023 +$67.5k,
+    2024 +$383k, 2025 +$233k, **2026 (to Sep 4) −$89.0k**. Monthly swings in 2025-26 are
+    large (e.g. Nov 2025 +$62k, May 2026 −$62k).
+  - **By index** (2022-26): SPX Sharpe 1.20 (+$432/index-day), RUT 0.41, NDX 0.23.
+  - **By time:** positive through 14:00; 14:30 +$4, 15:00 −$6, 15:30 −$19 per decision.
+  - **By chosen trade** (mean $ per decision): fly +48.7, condor +37.4, put spread +11.2,
+    straddle +3.4, call spread −9.4.
+  - Touch 2022-26: +$181/day, Sharpe 0.26.
+  - Entry margin (predicted $ per $1k): 0 → Sharpe 0.81; $25 → 0.89; $100 → 0.97 (39% of
+    decisions).
+  - It often gains when always-sell loses badly (Nov 2025, Apr and Jun 2026).
+  - **Warning recorded before the exam:** 2026 year-to-date is negative.
