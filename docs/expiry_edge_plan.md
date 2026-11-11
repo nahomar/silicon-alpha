@@ -968,3 +968,21 @@ forecast. It is expensive at scale: one day of `cmbp-1` is ~119 GB and ~$18.
     paid), 8 legs of fees, and the bought wings (themselves overpriced) eat it.
   - Friday-to-Monday nights are no different (−$14.2 vs −$15.8).
   - Closed. Running count: 297.
+
+- 2026-11-10, **Edge #10: SPX-only seller with a cross-index filter. Fixed before
+  running** (`odte/research/xindex.py`). Uses the saved pair-trade development rows
+  (2022-05-16 .. 2024-12-31; seen). Each index's walk-forward ridge prediction of
+  realized / implied is `pred6__ml_ridge+cal+ctx`, tested rows only.
+  - Idea: the pair trade showed the model can rank which index is most overpriced
+    (+$104/day vs random), but NDX/RUT costs (7.5% / 9.9% of mid) swamped it. Trade only
+    SPX (1.69% today), and use NDX/RUT as information.
+  - Rows: decision times where all three predictions exist, skipping the 60 minutes after
+    a scheduled release.
+  - **R1:** sell the SPX fly iff SPX's prediction is the lowest of the three.
+  - SPX P&L at half of today's gap (1.69% of mid), fees 4 × $1.20, $1k of risk per
+    decision.
+  - **Gate (one test):** R1 mean daily P&L, day-bootstrap 95% CI lower bound > 0, AND
+    R1 − always-sell-SPX (same rows) paired CI lower bound > 0, AND a positive total in
+    both halves (split 2023-09-01).
+  - Report: always-sell SPX; SPX's own model rule (pred < 0.95); the touch.
+  - Running count: 297 + 1 = 298.
