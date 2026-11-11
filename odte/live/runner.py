@@ -148,6 +148,9 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                    if cfg.symbol == "XSP" else [])
     broker.subscribe(day, strikes, xsp_strikes)
     j.log(broker.now(), "subscribed", spot=round(spot, 2), n_strikes=len(strikes), n_xsp_strikes=len(xsp_strikes))
+    if broker.now() > open_t + pd.Timedelta(minutes=10):
+        j.log(broker.now(), "late_start", text=f"quotes recorded from {broker.now():%H:%M} only: session features "
+                                               "(move/range/rv so far) are partial today; flag this day in studies")
     from odte.live import xshadow
     xsides = xshadow.setup(cfg, broker, day, spot, prev_settle, j)     # NDX/RUT, shadow only
 
@@ -566,7 +569,21 @@ def _run_scheduled(cfg: Config, today, notify) -> dict:
         ctx.refresh()                         # yesterday's VIX etc.; only dates before today are used
     except Exception as e:
         print(f"WARNING: context refresh failed ({e}); using the saved closes", flush=True)
-    b = IBKRBroker(cfg)
+    b = None
+    deadline = pd.Timestamp.now(tz="America/New_York").tz_localize(None).normalize() + pd.Timedelta(hours=15)
+    warned = False
+    while b is None:                                   # keep trying until 15:00 ET: start as soon as possible
+        try:
+            b = IBKRBroker(cfg)
+        except (ConnectionRefusedError, OSError, TimeoutError) as e:
+            if pd.Timestamp.now(tz="America/New_York").tz_localize(None) >= deadline:
+                raise
+            if not warned:
+                notify("bot waiting for IB Gateway", f"cannot connect ({e!r}); log into IB Gateway (paper). "
+                                                     "The bot retries every 2 minutes and starts by itself.")
+                warned = True
+            import time
+            time.sleep(120)
     day = b.now().normalize()
     prev_settle, prev_ratio = previous_day(cfg, day)
 
