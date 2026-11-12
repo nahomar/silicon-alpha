@@ -95,3 +95,4 @@ the current locked model."
     SPX is primary.
   - Secondary, not deciding: C4, C5, C8 (data/live/round2_models.pkl, sha256 79d9c75aaa2e3771…;
     C5/C8 trained on development through 2026-11-06).
+- Challenger freeze commit: e855f4ec4c4701b19e64eb5454df233e52d480c4
