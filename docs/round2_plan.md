@@ -142,3 +142,23 @@ the current locked model."
   - Multiplicity: two forward contenders (C7, NF), so a WIN needs the CI lower bound > 0 at
     95% (Bonferroni for two), not 90%.
   - Motivated by a post-hoc observation in round 3, which is why only a forward result counts.
+
+## Round 4: one distribution forecast, every trade priced from it (pre-registered 2026-11-11)
+- **Why:** round 3 failed from the optimizer's curse, comparing 14 independent noisy
+  predictions. A market maker instead forecasts one distribution of the close and prices every
+  structure from it, so the errors are shared, not competing.
+- **Forecast:**
+  - z = (close − F_t) / straddle_t, from the entry minute's forward and ATM straddle.
+  - Scale model: ridge alpha 1000 on B0's 41 inputs, target log(|z| + 0.05); s(x) = exp(fit).
+  - Shape: the empirical distribution (200 quantiles) of u = z / s(x) on the training rows.
+    No direction is forecast (earlier direction tests failed); u keeps the skew and fat tails.
+- **Pricing:** for each shape (legs, entry cash at half-gap and touch, risk, fees, exactly as
+  zoo.trade), expected value per $1k risk = (entry cash + E[payoff(F_t + straddle_t · s(x) · u)])
+  × 100 − fees, divided by risk.
+  - Exactness check: the same table must reproduce the realized labels at the actual close.
+- **Rule:** take the shape with the highest expected value if > 0; never in the post-release
+  hour.
+- **Candidates:** D4 (B0's 4 shapes), D14 (all 14), and D4L / D14L (no 15:00 / 15:30).
+- **Evaluation:** the round-2 walk-forward, window and metrics.
+- **Challenger rule:** the best D beats C7 (1.68) by ≥ 0.10 and in both halves; otherwise it
+  is logged and nothing changes.
