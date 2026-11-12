@@ -162,3 +162,36 @@ the current locked model."
 - **Evaluation:** the round-2 walk-forward, window and metrics.
 - **Challenger rule:** the best D beats C7 (1.68) by ≥ 0.10 and in both halves; otherwise it
   is logged and nothing changes.
+- **2026-11-11, round 4 result: PASS → challenger D4L** (reports/round2/round4.json).
+
+  | | Primary | Touch $/day | No top 10 | SPX | Halves | Sep-Nov $/day | Take |
+  |---|---|---|---|---|---|---|---|
+  | D4 | 2.13 | +628 | 1.77 | 2.70 | 2.02 / 2.27 | +647 | 57% |
+  | D14 | 1.91 | +382 | 1.36 | 1.34 | 2.26 / 1.58 | +1,053 | 67% |
+  | **D4L** | **2.25** | **+662** | **1.90** | **2.72** | **2.04 / 2.50** | **+802** | 49% |
+  | D14L | 1.97 | +507 | 1.45 | 1.44 | 2.30 / 1.67 | +1,465 | 57% |
+
+  - D4L beats C7 by +0.58 and in both halves.
+  - Scale forecast calibrated: realized / predicted median |z| = 1.02 on average (0.83-1.27
+    per refit).
+  - Predicted EV of the picks rises with realized profit across quintiles (realized ≈ half of
+    predicted). The 14-shape menu's top quintile has absurd EVs from very cheap pin flies.
+  - **Checks:**
+    - by year vs B0: 2023 +$85k vs +$78k; 2024 +$273k vs +$195k; 2025 +$233k vs +$153k;
+      2026 +$188k (Sharpe 2.66) vs +$69k (0.70);
+    - by index: SPX 2.72, NDX 1.76, RUT 1.18; 76% of 41 months positive, worst −$25k;
+    - deflated P(real) 98.4% with N = 15 round-2..4 candidates;
+    - settings ±: alpha 100 / 10,000 → 2.26 / 2.17; offset 0.02 / 0.10 → 2.24 / 2.30;
+      100 quantiles → 2.24.
+  - Why it should work: it learns the scale of the move (a far less noisy target than each
+    trade's P&L) and prices the known payoffs exactly, so it learns only what it must.
+- **D4L frozen as a forward contender** (`odte/research/round4.py`, `round2_forward.py`):
+  - Forecast trained on all development rows through 2026-11-06 (data/live/round4_model.pkl,
+    sha256 4c9b2ae6da875878…).
+  - Rule: the highest-EV of fly / condor / put spread / call spread if > 0; never in the
+    post-release hour; no 15:00 / 15:30.
+  - Computed from the bot's logged inputs (lead_row) and saved quotes (verified against the
+    research table: one-decision path exact; live path within 0.002).
+  - Window: the same 44 sessions from 2026-11-12, scored on the logged research labels.
+  - **WIN = mean (D4L − B0) > 0 with a 95% CI lower bound > 0** (three contenders: C7's 90%
+    rule was fixed first; NF and D4L use 95%). SPX primary.
