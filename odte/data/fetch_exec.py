@@ -3,6 +3,8 @@
   A      XSP 0DTE near-the-money 1-minute quotes, 2024-11-11 .. 2026-11-10   -> data/odte_xsp/        cap $2.275
   B_spx  SPX 0DTE near-the-money 1-SECOND quotes, 2026-08-17 .. 2026-11-10   -> data/odte_1s/spx/     cap $20.415
   B_xsp  XSP 0DTE near-the-money 1-SECOND quotes, same sessions              -> data/odte_1s/xsp/     cap $8.405
+  M      (owner approved up to $8.00) same-day options of SPY QQQ IWM TLT GLD USO XLF EEM, 1-minute,
+         +/-3% of the previous close, 2024-11-11 .. 2026-11-10 -> data/odte_etf/<ROOT>/   total cap $8.00
 
 Contracts are exactly the ones quoted: zero_dte_symbols(root, day, previous SPX close (/10 for XSP),
 band, step). Every session is priced first (free); a part aborts before downloading if its total
@@ -93,6 +95,89 @@ def run(name: str, dry: bool = False) -> int:
     return 0
 
 
+MULTI = ("SPY", "QQQ", "IWM", "TLT", "GLD", "USO", "XLF", "EEM")
+MULTI_CAP = 8.00
+ETF = ROOT / "data" / "odte_etf"
+
+
+def closes(root: str) -> pd.Series:
+    """Daily closes (Yahoo), kept append-only in data/odte_etf/<ROOT>/settlements.csv."""
+    import yfinance as yf
+    f = ETF / root / "settlements.csv"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    h = yf.Ticker(root).history(start="2024-10-20", end="2026-11-11", auto_adjust=False)["Close"]
+    new = pd.DataFrame({"date": pd.to_datetime(h.index).tz_localize(None).normalize(), "close": h.to_numpy()})
+    if f.exists():
+        old = pd.read_csv(f, parse_dates=["date"])
+        new = pd.concat([old, new[~new["date"].isin(set(old["date"]))]], ignore_index=True).sort_values("date")
+    new.to_csv(f, index=False)
+    return new.set_index("date")["close"]
+
+
+def run_multi(dry: bool = False, workers: int = 4) -> int:
+    import threading
+    import databento as db
+    client = db.Historical(os.environ["DATABENTO_API_KEY"])
+    cal = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
+    days = [d for d in cal if pd.Timestamp("2024-11-11") <= d <= pd.Timestamp("2026-11-10")]
+    jobs = []
+    for r in MULTI:
+        c = closes(r)
+        step = 0.5 if float(c.iloc[-1]) < 100 else 1.0
+        for d in days:
+            prev = c[c.index < d]
+            if len(prev) and not (ETF / r / f"{d:%Y-%m-%d}.parquet").exists():
+                jobs.append((r, d, zero_dte_symbols(r, d, float(prev.iloc[-1]), 0.03, step)))
+
+    def price(j):
+        r, d, syms = j
+        s, e = session_window(d)
+        try:
+            return float(_retry(lambda: client.metadata.get_cost(dataset=DATASET, schema="cbbo-1m", symbols=syms,
+                                                                 stype_in="raw_symbol", start=s, end=e), f"{r} {d:%Y-%m-%d} price"))
+        except db.BentoClientError:
+            return 0.0                                   # no same-day expiry listed that session
+    with ThreadPoolExecutor(8) as ex:
+        costs = list(ex.map(price, jobs))
+    todo = [(j, c) for j, c in zip(jobs, costs) if c > 0]
+    total = sum(c for _, c in todo)
+    by = pd.Series({r: sum(c for (j, c) in todo if j[0] == r) for r in MULTI}).round(3).to_dict()
+    print(f"M: {len(todo)} market-sessions to fetch, estimated ${total:.2f} (cap ${MULTI_CAP:.2f}); by market {by}", flush=True)
+    if total > MULTI_CAP:
+        print("ABORT: estimate exceeds the cap; nothing downloaded.")
+        return 2
+    if dry:
+        return 0
+    lock, spent = threading.Lock(), [0.0]
+
+    def fetch(item):
+        (r, d, syms), cost = item
+        with lock:
+            if spent[0] + cost > MULTI_CAP + 1e-9:
+                return
+            spent[0] += cost
+        s, e = session_window(d)
+        out = ETF / r
+        with tempfile.TemporaryDirectory(dir=out) as td:
+            tmp = Path(td) / f"{d:%Y%m%d}.dbn.zst"
+            _retry(lambda: client.timeseries.get_range(dataset=DATASET, schema="cbbo-1m", symbols=syms,
+                                                       stype_in="raw_symbol", start=s, end=e, path=str(tmp)), f"{r} {d:%Y-%m-%d}")
+            parts = [reduce_frame(ch.reset_index(), d) for ch in db.DBNStore.from_file(str(tmp)).to_df(count=500_000, map_symbols=True)]
+        chain = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+        f = out / f"{d:%Y-%m-%d}.parquet"
+        chain.to_parquet(f.with_suffix(".tmp"), index=False)
+        f.with_suffix(".tmp").replace(f)
+        with lock:
+            with open(LOG, "a") as fh:
+                fh.write(json.dumps({"part": f"M_{r}", "day": f"{d:%Y-%m-%d}", "usd": round(cost, 6), "rows": len(chain)}) + "\n")
+    with ThreadPoolExecutor(workers) as ex:
+        list(ex.map(fetch, todo))
+    print(f"M: done, spent ${spent[0]:.2f}")
+    return 0
+
+
 if __name__ == "__main__":
     LOG.parent.mkdir(parents=True, exist_ok=True)
+    if sys.argv[1] == "M":
+        sys.exit(run_multi("--dry-run" in sys.argv))
     sys.exit(run(sys.argv[1], "--dry-run" in sys.argv))
