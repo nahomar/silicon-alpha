@@ -195,3 +195,4 @@ the current locked model."
   - Window: the same 44 sessions from 2026-11-12, scored on the logged research labels.
   - **WIN = mean (D4L − B0) > 0 with a 95% CI lower bound > 0** (three contenders: C7's 90%
     rule was fixed first; NF and D4L use 95%). SPX primary.
+- D4L freeze commit: 27dbed91dc9480b233f4b3387645f1540b077bb7
