@@ -96,3 +96,26 @@ the current locked model."
   - Secondary, not deciding: C4, C5, C8 (data/live/round2_models.pkl, sha256 79d9c75aaa2e3771…;
     C5/C8 trained on development through 2026-11-06).
 - Challenger freeze commit: e855f4ec4c4701b19e64eb5454df233e52d480c4
+
+## Round 3: a wider trade menu (pre-registered 2026-11-11, before any result)
+- **Idea:** B0 chooses among 4 shapes. Give the same model (B0's inputs, ridge alpha 1000, one
+  model per trade) 10 more defined-risk shapes, so it can pick the shape that fits the moment.
+  - Flies: wing 1.0σ (narrow), 2.0σ (wide).
+  - Condors: short strikes ±0.6σ (tight), ±1.4σ (wide); wings 0.5σ.
+  - Put credit spreads: short −0.5σ (near), −1.2σ (far). Call credit spreads: short +0.5σ,
+    +1.2σ. All with 0.5σ wings.
+  - "Win big" pin butterflies (debit, pay several times the cost if the close lands near the
+    centre): long put butterfly centred −0.5σ and long call butterfly centred +0.5σ, wings
+    0.5σ.
+  - σ = the session's implied move, as in the research code.
+- **Labels:** zoo.trade with the library's cost scaling, half-gap and touch, $1k worst case
+  (`odte/research/menu3.py`). The existing four labels are recomputed in the same pass and must
+  equal the matrix's (an exactness check).
+- **Candidates:** R3 = B0 with the 14-shape menu; R3L = R3 without 15:00/15:30.
+- **Evaluation:** the round-2 walk-forward, window and metrics.
+- **Challenger rule:** the better of R3/R3L becomes round 3's challenger if its primary metric
+  beats **C7** (round 2's challenger, 1.68) by ≥ 0.10 AND beats C7 in both halves.
+  - Reported regardless: each shape's share of picks and of profit, and the pin butterflies'
+    hit rate and payoff multiple.
+- **Forward test:** frozen like C7, then scored against B0 on the 44 sessions after its own
+  freeze. New shapes are priced offline from the bot's saved SPX quotes.
