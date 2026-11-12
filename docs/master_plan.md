@@ -386,3 +386,11 @@
   same-day quotes (a fetcher bug, now fixed; docs/round2_plan.md). So B0's term inputs were
   wrong for SPX on 1 of the 44 exam days (12 of 1,584 decisions). The exam cannot be re-run; its
   result stands with this caveat.
+  - Measured after re-fetching the correct Nov 6 file (owner approved $0.02; spent $0.02): with
+    the correct inputs, B0 would have picked 4 flies + 8 call spreads instead of 12 flies on SPX
+    that day, at −$341 instead of −$1,853 (per $1k-risk units).
+  - Over 44 days that is about +$34/day: the exam mean of +$323/day would have been about
+    +$357/day. **The recorded result stands as run**; this is a footnote.
+  - It also means the exam's "term ≈ −$8/day" importance was measured with one corrupted day.
+  - The development matrix has been rebuilt: only Nov 6 SPX's six term inputs changed. The
+    previous copy is kept in data/research/_pre_round2/.
