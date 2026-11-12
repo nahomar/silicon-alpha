@@ -230,6 +230,19 @@ def main() -> int:
     if a.days_file:
         days = sorted(pd.to_datetime(pd.read_csv(a.days_file)["date"]))
     syms, nexp = {}, {}
+    if a.next_expiry:
+        # The next expiration after each session, from the session calendar (SPXW/NDXP/RUTW list
+        # every session). Fixed 2026-11-11: this used to be set only in --fast mode and taken from
+        # the 0DTE files on disk, so a normal run silently saved SAME-DAY quotes as "next expiry".
+        cal = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
+        for d in days:
+            later = cal[cal > d]
+            if len(later):
+                nexp[d] = later[0]
+        missing = [d for d in days if d not in nexp]
+        if missing:
+            print(f"no next expiration known for {len(missing)} day(s); skipped: {[f'{x:%Y-%m-%d}' for x in missing]}")
+            days = [d for d in days if d in nexp]
     if a.fast:
         # Band centre = previous session's index close (known before the open).
         import yfinance as yf
@@ -237,19 +250,11 @@ def main() -> int:
                                      end=pd.Timestamp(a.end) + pd.Timedelta(days=1),
                                      auto_adjust=False)["Close"]
         h.index = pd.to_datetime(h.index).tz_localize(None).normalize()
-        if a.next_expiry:
-            expiries = pd.DatetimeIndex(sorted(pd.Timestamp(p.stem) for p in
-                                               (ROOT / "data" / "odte_0dte").glob("20??-??-??.parquet")))
         for d in days:
             prev = h[h.index < d]
             if not len(prev):
                 continue
-            e = d
-            if a.next_expiry:
-                later = expiries[expiries > d]
-                if not len(later):
-                    continue
-                e = nexp[d] = later[0]
+            e = nexp.get(d, d)
             syms[d] = zero_dte_symbols(a.root, e, float(prev.iloc[-1]), a.band + 0.01)
     todo, costs = [], {}
     def done(d):

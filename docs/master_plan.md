@@ -382,3 +382,7 @@
     scores exactly for SPX. NDX/RUT are approximate (coarser recorded strikes).
   - Each 44 trading days of it is a fresh out-of-sample test; real money still needs
     docs/go_no_go.md.
+- **2026-11-11, post-exam data finding:** the SPX next-expiry file for exam day 2026-11-06 held
+  same-day quotes (a fetcher bug, now fixed; docs/round2_plan.md). So B0's term inputs were
+  wrong for SPX on 1 of the 44 exam days (12 of 1,584 decisions). The exam cannot be re-run; its
+  result stands with this caveat.

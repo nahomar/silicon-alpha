@@ -214,3 +214,25 @@ the current locked model."
       were computed on its selection window.
     - Prior that any contender beats B0 forward: about a coin flip. The forward test decides;
       nothing is changed.
+- **2026-11-11, never-seen sessions 2026-11-09..10** (owner approved $10.61 for Nov 9-11; spent
+  about $7.26 so far; Nov 11 is refused by Databento until 24 h have passed; reports/round2/newdays.json).
+  Models exactly as frozen; $300 worst case per trade; half-gap.
+
+  | | SPX Nov 9 | SPX Nov 10 | SPX total (trades) | All indexes total (trades) | All, touch |
+  |---|---|---|---|---|---|
+  | B0 | +47 | −557 | −510 (12) | −2,315 (57) | −2,799 |
+  | C7 | 0 | −645 | −645 (9) | −2,857 (48) | −3,175 |
+  | NF | +47 | −431 | −385 (12) | −4,470 (57) | −5,182 |
+  | D4L | 0 | +75 | **+75 (1)** | **−1,250 (22)** | −1,384 |
+  | always-sell | | | +196 | −2,569 | |
+
+  - Two losing days for sellers. D4L lost least by sitting out most decisions (22 trades vs
+    57). Two sessions are noise; no conclusion.
+- **Data bug found and fixed** (`odte/data/fetch_0dte.py`): without --fast, --next-expiry was
+  ignored and SAME-DAY quotes were saved as "next expiry".
+  - Affected: 2026-11-06 (from the exam purchase) and the first Nov 9-10 download ($2.36 wasted).
+    Bad files moved to data/odte_next/_bad_same_day/.
+  - Nov 9-10 re-fetched correctly ($0.05). All 2,086 other next-expiry files have the correct
+    expiry.
+  - The fetcher now takes next expirations from the session calendar and never falls back to
+    same-day.
