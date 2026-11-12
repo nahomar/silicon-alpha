@@ -185,6 +185,9 @@ def fetch_settlements(days: list, out: Path, index: str = "^GSPC") -> pd.DataFra
                                    auto_adjust=False)
     s = pd.DataFrame({"date": pd.to_datetime(h.index).tz_localize(None).normalize(),
                       "spx_close": h["Close"].to_numpy()})
+    if out.exists():                       # append only: stored closes (research labels) never change
+        old = pd.read_csv(out, parse_dates=["date"])
+        s = pd.concat([old, s[~s["date"].isin(set(old["date"]))]], ignore_index=True).sort_values("date")
     s.to_csv(out, index=False)
     return s
 
