@@ -34,3 +34,6 @@
   the same years; worst trades.
 - PASS makes "Friday 1DTE seller" a forward contender (its own freeze), scored from the bot's
   recordings. FAIL means it is logged as a 2022-26 artefact.
+- **W1 result: FAIL.** Friday 15:30 1DTE fly, 2016-08-22 .. 2022-05-13 (274 Fridays): +$3.8 per
+  $1k [−51.1, +57.9]; touch −$11.5. Years swing (2017 +72, 2018 −74, 2019 +36, 2020 −44, 2021 +50).
+  The 2022-26 +$88 was not a stable weekend effect for this trade.
