@@ -119,3 +119,16 @@ the current locked model."
     hit rate and payoff multiple.
 - **Forward test:** frozen like C7, then scored against B0 on the 44 sessions after its own
   freeze. New shapes are priced offline from the bot's saved SPX quotes.
+- **2026-11-11, round 3 result: FAIL** (reports/round2/round3.json). Labels built for 48,919 rows;
+  the exactness check on the existing four shapes passed (max difference 0).
+  - R3 (14 shapes): primary 0.07 (vs C7 1.68, vs B0 1.30); touch −$637/day.
+  - R3L (no late decisions): 0.49; touch −$271/day.
+  - **Why:** taking the highest of 14 noisy predictions selects whichever shape's prediction
+    is most over-estimated (the optimizer's curse). The high-variance shapes get picked too
+    often.
+  - **"Win big" pin butterflies:** picked 4,695 times; hit rate 30%; average win 1.9× risk;
+    633 wins above 2×; total −$228k. Same verdict as T3: no skill at picking which lottery
+    tickets pay.
+  - **Observation only (seen after the fact, not a result):** the narrow fly (1.0σ wings) was
+    the most profitable pick (+$223k, 2,481 picks, +$90 per pick). Any test of it on these
+    data is now biased; only a forward test would be clean.
