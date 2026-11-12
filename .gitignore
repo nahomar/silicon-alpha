@@ -96,3 +96,6 @@ data/oi/
 data/research/
 data/filings/
 data/prices/
+
+# third-party/private research data shared by the owner: never commit (repo is public)
+data/supply/aci/

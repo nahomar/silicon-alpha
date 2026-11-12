@@ -20,3 +20,12 @@
 - Reported: all horizons and instruments, the number of events, the largest surprises.
 - PASS → a pre-registered forward test on new issues (and DRC/company data next). FAIL →
   logged, like the Eskom probe.
+
+## Result (2026-11-11): FAIL
+- 67 monthly releases with a point-in-time surprise; 49 with prices (2020-04 .. 2026-07).
+- **Primary, CPER at 5 days: Spearman −0.11 [−0.34, +0.11].** The sign is as hypothesised, but
+  the effect is indistinguishable from 0.
+- All 12 instrument × horizon cells have CIs spanning 0: CPER +0.01 / −0.11 / −0.06; COPX
+  −0.09 / −0.06 / −0.14; FCX ≈ 0; SCCO −0.06 / −0.01 / −0.14.
+- Power: with 49 events only |rho| above about 0.3 is detectable.
+- Consistent with the Eskom probe: no detectable post-release drift from African supply data.
