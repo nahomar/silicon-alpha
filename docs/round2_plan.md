@@ -196,3 +196,21 @@ the current locked model."
   - **WIN = mean (D4L − B0) > 0 with a 95% CI lower bound > 0** (three contenders: C7's 90%
     rule was fixed first; NF and D4L use 95%). SPX primary.
 - D4L freeze commit: 27dbed91dc9480b233f4b3387645f1540b077bb7
+- **2026-11-11, hold-out check** (owner asked for out-of-sample evidence; not pre-registered;
+  `odte/research/holdout_check.py`). The contenders on development stretches that played no
+  part in choosing them (rounds 2-4 chose on 2023-07 onwards):
+  - **Jan 2022 - Jun 2023:**
+    - B0 +$727/day, Sharpe 1.82; touch +$421;
+    - C7 +$583 (1.53), vs B0 **−$144/day [−258, −26]**;
+    - NF +$708 (1.34), vs B0 −$19 [−251, +215];
+    - **D4L +$443 (0.98), vs B0 −$284 [−627, +46]**.
+  - **Jun 2019 - Dec 2021** (SPX, Mon/Wed/Fri era): B0 −$66 (−0.34); C7 −$20, vs B0 +$46
+    [−5, +101]; NF −$96; D4L +$6 (0.03), vs B0 +$72 [−103, +248].
+  - **Reading:**
+    - The round 2-4 gains over B0 are specific to the window they were chosen on. On the
+      18 months before it, every contender trails B0, and C7 significantly so.
+    - B0 was itself chosen on 2022-26, so that stretch is not clean for B0 either.
+    - Earlier statements ("strongest result", "deflated 98%") overstated D4L, since they
+      were computed on its selection window.
+    - Prior that any contender beats B0 forward: about a coin flip. The forward test decides;
+      nothing is changed.
