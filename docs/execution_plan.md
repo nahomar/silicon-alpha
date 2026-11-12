@@ -46,3 +46,33 @@ orders, how long to wait, when to use SPX vs XSP."
 
 ## Noise
 - All comparisons are paired: same decisions, same seconds; only the policy differs.
+
+## Additions (fixed 2026-11-11 22:xx, still before any data of this study was examined)
+- **E3 optimal stopping** (data B):
+  - Fit a fill-time model: the hazard of the combo's touch credit reaching a limit, as a function
+    of distance from mid (in half-gaps), seconds elapsed, time of day, and recent 1-minute
+    realized movement of the forward. Discrete-time logistic hazard, fitted on the first 41
+    sessions.
+  - Solve the Bellman equation backwards over a 5-minute horizon (actions each 5 s: hold,
+    improve the limit by one tick, cross at touch, abandon). Value = expected P&L per decision
+    using the locked model's edge and the measured adverse selection.
+  - **Test on the last 20 sessions** against the E2 policies, with the same decision rule
+    (≥ $2 per $1k better than LADDER, CI lower bound > 0).
+- **N1 delta-hedged edge** (data B; a measuring tool, not a trading rule):
+  - For each decision, the P&L of the sold structure delta-hedged each minute with the parity
+    forward, using Black-Scholes deltas from each leg's implied vol at its 1-second mid.
+  - This removes "where the index lands" and leaves "was the option overpriced vs what then
+    happened".
+  - Report its standard deviation vs unhedged P&L, and the locked model's selection skill
+    (picked vs not picked) measured this way, with a CI.
+  - If the noise falls ≥ 3×, it becomes a secondary metric in every later comparison.
+- **S1 sequential looks for the forward head-to-head** (docs/round2_plan.md; fixed before its
+  first session, 2026-11-12):
+  - Interim looks at 11, 22 and 33 sessions. A contender may be declared WIN early only if the
+    one-sided z of its daily difference vs B0 exceeds the O'Brien-Fleming boundary (4.05, 2.86,
+    2.34 at looks 1-3; 2.02 at 44). No early LOSE.
+  - Otherwise the 44-session rules stand unchanged.
+- **K1 sizing (before any real money):**
+  - Fractional Kelly with parameter uncertainty and a 1-day CVaR(95%) cap, on the effective
+    number of independent bets per day, estimated from the correlation of same-day decisions
+    across times and indexes.

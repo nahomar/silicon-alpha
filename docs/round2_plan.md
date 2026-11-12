@@ -236,3 +236,6 @@ the current locked model."
     expiry.
   - The fetcher now takes next expirations from the session calendar and never falls back to
     same-day.
+- **2026-11-11, before session 1: sequential looks added** (docs/execution_plan.md S1).
+  - Early WIN only if z ≥ 4.05 / 2.86 / 2.34 at 11 / 22 / 33 sessions (O'Brien-Fleming); the
+    44-session rules are otherwise unchanged.
