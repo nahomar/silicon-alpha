@@ -376,3 +376,9 @@
     real vs 16% if not).
 - **Per the plan: a weak pass makes this model the live bot's lead shadow.** Real money
   still requires docs/go_no_go.md.
+- **2026-11-11, lead shadow wired** (owner: "yes wire it in tonight"; docs/live_bot.md): the
+  frozen model runs live from 2026-11-12 as paper evidence (no orders).
+  - The replay of 2026-08-20 reproduces the research inputs, decisions (36/36) and trade
+    scores exactly for SPX. NDX/RUT are approximate (coarser recorded strikes).
+  - Each 44 trading days of it is a fresh out-of-sample test; real money still needs
+    docs/go_no_go.md.

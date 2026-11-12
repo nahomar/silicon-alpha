@@ -171,3 +171,37 @@ launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.evening.plist
 ## Known limits (v1)
 - Surprise moves now pause paper orders (guards above). The shadow book still follows the research rules (scheduled releases only), so the guard's value can be measured.
 - Paper fills are simulated by IBKR and say nothing about real fill quality. Measuring that needs tiny real XSP orders, only with the owner's go.
+
+## Lead shadow: the frozen exam model (from 2026-11-12)
+- **What:** the model that passed the one-time exam (WEAK PASS; docs/master_plan.md, freeze
+  ebadab6), run live as paper evidence. **It never places orders.** Code: `odte/live/frozen.py`;
+  model file `data/live/model_frozen.pkl` (`python3 -m odte.live.frozen train`, development
+  rows only).
+- **Every 30 minutes, 10:00-15:30, for SPX, NDX and RUT:**
+  - inputs: calendar, dealer gamma, recent fly price changes, term structure, identity;
+  - rule: the best predicted of fly / condor / put spread / call spread if > 0; never within
+    60 minutes after a scheduled release; the bot's orders and guards play no part.
+- **Tomorrow's SPX options** (term structure): 12 extra quote lines (ATM ±5 strikes, both
+  sides, plus 3 strikes around each wing).
+  - Re-centred 2 minutes before each decision, and the wings refined 1 minute before using the
+    straddle just observed.
+  - Quotes are saved to `chains/spx_next/` and backed up each evening.
+  - Total quote lines ≈ 196.
+- **Scoring:** after the close, each pick is priced with the research code (`zoo.trade`) on
+  the day's recorded quotes, half-gap and touch, at $300 worst case per trade. All four
+  trades' scores are logged for every decision (`lead_labels`), so any rule can be studied
+  later.
+- **Journal kinds:**
+  - `lead_shadow` (start), `lead_next_quotes`;
+  - `shadow` with strategy `frozen_lead` (index, trade, predictions, missing inputs);
+  - `lead_row` (all 41 inputs), `lead_labels`, `shadow_settle`.
+  - The day summary and report show `frozen_lead` pooled and per index.
+- **Verified by replaying 2026-08-20 through the runner**, with quotes aligned to live timing
+  (tests/odte/test_frozen.py):
+  - SPX inputs, decisions and trade scores equal the research matrix exactly;
+  - all 36 decisions match.
+  - NDX/RUT are approximate: the bot records NDX every 50 points and RUT 22 strikes, while
+    research used every listed strike. Their flow inputs and some scores differ, and a far
+    strike can be missing. SPX is the exact comparison; the exam's edge was SPX.
+  - Note: a plain replay sees each minute's quote one minute late, because it records at
+    hh:mm:58 from whole-minute history. That is a test-harness effect, not a live one.

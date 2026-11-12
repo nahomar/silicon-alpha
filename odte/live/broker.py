@@ -150,6 +150,24 @@ class ReplayBroker:
         st = st[st.index < pd.Timestamp(day).normalize()]
         return float(st.iloc[-1]) if len(st) else float("nan")
 
+    def subscribe_next(self, day, expiration, contracts):
+        """Next-expiry SPXW quotes for (right, strike) pairs, from data/odte_next (replaces any earlier set)."""
+        if getattr(self, "_next_hist", None) is None:
+            h = pd.read_parquet(f"data/odte_next/{self.day:%Y-%m-%d}.parquet")
+            h["quote_datetime"] = pd.to_datetime(h["quote_datetime"])
+            self._next_hist = h
+        self._next_set = {(r, float(k)) for r, k in contracts}
+
+    def snapshot_next(self):
+        h = getattr(self, "_next_hist", None)
+        if h is None or not getattr(self, "_next_set", None):
+            return pd.DataFrame(columns=CHAIN_COLS)
+        v = h[h["quote_datetime"] <= self.t]
+        v = v[[(r, float(k)) in self._next_set for r, k in zip(v["option_type"], v["strike"])]]
+        last = v.sort_values("quote_datetime").groupby(["option_type", "strike"]).tail(1).copy()
+        last["quote_datetime"] = self.t
+        return last[CHAIN_COLS]
+
     def reconcile(self, day) -> dict:
         """End-of-day broker view (replay: from the simulated order book)."""
         return {"open_orders": sum(1 for o in self.orders.values() if o["live"]),
@@ -270,6 +288,30 @@ class IBKRBroker:
 
     def snapshot_xsp(self):
         return self._rows("XSP")
+
+    def subscribe_next(self, day, expiration, contracts):
+        """Next-expiry SPXW quotes for a few (right, strike) pairs (lead shadow's term inputs).
+        Cancels the previous set first, so it holds at most len(contracts) quote lines."""
+        for t in getattr(self, "next_tickers", {}).values():
+            try:
+                self.ib.cancelMktData(t.contract)
+            except Exception:
+                pass
+        self.next_tickers, self.next_exp = {}, pd.Timestamp(expiration).normalize()
+        cons = [self._option("SPX", expiration, float(k), r) for r, k in contracts]
+        cons = [c for c in (self.ib.qualifyContracts(*cons) if cons else []) if c and c.conId]
+        for c in cons:
+            self.next_tickers[(c.right, float(c.strike))] = self.ib.reqMktData(c, "", False, False)
+        return len(cons)
+
+    def snapshot_next(self):
+        now = self.now()
+        num = lambda x: float(x) if x is not None and math.isfinite(x) and x >= 0 else np.nan
+        rows = [{"quote_datetime": now, "root": "SPXW", "expiration": getattr(self, "next_exp", pd.NaT),
+                 "strike": k, "option_type": r, "bid": num(t.bid), "ask": num(t.ask),
+                 "bid_size": num(t.bidSize), "ask_size": num(t.askSize)}
+                for (r, k), t in getattr(self, "next_tickers", {}).items()]
+        return pd.DataFrame(rows, columns=CHAIN_COLS).dropna(subset=["bid", "ask"])
 
     def place_fly(self, order, price):
         from ib_async import ComboLeg, Contract, LimitOrder

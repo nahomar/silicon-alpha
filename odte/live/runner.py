@@ -167,6 +167,12 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                                                "(move/range/rv so far) are partial today; flag this day in studies")
     from odte.live import xshadow
     xsides = xshadow.setup(cfg, broker, day, spot, prev_settle, j)     # NDX/RUT, shadow only
+    lead = None                                          # frozen exam model: lead shadow, never orders
+    try:
+        from odte.live import frozen
+        lead = frozen.Lead.start(cfg, day, j, broker.now())
+    except Exception as e:
+        j.log(broker.now(), "note", text=f"lead shadow off today: {e!r}")
 
     chain, xchain, done, active, fills, shadows = [], [], set(), None, [], []
     from odte.live import flowshadow
@@ -197,6 +203,15 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                 if cfg.symbol == "XSP":
                     xchain.append(broker.snapshot_xsp())
                 xshadow.record(xsides, broker)
+                if lead is not None:
+                    try:
+                        lead.record(broker)
+                        from odte.live import guards as _g
+                        px = _g.parity_price(chain[-1]) if chain and len(chain[-1]) else float("nan")
+                        lead.tick(broker, now, times, done, px, dctx["ctx"].get("vix_prev"),
+                                  chain[-1] if chain else None)
+                    except Exception as e:
+                        j.log(now, "note", text=f"lead shadow quotes failed: {e!r}")
                 try:                                                     # safety guards (orders only)
                     px_now = guards.parity_price(chain[-1]) if chain and len(chain[-1]) else float("nan")
                     sm = watch.update(now, px_now)
@@ -343,6 +358,11 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                         j.log(now, "order", hhmm=hhmm, symbol=o.symbol, K=o.K, W=o.W, qty=o.qty,
                               price=o.ladder[0], mid=o.mid, touch=o.touch, ladder=o.ladder,
                               worst_case=round(o.worst_case, 2))
+                if lead is not None:
+                    try:
+                        lead.decide(now, hhmm, r, chain, xsides, dctx)
+                    except Exception as e:
+                        j.log(now, "note", text=f"lead shadow failed at {hhmm}: {e!r}")
             for pf in [p for p in pending_flow if now >= p["t5"] + pd.Timedelta(seconds=2)]:
                 pending_flow.remove(pf)
                 try:
@@ -390,6 +410,11 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             xshadow.save(xsides, cfg, day, tag)
         except Exception:
             pass
+        try:
+            if lead is not None:
+                lead.save(cfg, day, tag)
+        except Exception:
+            pass
         j.log(broker.now(), "crash", error=repr(e), working_order=active is not None, cancelled=cancelled,
               fills=len(fills))
         alert("bot stopped", f"{day:%Y-%m-%d} {broker.now():%H:%M}: {e!r}. "
@@ -407,6 +432,11 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
         unfilled.append({"hhmm": active["hhmm"], "o": active["o"]})
     _save_chains(cfg, day, tag, chain, xchain)
     xshadow.save(xsides, cfg, day, tag)
+    try:
+        if lead is not None:
+            lead.save(cfg, day, tag)
+    except Exception as e:
+        j.log(broker.now(), "note", text=f"lead shadow save failed: {e!r}")
     if side_b is not None and len(skew_hist) and not tag:      # never let replays touch live history
         sp = cfg.journal_dir.parent / "side" / "skew_history.parquet"
         skew_hist[skew_hist["day"] >= day - pd.Timedelta(days=60)].to_parquet(sp, index=False)
@@ -451,6 +481,11 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
             for k, v in p.items():
                 if np.isfinite(v):
                     b[k] = round(b.get(k, 0.0) + v, 2)
+    if lead is not None:
+        try:
+            lead.settle(broker.now(), chain, settle, prev_settle, xsides, xset, book)
+        except Exception as e:
+            j.log(broker.now(), "note", text=f"lead shadow settlement failed: {e!r}")
     ratio_today = (abs(settle - ratio_ref[0]) / ratio_ref[1]
                    if ratio_ref and ratio_ref[1] > 0 else None)          # tomorrow's prev_ratio
     summary = {"day": f"{day:%Y-%m-%d}", "decisions": len(done), "orders": n_trades, "fills": len(fills),

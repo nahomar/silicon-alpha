@@ -35,12 +35,14 @@ def day_report(recs: list, news_path: Path | None = None) -> dict:
                and d["xsp"].get("fly_credit") is not None]
     book = {}
     for r in kinds("shadow_settle"):
-        b = book.setdefault(r["strategy"], {"trades": 0, "half": 0.0, "touch": 0.0, "xsp_half": 0.0})
-        b["trades"] += 1
-        for k in ("half", "touch", "xsp_half"):
-            v = r.get(k)
-            if v is not None and math.isfinite(v):
-                b[k] += v
+        keys = [r["strategy"]] + ([f"{r['strategy']}:{r['index']}"] if r.get("index") else [])
+        for key in keys:                                  # the lead shadow also per index
+            b = book.setdefault(key, {"trades": 0, "half": 0.0, "touch": 0.0, "xsp_half": 0.0})
+            b["trades"] += 1
+            for k in ("half", "touch", "xsp_half"):
+                v = r.get(k)
+                if v is not None and math.isfinite(v):
+                    b[k] += v
     fills = kinds("fill")
     news = []
     if news_path and news_path.exists():

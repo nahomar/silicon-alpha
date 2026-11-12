@@ -43,15 +43,21 @@ def _straddle_skew(grid, F, t, K_hint=None):
     return float(st), float(skew)
 
 
-def build(d: pd.DataFrame) -> pd.DataFrame:
+def build(d: pd.DataFrame, next_chains: dict | None = None) -> pd.DataFrame:
+    """next_chains: {day: next-expiry quotes} to use instead of data/odte_next (the live bot)."""
     from odte.eval.expiry_edge import implied_forward, minute_grid
     sessions = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
     rows = {}
     for day, g in d.groupby("day"):
-        p = NEXT / f"{day:%Y-%m-%d}.parquet"
-        if not p.exists():
-            continue
-        ch = pd.read_parquet(p)
+        if next_chains is not None:
+            ch = next_chains.get(pd.Timestamp(day))
+            if ch is None:
+                continue
+        else:
+            p = NEXT / f"{day:%Y-%m-%d}.parquet"
+            if not p.exists():
+                continue
+            ch = pd.read_parquet(p)
         if ch.empty:
             continue
         exp = pd.Timestamp(ch["expiration"].iloc[0]).normalize()
