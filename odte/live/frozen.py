@@ -44,7 +44,9 @@ def train(cfg=None, path: Path | None = None) -> dict:
     from odte.live.config import Config
     from odte.research import exam, meta
     cfg = cfg or Config()
+    from odte.research import exam_guard as eg
     dev = meta.load()
+    dev = dev[dev["day"] < eg.EXAM_FROM].reset_index(drop=True)   # the locked spec: rows before the exam only
     feats = exam.feature_list(dev, exam.GROUPS)
     X = dev[feats].apply(pd.to_numeric, errors="coerce").to_numpy(float)
     post = dev["post"].to_numpy()

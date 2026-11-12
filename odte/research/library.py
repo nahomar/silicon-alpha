@@ -78,7 +78,7 @@ def build_index(sym: str, limit_days: list | None = None, allow_exam: bool = Fal
     settle = pd.read_csv(folder / "settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
     files = sorted(p for p in folder.glob("20??-??-??.parquet"))
     if not allow_exam:
-        files = [p for p in files if pd.Timestamp(p.stem) < eg.EXAM_FROM]       # development only
+        files = [p for p in files if pd.Timestamp(p.stem) <= eg.dev_end()]     # development only
     if limit_days is not None:
         files = [p for p in files if pd.Timestamp(p.stem) in set(pd.to_datetime(limit_days))]
     eg.check([p.stem for p in files])

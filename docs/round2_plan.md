@@ -66,3 +66,32 @@ the current locked model."
 - Real money still requires docs/go_no_go.md.
 
 ## Log
+- **2026-11-11, development results** (walk-forward, common window 2023-07-03 .. 2026-11-06;
+  reports/round2/candidates.json). Primary = capped Sharpe at half-gap.
+
+  | Candidate | Primary | vs B0 | Both halves better | Touch $/day | SPX Sharpe | Sep-Nov $/day |
+  |---|---|---|---|---|---|---|
+  | B0 locked | 1.30 | | | +178 | 2.48 | +303 |
+  | C1 era only | 1.33 | +0.03 | no | +210 | 2.35 | +302 |
+  | C2 recency 1y | 1.33 | +0.03 | no | +240 | 2.26 | +545 |
+  | C3 plateau ensemble | 1.24 | −0.06 | no | +150 | 2.46 | +432 |
+  | C4 confidence sizing | 1.60 | +0.30 | yes | +513 | 2.40 | +369 |
+  | C5 cost-aware (touch) | 1.58 | +0.28 | yes | +300 | 2.63 | +284 |
+  | C6 meta-label | 0.81 | −0.49 | no | −41 | 2.14 | +445 |
+  | **C7 no 15:00/15:30** | **1.68** | **+0.38** | **yes** | +377 | 2.59 | +584 |
+  | C8 = C1+C4+C5+C7 | 1.62 | +0.32 | yes | **+603** | 1.83 | +29 |
+
+  - C8's parts follow the rule: every candidate above B0 on the primary metric. C1 +0.034
+    beat C2 +0.028.
+  - **Challenger (rule: the best primary that beats B0 by ≥ 0.10 in both halves) = C7.**
+    Deflated P(real) 99% with N = 9.
+  - Caveat: the late-decision weakness was seen in development before this round (robustness
+    by time of day), so C7 is the most data-informed candidate. The forward test is what
+    judges it.
+- **Challenger frozen** ():
+  - C7 = the locked model's own file (data/live/model_frozen.pkl, sha256 1e797d05d29b8fd1…) with no
+    decisions at 15:00/15:30.
+  - Scored from the bot's journals (lead_labels). Window = 44 sessions from **2026-11-12**.
+    SPX is primary.
+  - Secondary, not deciding: C4, C5, C8 (data/live/round2_models.pkl, sha256 79d9c75aaa2e3771…;
+    C5/C8 trained on development through 2026-11-06).

@@ -70,7 +70,7 @@ def build_matrix() -> pd.DataFrame:
         if not p.exists():
             continue
         d = pd.read_parquet(p)
-        d = d[d["day"] < eg.EXAM_FROM].reset_index(drop=True)
+        d = d[d["day"] <= eg.dev_end()].reset_index(drop=True)
         eg.check(d["day"])
         for c in ("es_on_range", "es_on_rv", "es_on_ret", "es_on_vol", "es_last15", "gex_0dte", "gex_flip_dist",
                   "gex_net", "maxoi_dist", "oi_pcr_0dte"):
