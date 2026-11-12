@@ -99,3 +99,6 @@ data/prices/
 
 # third-party/private research data shared by the owner: never commit (repo is public)
 data/supply/aci/
+
+# CHOKEPOINT stage 2 raw stores (large, regenerable)
+data/africa/
