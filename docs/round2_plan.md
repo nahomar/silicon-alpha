@@ -88,7 +88,7 @@ the current locked model."
   - Caveat: the late-decision weakness was seen in development before this round (robustness
     by time of day), so C7 is the most data-informed candidate. The forward test is what
     judges it.
-- **Challenger frozen** ():
+- **Challenger frozen** (`odte/research/round2_forward.py`):
   - C7 = the locked model's own file (data/live/model_frozen.pkl, sha256 1e797d05d29b8fd1…) with no
     decisions at 15:00/15:30.
   - Scored from the bot's journals (lead_labels). Window = 44 sessions from **2026-11-12**.
