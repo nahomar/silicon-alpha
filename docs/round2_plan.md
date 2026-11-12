@@ -132,3 +132,13 @@ the current locked model."
   - **Observation only (seen after the fact, not a result):** the narrow fly (1.0σ wings) was
     the most profitable pick (+$223k, 2,481 picks, +$90 per pick). Any test of it on these
     data is now biased; only a forward test would be clean.
+- **2026-11-11, forward contender NF (owner: "yes"), fixed before any session of its window:**
+  - **NF = B0's decisions, except that whenever B0 sells the fly, NF sells the narrow fly
+    (wings 1.0σ instead of 1.5σ).** Everything else is identical.
+  - Priced after the close with zoo.trade on the bot's saved quotes, using the day's logged
+    cost scale.
+  - Window and rule: the same 44 sessions from 2026-11-12 and the same WIN / LEAN / LOSE rule
+    against B0, SPX primary.
+  - Multiplicity: two forward contenders (C7, NF), so a WIN needs the CI lower bound > 0 at
+    95% (Bonferroni for two), not 90%.
+  - Motivated by a post-hoc observation in round 3, which is why only a forward result counts.
