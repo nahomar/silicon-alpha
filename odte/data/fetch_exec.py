@@ -94,8 +94,11 @@ def run(name: str, dry: bool = False) -> int:
                 break
             s, e = session_window(d)
             tmp = Path(td) / f"{d:%Y%m%d}.dbn.zst"
-            _retry(lambda: client.timeseries.get_range(dataset=DATASET, schema=schema, symbols=syms[d],
-                                                       stype_in="raw_symbol", start=s, end=e, path=str(tmp)), f"{d:%Y-%m-%d}")
+            def _get():
+                tmp.unlink(missing_ok=True)                 # a failed attempt can leave a partial file
+                client.timeseries.get_range(dataset=DATASET, schema=schema, symbols=syms[d],
+                                            stype_in="raw_symbol", start=s, end=e, path=str(tmp))
+            _retry(_get, f"{d:%Y-%m-%d}")
             spent += costs[d]
             parts = [reduce_frame(ch.reset_index(), d) for ch in db.DBNStore.from_file(str(tmp)).to_df(count=500_000, map_symbols=True)]
             tmp.unlink(missing_ok=True)
@@ -178,8 +181,11 @@ def run_multi(dry: bool = False, workers: int = 4) -> int:
         out = ETF / r
         with tempfile.TemporaryDirectory(dir=out) as td:
             tmp = Path(td) / f"{d:%Y%m%d}.dbn.zst"
-            _retry(lambda: client.timeseries.get_range(dataset=DATASET, schema="cbbo-1m", symbols=syms,
-                                                       stype_in="raw_symbol", start=s, end=e, path=str(tmp)), f"{r} {d:%Y-%m-%d}")
+            def _get():
+                tmp.unlink(missing_ok=True)
+                client.timeseries.get_range(dataset=DATASET, schema="cbbo-1m", symbols=syms,
+                                            stype_in="raw_symbol", start=s, end=e, path=str(tmp))
+            _retry(_get, f"{r} {d:%Y-%m-%d}")
             parts = [reduce_frame(ch.reset_index(), d) for ch in db.DBNStore.from_file(str(tmp)).to_df(count=500_000, map_symbols=True)]
         chain = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         f = out / f"{d:%Y-%m-%d}.parquet"
