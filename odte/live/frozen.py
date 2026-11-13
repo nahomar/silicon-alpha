@@ -67,7 +67,8 @@ def train(cfg=None, path: Path | None = None) -> dict:
 
 def predict_row(bundle: dict, row: dict) -> dict:
     x = np.array([[float(row.get(c, np.nan)) if row.get(c) is not None else np.nan for c in bundle["features"]]])
-    return {k: float(m.predict(x)[0]) for k, m in bundle["models"].items()}
+    from odte.live.linear import linear_predict           # version-proof (odte/live/linear.py)
+    return {k: float(linear_predict(m, x)[0]) for k, m in bundle["models"].items()}
 
 
 def choose(preds: dict, post: bool) -> tuple:

@@ -108,7 +108,8 @@ def ev_row(b: dict, x: dict, zd, hhmm: str, k_day: float) -> dict:
     """Expected value per $1k risk (half-gap) of each menu shape at one decision."""
     from odte.research.struct4 import price, shapes
     xv = np.array([[np.nan if x.get(c) is None else float(x[c]) for c in b["features"]]])
-    s = float(np.exp(b["model"].predict(xv)[0]))
+    from odte.live.linear import linear_predict
+    s = float(np.exp(linear_predict(b["model"], xv)[0]))
     out = {}
     for name in b["menu"]:
         p = price(shapes()[name], zd, hhmm, k_day, 0.5)

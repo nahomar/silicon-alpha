@@ -205,3 +205,11 @@ launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.evening.plist
     strike can be missing. SPX is the exact comparison; the exam's edge was SPX.
   - Note: a plain replay sees each minute's quote one minute late, because it records at
     hh:mm:58 from whole-minute history. That is a test-harness effect, not a live one.
+- **2026-11-12 fix (found before any live session used it):** the frozen model and D4L's forecast
+  were saved with scikit-learn 1.6.1 (research env). In the bot's env (1.9.1) they load but
+  `predict` raised (SimpleImputer `_fill_dtype`).
+  - The lead shadow would have logged failures instead of decisions.
+  - Now predicted with `odte/live/linear.py`, straight from the fitted numbers: identical to
+    sklearn (max diff 0.0 in both envs) and version-proof.
+  - tests/odte/test_frozen.py now passes in .venv-live too.
+  - **Rule: live-path tests run in .venv-live.**

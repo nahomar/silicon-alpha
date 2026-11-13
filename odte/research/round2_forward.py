@@ -168,8 +168,9 @@ def score(df: pd.DataFrame, m: dict) -> pd.DataFrame:
     for _, r in df.iterrows():
         x = np.array([[np.nan if r["x"].get(c) is None else float(r["x"][c]) for c in feats]])
         b0p = {k: float(r["preds"].get(k, np.nan)) for k in MENU}
-        c5p = {k: float(m["c5"][k].predict(x)[0]) for k in MENU}
-        c8p = {k: float(m["c8"][k].predict(x)[0]) for k in MENU}
+        from odte.live.linear import linear_predict
+        c5p = {k: float(linear_predict(m["c5"][k], x)[0]) for k in MENU}
+        c8p = {k: float(linear_predict(m["c8"][k], x)[0]) for k in MENU}
         choice = {"B0": (r["b0_trade"], 1.0), "C7": (r["b0_trade"] if r["hhmm"] not in LATE else "none", 1.0),
                   "C4": (r["b0_trade"], float(np.clip(max(b0p.values()) / m["scale_b0"], 0, 2))),
                   "C5": (_choose(c5p, r["post"]), 1.0),
