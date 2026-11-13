@@ -2,18 +2,54 @@
 
 [![CI](https://github.com/nahomar/silicon-alpha/actions/workflows/ci.yml/badge.svg)](https://github.com/nahomar/silicon-alpha/actions/workflows/ci.yml)
 
-A research engine for 0DTE SPX/NDX options and prediction-market arbitrage,
-built around a **differentiable option pricer** and a decoder-only transformer
-(*TradeFM*) over exchange-message microstructure.
+A research engine for 0DTE SPX options, built around a **differentiable option
+pricer**, a decoder-only transformer (*TradeFM*) over exchange-message
+microstructure, and — the current focus — a **pre-registered, walk-forward
+study of whether ML can trade SPX 0DTE iron flies held to the close** after
+real spreads and fees.
 
 This is an **active research build, not a deployed trading system**, and the
-README is written to keep that distinction unambiguous. One component is
-rigorously validated; one is trained but has not yet shown out-of-sample edge;
-the rest is a phased roadmap with design docs and intentionally-inert scaffolds.
-Any profit/latency figures in the design docs are *targets*, not measured
-results — nothing here has traded real capital.
+README is written to keep that distinction unambiguous. Validated components
+are marked ✅, built-but-unproven ones 🔄, design-only ones 📝. Any
+profit/latency figures in the design docs are *targets*, not measured results —
+nothing here has traded real capital, and the main study's pre-registered
+verdict so far is **FAIL** (details below).
 
 ## What actually works today
+
+- **Hold-to-expiry 0DTE ML study** 🔄 *built, run on 12 months of real data;
+  pre-registered verdict **FAIL**; 4-year replication in progress*.
+  ([`odte/eval/expiry_edge.py`](odte/eval/expiry_edge.py), plan and every
+  pre-registration in [`docs/expiry_edge_plan.md`](docs/expiry_edge_plan.md)).
+  SPXW 0DTE cash-settles at the close, so a position held to the bell crosses
+  the spread once — the fix for the bar-to-bar problem below. Models forecast
+  *realized ÷ implied* move for the rest of the day and sell or buy an ATM iron
+  fly at the touch, with fees, walk-forward by day (each day's model sees only
+  earlier days; every feature only data stamped before the decision minute).
+  - **12 months (Nov 2025 → Nov 2026, 251 sessions, 211 tested):** the
+    pre-registered model (ridge, price features) **lost** −$12.6k at $1k max
+    loss per trade; always-sell made +$6.2k — roughly breakeven after costs
+    (median realized/implied 0.76: options did overprice the day, but big
+    days and spreads ate most of it). The best variant (ridge + calendar +
+    market context + social) made +$51k, Sharpe ≈ 2, but its edge over
+    always-sell is not significant and it was chosen after ~40 variants —
+    it must replicate on unseen years. The **calendar layer** is the only one
+    whose removal significantly hurts; market context (VIX1D/VIX, VVIX,
+    overnight gap) carries half the signal; adding more layers on top added
+    noise; LightGBM overfit; the sequence transformer was no better than ridge.
+  - Three trading versions are scored from one prediction set: 6 fixed times
+    (decides the verdict), every 15 min with one strong-signal trade a day,
+    and decisions after scheduled events / market shocks. A second objective —
+    a **danger detector** (sell by default, sit out predicted blow-up days) —
+    is pre-registered for the 4-year run.
+  - **Money view** ([`odte/eval/portfolio.py`](odte/eval/portfolio.py)):
+    quarter-Kelly sizing fit walk-forward, rest-at-mid-then-cross execution,
+    2%/trade and 6%/day risk caps, drawdown pause, whole lots capped at the
+    displayed size. Finding: displayed liquidity caps most trades from ~$1–10M,
+    so a single SPX 0DTE fly cannot absorb large capital.
+  - Bugs the harness itself caught before results were trusted: a shock rule
+    that fired on noise, early-close days whose stale post-bell quotes let
+    decisions see the settlement, and an OOM in the transformer's validation.
 
 - **Phase 0 — Differential-ML option pricer** ✅ *validated*. A 50k-parameter
   twin-network prices SPX options and Greeks (Δ/Γ/𝒱 via automatic adjoint
@@ -57,13 +93,36 @@ results — nothing here has traded real capital.
   quantities ~10 orders of magnitude apart, and `odte_smoke.py` imported the
   weak one. Both fixed; 27 tests where there were zero.
 
-- **Option edge harness** 🔄 *built, never run on market data*. The instrument
-  for the question the whole repo turns on: does any signal predict 0DTE option
-  returns *net of the spread you actually pay*? Prices on the touch rather than
-  assuming bps — on the synthetic session a **perfect** next-bar mid forecast
-  earns +20.3% per trade at mids and +3.7% net, so the spread eats 82% of a
-  flawless signal. Reports breakeven spread capture, not accuracy. No options
-  data is in the repo, so it has produced no result.
+- **Option edge harness (bar-to-bar)** 🔄 *built; superseded by the
+  hold-to-expiry study above*. Asks whether a signal predicts 0DTE option
+  returns *net of the spread you actually pay*, priced on the touch. On the
+  synthetic session a **perfect** next-bar mid forecast earns +20.3% per trade
+  at mids and +3.7% net — the spread eats 82% of a flawless signal, which is
+  why the main study holds to expiry instead.
+
+- **Data layers** ✅ *built, point-in-time, leakage-tested* — each enters the
+  study as its own cumulative layer so its contribution is measured
+  (add-one and drop-one), never assumed:
+  - *Calendar* ([`odte/data/calendar.py`](odte/data/calendar.py)): CPI / NFP /
+    PPI / JOLTS at their **actual** release dates 2022→2026 (the 2025 shutdown
+    moved or cancelled several), FOMC ± projections and minutes, mega-cap
+    earnings, long auctions, opex, quad witching, VIX expiry, early closes.
+  - *Market context* ([`odte/data/context.py`](odte/data/context.py)): the VIX
+    term structure (VIX1D → VIX3M), VVIX, SKEW, rates, dollar, crude, gold,
+    credit, BTC — all from prior closes.
+  - *Free alternative data* ([`odte/data/altdata.py`](odte/data/altdata.py)):
+    Kalshi S&P daily-range and Fed markets, presidential Truth Social posts,
+    GDELT news volume via Google BigQuery (GDELT's bulk route), Coinbase BTC
+    1-minute, buyback blackouts.
+  - *Social + NLP* ([`social/`](social/)): Reddit (WSB, r/options,
+    r/thetagang) and Stocktwits recorders (gap-free backfill, live every
+    5 min, no vote counts — they are fetched later, i.e. look-ahead) and
+    offline transformer scores (twitter-roberta sentiment, MiniLM fear/greed
+    similarity to fixed phrases).
+  - Market data: Databento OPRA `cbbo-1m`, requested **only for the session's
+    own expiry near the money** — identical data to the full chain at
+    ~1/50 the cost (the first 12 months cost ~$96, mostly before this trick;
+    4 more years back to May 2022 cost ≈ $13).
 
 - **Text→equity study** ✅ *complete; null*. Text adds no tradeable directional
   signal (all arms ≤ chance; placebo dAUC −0.029). The reusable finding is
@@ -304,13 +363,20 @@ chokepoint/              SEPARATE TRACK (see docs/chokepoint_track.md)
   probe/              eskom_pgm.py — the $0 gate for the whole track
   research/           concentration.py — Africa supply share + HHI
 configs/              tradefm_40m.yml, tradefm_524m.yml, smoke configs
-docs/                 architecture.md, cross_asset_fusion.md, phase4_strategic_layer.md
+  calendar/           macro_releases.csv (verified release dates), early_closes.csv
+  tradefm/            tick_days.csv (TradeFM retrain days)
+docs/                 expiry_edge_plan.md (plan + pre-registrations), architecture.md, ...
 infra/
   gcp/                phase2_a3mega.sh, launch_torchrun_524m.sh, TCPX env
   modal/              phase2_smoke.py (single-node validation suite)
+social/               reddit.py, stocktwits.py (recorders), features.py, nlp.py
 odte/
-  data/               databento_pack.py, polygon_pack.py, streaming_quantiles.py,
+  data/               fetch_0dte.py (Databento 0DTE quotes / ticks), calendar.py,
+                      context.py, altdata.py, gdelt_bq.sql,
+                      databento_pack.py, polygon_pack.py, streaming_quantiles.py,
                       cme_es_pack.py (Phase 2.5 scaffold)
+  eval/               expiry_edge.py (main study), extra_features.py, seq_model.py,
+                      portfolio.py (money view), option_edge.py (bar-to-bar)
   kernels/            fused_bin.cu, persistent_decode.cu, rdma_ingest.cu (Phase 3)
   train/              distributed.py (FSDP), checkpoint.py, pretrain_tradefm.py
   transformer_tradefm.py  (TradeFM model; optional modality embedding for 2.5)
@@ -319,6 +385,22 @@ notebooks/            colab_phase0_dml.ipynb, colab_phase1_tradefm.ipynb
 tests/                quantile_parity, etc.
 STATE.md              detailed project handoff runbook
 BUDGET.md             compute + data cost tracking
+```
+
+## Running the 0DTE study
+
+```bash
+# self-test on synthetic sessions (leakage, costs, planted edge found, no false edge)
+PYTHONPATH=. python3 -m odte.eval.expiry_edge --selftest
+
+# data (Databento key in DATABENTO_API_KEY; prices every session first, hard cap)
+PYTHONPATH=. python3 -m odte.data.fetch_0dte --fast --start 2025-11-07 --end 2026-11-06 --max-usd 20
+PYTHONPATH=. python3 -m odte.data.calendar build --start 2022-04-01 --end 2026-11-30
+PYTHONPATH=. python3 -m odte.data.context fetch --start 2022-01-01
+PYTHONPATH=. python3 -m odte.data.altdata fetch gdelt-bq      # needs a signed-in gcloud project
+
+# full study: 3 trading versions, all layers, transformer, layer importance, money view
+PYTHONPATH=. python3 -m odte.eval.expiry_edge --seq --min-train-days 40 --write
 ```
 
 ## Phase 2 validation on Modal ($0.50–$3 per run)
@@ -369,6 +451,7 @@ cost estimates, and post-launch monitoring.
 
 ## Related docs
 
+- [`docs/expiry_edge_plan.md`](docs/expiry_edge_plan.md) — 0DTE study plan, pre-registrations, findings log
 - [`STATE.md`](STATE.md) — handoff runbook, decisions, session log
 - [`BUDGET.md`](BUDGET.md) — compute + data cost tracking
 - [`docs/architecture.md`](docs/architecture.md) — full flow diagram with HRT palette
@@ -379,4 +462,3 @@ cost estimates, and post-launch monitoring.
 - [`docs/phase6_alpha_factor_discovery.md`](docs/phase6_alpha_factor_discovery.md) — Phase 6 spec
 - [`docs/phase7_alternative_data.md`](docs/phase7_alternative_data.md) — Phase 7 spec
 - [`docs/phase8_sovereign_infrastructure.md`](docs/phase8_sovereign_infrastructure.md) — Phase 8 spec
-- [`docs/sponsor_email_template.md`](docs/sponsor_email_template.md) — faculty-sponsor email template

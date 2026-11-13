@@ -1,0 +1,17 @@
+[Unit]
+Description=silicon-alpha: paper trading bot (one session)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=silicon
+WorkingDirectory=/home/silicon/projects/silicon-alpha
+Environment=PYTHONPATH=/home/silicon/projects/silicon-alpha
+Environment=REPO=/home/silicon/projects/silicon-alpha
+Environment=PY=/home/silicon/projects/silicon-alpha/.venv-live/bin/python
+EnvironmentFile=-/home/silicon/.config/silicon-alpha/server.env
+ExecStart=/home/silicon/projects/silicon-alpha/.venv-live/bin/python -W ignore -m odte.live.runner --mode paper
+TimeoutStartSec=11h
+StandardOutput=append:/home/silicon/projects/silicon-alpha/data/live/logs/bot.out
+StandardError=append:/home/silicon/projects/silicon-alpha/data/live/logs/bot.err

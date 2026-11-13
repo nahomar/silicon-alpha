@@ -10,7 +10,8 @@
 # it registers cleanly, reports exit 126, and never runs.
 set -uo pipefail   # NOT -e: one failing ticker must not kill the whole run
 
-REPO="/Users/nahom/projects/silicon-alpha"
+REPO="${REPO:-/Users/nahom/projects/silicon-alpha}"
+PY="${PY:-/usr/bin/python3}"
 LOG_DIR="$REPO/data/market/logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/snapshot-$(date +%Y-%m).log"
@@ -19,7 +20,7 @@ cd "$REPO" || { echo "$(date -u +%FT%TZ) FATAL: repo missing at $REPO" >> "$LOG"
 
 # --- prices: every run -------------------------------------------------------
 echo "--- $(date -u +%FT%TZ) snapshot start" >> "$LOG"
-PYTHONPATH="$REPO" /usr/bin/python3 -m chokepoint.record.recorder snapshot \
+PYTHONPATH="$REPO" "$PY" -m chokepoint.record.recorder snapshot \
   --pause 0.2 >> "$LOG" 2>&1
 echo "--- $(date -u +%FT%TZ) snapshot exit=$?" >> "$LOG"
 
@@ -32,7 +33,7 @@ STAMP="$REPO/data/supply/.last_poll"
 TODAY="$(date -u +%F)"
 if [ "$(cat "$STAMP" 2>/dev/null)" != "$TODAY" ]; then
     echo "--- $(date -u +%FT%TZ) supply poll start" >> "$LOG"
-    PYTHONPATH="$REPO" /usr/bin/python3 -m chokepoint.record.supply poll \
+    PYTHONPATH="$REPO" "$PY" -m chokepoint.record.supply poll \
       >> "$LOG" 2>&1
     rc=$?
     echo "--- $(date -u +%FT%TZ) supply poll exit=$rc" >> "$LOG"

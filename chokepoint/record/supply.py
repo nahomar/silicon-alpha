@@ -27,6 +27,7 @@ before it was revised.
 
     comexstat   Brazil customs, monthly, ~4 days after month end
     cochilco    LME/COMEX/SHFE copper inventories, monthly
+    nasa_power  daily weather at 53 African producing sites, last 45 days
 
 Eskom stage history is deliberately NOT polled here. It is reconstructed by
 walking 778 git revisions of an upstream file, which takes minutes and produces
@@ -218,8 +219,17 @@ def poll_cochilco(year: int | None = None, month: int | None = None
                       error=f"no readable bulletin in last {len(candidates)} months")
 
 
+def poll_weather() -> PollReport:
+    """NASA POWER daily weather at Africa's producing sites (chokepoint.data.weather)."""
+    from chokepoint.data import weather
+    try:
+        return weather.poll()
+    except Exception as e:  # noqa: BLE001 -- record what we can, report the rest
+        return PollReport(source=weather.SOURCE, error=str(e))
+
+
 def poll_all() -> list[PollReport]:
-    return [poll_comexstat(), poll_cochilco()]
+    return [poll_comexstat(), poll_cochilco(), poll_weather()]
 
 
 def status() -> str:

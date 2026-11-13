@@ -40,6 +40,12 @@ data/fake_datashop/
 data/odte_0dte/
 # recorded Reddit / Stocktwits posts + logs
 data/social/
+# derived calendar, cross-asset and alternative data (regenerable)
+data/calendar/
+data/context/
+data/alt/
+# local-only cluster scripts and settings (not published)
+infra/asu/
 
 # Notebook outputs (cells are in source; outputs are per-run)
 .ipynb_checkpoints/
@@ -77,3 +83,25 @@ data/market/logs/
 # dividends. A point-in-time capture is only available at the point in time, so
 # a snapshot lost is a snapshot gone forever. ~6KB per capture.
 data/supply/.last_poll
+.venv-live/
+data/live/
+data/trend/
+data/kalshi/
+data/carry/
+data/odte_next/
+data/odte_0dte_ndxp/
+data/odte_0dte_rutw/
+data/odte_0dte_pre2016/
+data/oi/
+data/research/
+data/filings/
+data/prices/
+
+# third-party/private research data shared by the owner: never commit (repo is public)
+data/supply/aci/
+
+# CHOKEPOINT stage 2 raw stores (large, regenerable)
+data/africa/
+
+# NASA POWER weather vintages (public data, ~10 MB; synced to the server by deploy/sync_data.sh)
+data/supply/nasa_power.parquet

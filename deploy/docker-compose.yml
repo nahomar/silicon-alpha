@@ -1,0 +1,27 @@
+# IB Gateway, headless, logged in and restarted by IBC (github.com/gnzsnz/ib-gateway-docker).
+# The API is published on the server's loopback only (127.0.0.1:4002 = paper); never on the internet.
+# Credentials come from deploy/ib.env on the server (chmod 600, never committed).
+services:
+  ib-gateway:
+    image: ${IB_IMAGE:-ghcr.io/gnzsnz/ib-gateway:10.50.1g}
+    container_name: ib-gateway
+    restart: unless-stopped
+    env_file: ib.env
+    environment:
+      TRADING_MODE: paper
+      READ_ONLY_API: "no"
+      TWOFA_TIMEOUT_ACTION: restart
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      EXISTING_SESSION_DETECTED_ACTION: primary
+      ALLOW_BLIND_TRADING: "no"
+      AUTO_RESTART_TIME: "11:59 PM"
+      TIME_ZONE: America/New_York
+      TZ: America/New_York
+      JAVA_HEAP_SIZE: "1024"
+    ports:
+      - "127.0.0.1:4002:4004"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/4004' || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 5

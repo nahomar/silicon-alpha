@@ -1,0 +1,1978 @@
+[
+  {
+    "data": "odte_0dte",
+    "block": "2016H2",
+    "start": "2016-07-01",
+    "end": "2016-12-31",
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt"
+    ],
+    "commit": "5c99fa3",
+    "opened_at": "2026-11-08 15:41",
+    "always_short_total": -23797.854886737077,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 66,
+        "total": -28664.855402051035,
+        "sharpe": -4.156691032966159,
+        "sharpe_ci": [
+          -7.8373807539606455,
+          -0.34076319903412217
+        ],
+        "max_drawdown": -27881.506287708984,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": -73.7424320502114,
+        "vs_always_short_ci": [
+          -618.3492025029202,
+          477.24642917029206
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 66,
+        "total": -22833.34258352557,
+        "sharpe": -3.4089340372516825,
+        "sharpe_ci": [
+          -7.033604185264945,
+          0.3165820025340367
+        ],
+        "max_drawdown": -22284.034522954407,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": 14.613822775931993,
+        "vs_always_short_ci": [
+          -477.77619856881626,
+          500.87061116532
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2017H1",
+    "start": "2017-01-01",
+    "end": "2017-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -13265.819674756376
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 76,
+        "total": -17609.9654383644,
+        "sharpe": -2.185325005768576,
+        "sharpe_ci": [
+          -5.816905795777164,
+          1.452482678067874
+        ],
+        "max_drawdown": -23943.142233745348,
+        "vs_always_short_per_day": -57.15981267905296,
+        "vs_always_short_ci": [
+          -586.4730926777835,
+          482.0806134754229
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 76,
+        "total": -22386.22629093751,
+        "sharpe": -2.5346158821684117,
+        "sharpe_ci": [
+          -6.1823889747538,
+          0.9560115570110076
+        ],
+        "max_drawdown": -21193.659365910757,
+        "vs_always_short_per_day": -120.0053502129096,
+        "vs_always_short_ci": [
+          -757.3374673228845,
+          517.3497726382044
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt"
+    ],
+    "commit": "8680db2",
+    "opened_at": "2026-11-08 16:36",
+    "always_short_total": -39231.04269777027,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 76,
+        "total": -32933.75225998361,
+        "sharpe": -4.3389572380309165,
+        "sharpe_ci": [
+          -7.826684845162379,
+          -0.8523333313552942
+        ],
+        "max_drawdown": -33855.401126631055,
+        "worst_day": -5392.67682628002,
+        "vs_always_short_per_day": 82.8590847077191,
+        "vs_always_short_ci": [
+          -419.4041357069135,
+          592.2136427467119
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 76,
+        "total": -38662.15940112718,
+        "sharpe": -4.61012563020938,
+        "sharpe_ci": [
+          -8.209831102813832,
+          -1.1700886617532373
+        ],
+        "max_drawdown": -36936.098355009046,
+        "worst_day": -5430.041801550659,
+        "vs_always_short_per_day": 7.485306534777548,
+        "vs_always_short_ci": [
+          -595.4517838061179,
+          605.5772429719372
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2017H2",
+    "start": "2017-07-01",
+    "end": "2017-12-31",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": 19766.905085226856
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 81,
+        "total": -4681.461439322016,
+        "sharpe": -0.5930253797886831,
+        "sharpe_ci": [
+          -3.7855133667184466,
+          3.1540328445613177
+        ],
+        "max_drawdown": -16003.059715624759,
+        "vs_always_short_per_day": -301.8316854882577,
+        "vs_always_short_ci": [
+          -540.4073650265661,
+          -83.40909782098163
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 81,
+        "total": -265.395367232577,
+        "sharpe": -0.03517787401480114,
+        "sharpe_ci": [
+          -3.349296299703709,
+          3.811657127853179
+        ],
+        "max_drawdown": -15833.668080706793,
+        "vs_always_short_per_day": -247.31235126493132,
+        "vs_always_short_ci": [
+          -466.7133877816032,
+          -46.879477409004274
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 2555.2105633364845,
+        "sharpe": 0.337292708433567,
+        "sharpe_ci": [
+          -2.8190510595295377,
+          4.222948985883866
+        ],
+        "max_drawdown": -12437.270428372136,
+        "vs_always_short_per_day": -212.4900558258071,
+        "vs_always_short_ci": [
+          -394.6346565163559,
+          -34.184459987239464
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 5219.228143088552,
+        "sharpe": 0.7081002132042004,
+        "sharpe_ci": [
+          -2.4791873031699367,
+          4.595586800185779
+        ],
+        "max_drawdown": -13246.810544381042,
+        "vs_always_short_per_day": -179.60094990294206,
+        "vs_always_short_ci": [
+          -362.05145896397755,
+          -2.767873661036263
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "f0bddfa",
+    "opened_at": "2026-11-08 17:15",
+    "always_short_total": -2549.1397808093334,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 81,
+        "total": -18657.807743497044,
+        "sharpe": -2.483789739668701,
+        "sharpe_ci": [
+          -5.609880594356783,
+          1.110897233069904
+        ],
+        "max_drawdown": -22443.294095545883,
+        "worst_day": -5393.055241782952,
+        "vs_always_short_per_day": -198.87244398379886,
+        "vs_always_short_ci": [
+          -418.96044474870695,
+          6.230312256976556
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 81,
+        "total": -15515.765474697797,
+        "sharpe": -2.171895006796257,
+        "sharpe_ci": [
+          -5.394252177324981,
+          1.5202795202309722
+        ],
+        "max_drawdown": -21340.915419331126,
+        "worst_day": -5393.055241782952,
+        "vs_always_short_per_day": -160.081798689981,
+        "vs_always_short_ci": [
+          -360.2756855082479,
+          28.673860951458295
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 81,
+        "total": -9494.756176071547,
+        "sharpe": -1.3265021450432197,
+        "sharpe_ci": [
+          -4.3467603022952295,
+          2.3831115294944927
+        ],
+        "max_drawdown": -16616.922701843803,
+        "worst_day": -5393.055241782952,
+        "vs_always_short_per_day": -85.74835055879274,
+        "vs_always_short_ci": [
+          -246.75795396867397,
+          75.5965733580661
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 81,
+        "total": -8067.033476759916,
+        "sharpe": -1.16365493414984,
+        "sharpe_ci": [
+          -4.253906305897283,
+          2.5567003676018567
+        ],
+        "max_drawdown": -17228.863595116665,
+        "worst_day": -5393.055241782952,
+        "vs_always_short_per_day": -68.12214439445162,
+        "vs_always_short_ci": [
+          -227.32780588527388,
+          93.22888229111497
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2018H1",
+    "start": "2018-01-01",
+    "end": "2018-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -81433.88541205096
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 79,
+        "total": -13045.070984786207,
+        "sharpe": -1.2408113629347843,
+        "sharpe_ci": [
+          -4.712420562950842,
+          2.2692647371442582
+        ],
+        "max_drawdown": -25018.05237971639,
+        "vs_always_short_per_day": 865.6811952818326,
+        "vs_always_short_ci": [
+          3.903461477735641,
+          1745.2022311690948
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 79,
+        "total": -7316.893641419179,
+        "sharpe": -0.6942355899987013,
+        "sharpe_ci": [
+          -4.331864680037555,
+          2.708894519358375
+        ],
+        "max_drawdown": -14320.117638086755,
+        "vs_always_short_per_day": 938.1897692485037,
+        "vs_always_short_ci": [
+          96.90493926729806,
+          1825.3515224836785
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 79,
+        "total": -29937.742822975757,
+        "sharpe": -4.752114477150627,
+        "sharpe_ci": [
+          -7.151171003745768,
+          -1.9242392343993788
+        ],
+        "max_drawdown": -29937.74282297576,
+        "vs_always_short_per_day": 651.8499061908255,
+        "vs_always_short_ci": [
+          104.04854557679005,
+          1228.8263952245352
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 79,
+        "total": -29843.729447528975,
+        "sharpe": -4.872943223611349,
+        "sharpe_ci": [
+          -7.442474838871826,
+          -2.077512056536076
+        ],
+        "max_drawdown": -30738.744369134252,
+        "vs_always_short_per_day": 653.0399489179998,
+        "vs_always_short_ci": [
+          98.23727031070099,
+          1217.9724615914047
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "aa5a1d5",
+    "opened_at": "2026-11-08 17:24",
+    "always_short_total": -100389.42278934538,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 79,
+        "total": -24767.094797950354,
+        "sharpe": -2.4523827788768884,
+        "sharpe_ci": [
+          -5.992809885567794,
+          0.9909349206077506
+        ],
+        "max_drawdown": -26713.511220955603,
+        "worst_day": -5341.469183545281,
+        "vs_always_short_per_day": 957.2446581189241,
+        "vs_always_short_ci": [
+          145.69314641787528,
+          1795.3979312897045
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 79,
+        "total": -20823.133767848525,
+        "sharpe": -2.0643654873878208,
+        "sharpe_ci": [
+          -5.751161440621326,
+          1.3621453343041605
+        ],
+        "max_drawdown": -24977.972195116865,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 1007.1682154619855,
+        "vs_always_short_ci": [
+          205.84513399204985,
+          1853.6668031242782
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 79,
+        "total": -33058.21031453636,
+        "sharpe": -5.255358744484673,
+        "sharpe_ci": [
+          -7.5450241623026795,
+          -2.6348595898928906
+        ],
+        "max_drawdown": -33058.21031453636,
+        "worst_day": -5341.469183545281,
+        "vs_always_short_per_day": 852.2938287950507,
+        "vs_always_short_ci": [
+          326.9222243553419,
+          1403.1716536762017
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 79,
+        "total": -33294.28564375975,
+        "sharpe": -5.450293772000326,
+        "sharpe_ci": [
+          -7.927132174846559,
+          -2.860946447295756
+        ],
+        "max_drawdown": -33294.28564375975,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 849.3055334884251,
+        "vs_always_short_ci": [
+          318.5356694485054,
+          1388.5242248425925
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2018H2",
+    "start": "2018-07-01",
+    "end": "2018-12-31",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -10619.50159307444
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 79,
+        "total": 16586.824164351725,
+        "sharpe": 1.8366149916429515,
+        "sharpe_ci": [
+          -1.7616420491231575,
+          5.41328570326021
+        ],
+        "max_drawdown": -9170.770267899827,
+        "vs_always_short_per_day": 344.38387034716663,
+        "vs_always_short_ci": [
+          -429.8235478263099,
+          1128.2746161388895
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 79,
+        "total": 12719.628078443398,
+        "sharpe": 1.4271565686873897,
+        "sharpe_ci": [
+          -2.086877485682163,
+          4.989417226610021
+        ],
+        "max_drawdown": -6241.917208046847,
+        "vs_always_short_per_day": 295.4320211584537,
+        "vs_always_short_ci": [
+          -547.5152302825768,
+          1135.0051422611439
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 79,
+        "total": 10160.97729077441,
+        "sharpe": 1.811796611047562,
+        "sharpe_ci": [
+          -1.541422064731755,
+          6.191055224471987
+        ],
+        "max_drawdown": -5000.0,
+        "vs_always_short_per_day": 263.04403650441577,
+        "vs_always_short_ci": [
+          -265.2292784262238,
+          785.3698017674849
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 79,
+        "total": 6692.6550698286255,
+        "sharpe": 1.3947650973957604,
+        "sharpe_ci": [
+          -2.0246393198066097,
+          5.723050689496911
+        ],
+        "max_drawdown": -5000.0,
+        "vs_always_short_per_day": 219.14122358105143,
+        "vs_always_short_ci": [
+          -325.9614442442506,
+          759.7150653404289
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "257939e",
+    "opened_at": "2026-11-08 17:29",
+    "always_short_total": -31614.709485016683,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 79,
+        "total": 5814.545650158462,
+        "sharpe": 0.6818733995685935,
+        "sharpe_ci": [
+          -2.869149812163702,
+          4.170133558987152
+        ],
+        "max_drawdown": -9668.781558562934,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": 473.78803968576136,
+        "vs_always_short_ci": [
+          -262.84894024985215,
+          1226.1454243938329
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 79,
+        "total": 1701.8512726131094,
+        "sharpe": 0.20158068501038165,
+        "sharpe_ci": [
+          -3.3266932152909523,
+          3.7700168697639067
+        ],
+        "max_drawdown": -9502.620168154985,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": 421.72861718518726,
+        "vs_always_short_ci": [
+          -377.2813111953662,
+          1213.3548514015754
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 79,
+        "total": 4679.577084432107,
+        "sharpe": 0.8977172071009053,
+        "sharpe_ci": [
+          -2.2915348320663487,
+          5.485847384222574
+        ],
+        "max_drawdown": -5000.0,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": 459.42134898036454,
+        "vs_always_short_ci": [
+          -46.32762814663411,
+          960.3975136363981
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 79,
+        "total": 2138.5952439709895,
+        "sharpe": 0.4773317793675936,
+        "sharpe_ci": [
+          -2.705186862247727,
+          4.9876167786880545
+        ],
+        "max_drawdown": -5000.0,
+        "worst_day": -5000.0,
+        "vs_always_short_per_day": 427.25702188592,
+        "vs_always_short_ci": [
+          -97.8608595102833,
+          947.4401031850534
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2019H1",
+    "start": "2019-01-01",
+    "end": "2019-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": 47166.00631126619
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -1411.3369112433056,
+        "sharpe": -0.18557377945474718,
+        "sharpe_ci": [
+          -3.665387905678728,
+          3.40688029785313
+        ],
+        "max_drawdown": -15142.470361551226,
+        "vs_always_short_per_day": -607.2167902813687,
+        "vs_always_short_ci": [
+          -1278.5529268631371,
+          45.349131731295934
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -7276.53341586874,
+        "sharpe": -0.8816566217366595,
+        "sharpe_ci": [
+          -4.43183233687461,
+          2.6380536339889153
+        ],
+        "max_drawdown": -16248.860259119294,
+        "vs_always_short_per_day": -680.5317465891867,
+        "vs_always_short_ci": [
+          -1391.8796333228058,
+          3.120257260242914
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 18722.660442305867,
+        "sharpe": 3.5184721315677923,
+        "sharpe_ci": [
+          0.07841911108779323,
+          7.493909457839734
+        ],
+        "max_drawdown": -7124.529429217675,
+        "vs_always_short_per_day": -355.54182336200404,
+        "vs_always_short_ci": [
+          -858.5383070935142,
+          156.4836763855472
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 13941.400225303178,
+        "sharpe": 2.553992435239756,
+        "sharpe_ci": [
+          -0.9400560333515181,
+          6.687765569363467
+        ],
+        "max_drawdown": -7387.519612551823,
+        "vs_always_short_per_day": -415.3075760745377,
+        "vs_always_short_ci": [
+          -906.8141971454229,
+          72.44069859941776
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "9751d96",
+    "opened_at": "2026-11-08 17:38",
+    "always_short_total": 25623.25379258547,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -10242.130710498683,
+        "sharpe": -1.3982836349498138,
+        "sharpe_ci": [
+          -4.826439383461342,
+          2.0830638443331537
+        ],
+        "max_drawdown": -17975.994523728972,
+        "worst_day": -3747.0649627789644,
+        "vs_always_short_per_day": -448.31730628855183,
+        "vs_always_short_ci": [
+          -1089.3603775801162,
+          177.61804568498582
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -16657.318685223123,
+        "sharpe": -2.0892778051378995,
+        "sharpe_ci": [
+          -5.567307757036273,
+          1.2853635771198215
+        ],
+        "max_drawdown": -22031.552728702663,
+        "worst_day": -4335.504974488755,
+        "vs_always_short_per_day": -528.5071559726074,
+        "vs_always_short_ci": [
+          -1207.5516738611152,
+          124.34242848687217
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 13252.80522199594,
+        "sharpe": 2.6348391485874463,
+        "sharpe_ci": [
+          -0.822812688980151,
+          6.842958052280378
+        ],
+        "max_drawdown": -7336.620924822216,
+        "worst_day": -3633.3383617893205,
+        "vs_always_short_per_day": -154.63060713236914,
+        "vs_always_short_ci": [
+          -627.7637971097456,
+          336.1496805280009
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": 8427.772612758523,
+        "sharpe": 1.616762628136357,
+        "sharpe_ci": [
+          -1.841373880758158,
+          5.840219036302612
+        ],
+        "max_drawdown": -7619.338652306023,
+        "worst_day": -3633.3383617893205,
+        "vs_always_short_per_day": -214.9435147478368,
+        "vs_always_short_ci": [
+          -680.8304604986577,
+          254.8352923109674
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2019H2",
+    "start": "2019-07-01",
+    "end": "2019-12-31",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": 31630.978434181856
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 81,
+        "total": 10924.348132193625,
+        "sharpe": 1.296110538435688,
+        "sharpe_ci": [
+          -1.850094381571763,
+          4.944441611092819
+        ],
+        "max_drawdown": -8412.544148745037,
+        "vs_always_short_per_day": -255.6374111356573,
+        "vs_always_short_ci": [
+          -796.8316365850318,
+          322.0635122389309
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 81,
+        "total": 11708.188105285588,
+        "sharpe": 1.370529376871592,
+        "sharpe_ci": [
+          -1.808076505217957,
+          5.025518061971593
+        ],
+        "max_drawdown": -10138.278698868595,
+        "vs_always_short_per_day": -245.96037443081815,
+        "vs_always_short_ci": [
+          -778.0078239407603,
+          330.40543959211595
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 18309.50448107837,
+        "sharpe": 2.5272584491614443,
+        "sharpe_ci": [
+          -0.7559787084009683,
+          6.569076164139537
+        ],
+        "max_drawdown": -6000.0,
+        "vs_always_short_per_day": -164.4626413963394,
+        "vs_always_short_ci": [
+          -608.4578587866432,
+          302.14992751253885
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 19714.683029636944,
+        "sharpe": 2.6730319849869333,
+        "sharpe_ci": [
+          -0.5339771807386245,
+          6.689875937457343
+        ],
+        "max_drawdown": -6000.0,
+        "vs_always_short_per_day": -147.1147580808014,
+        "vs_always_short_ci": [
+          -580.020524506152,
+          321.0889550283719
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "5ca44e9",
+    "opened_at": "2026-11-08 17:46",
+    "always_short_total": 11194.93888457067,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 81,
+        "total": 2236.716342884887,
+        "sharpe": 0.2770756303088915,
+        "sharpe_ci": [
+          -2.7823606624397272,
+          3.86351262048417
+        ],
+        "max_drawdown": -9193.81271953926,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": -110.59534002081212,
+        "vs_always_short_ci": [
+          -627.0506083300628,
+          439.7475744916201
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 81,
+        "total": 1876.4198775623593,
+        "sharpe": 0.23037559598697951,
+        "sharpe_ci": [
+          -2.830021848649852,
+          3.8444097718765375
+        ],
+        "max_drawdown": -11398.287214882097,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": -115.04344453096685,
+        "vs_always_short_ci": [
+          -620.4963344335182,
+          428.1185041554532
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 12479.302261820645,
+        "sharpe": 1.8059401606698877,
+        "sharpe_ci": [
+          -1.3944017279484653,
+          5.911553384462626
+        ],
+        "max_drawdown": -6000.0,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 15.856337990740428,
+        "vs_always_short_ci": [
+          -411.4133374625893,
+          455.82499213541564
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 81,
+        "total": 13004.720922651559,
+        "sharpe": 1.858662891588442,
+        "sharpe_ci": [
+          -1.2697696355953796,
+          5.980747361142333
+        ],
+        "max_drawdown": -6000.0,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 22.342988124455385,
+        "vs_always_short_ci": [
+          -386.1382791073825,
+          475.07738396852164
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2020H1",
+    "start": "2020-01-01",
+    "end": "2020-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -20860.97555463715
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -7374.705286926692,
+        "sharpe": -0.8493384754173317,
+        "sharpe_ci": [
+          -4.7254087580928825,
+          2.5810363648085133
+        ],
+        "max_drawdown": -18785.139942286653,
+        "vs_always_short_per_day": 168.5783783463806,
+        "vs_always_short_ci": [
+          -494.3453715322301,
+          873.2886742352957
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -6162.994026372561,
+        "sharpe": -0.6512090430447203,
+        "sharpe_ci": [
+          -4.146962948378364,
+          2.859000173589599
+        ],
+        "max_drawdown": -18696.84004617345,
+        "vs_always_short_per_day": 183.72476910330712,
+        "vs_always_short_ci": [
+          -425.7662654623032,
+          860.1126842096356
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -6013.563734199266,
+        "sharpe": -0.9121843595637926,
+        "sharpe_ci": [
+          -4.333021670458125,
+          2.7369033635271247
+        ],
+        "max_drawdown": -15381.962139722064,
+        "vs_always_short_per_day": 185.59264775547348,
+        "vs_always_short_ci": [
+          -330.5848046826776,
+          725.6357140320646
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -12661.085340495552,
+        "sharpe": -1.6078561336658892,
+        "sharpe_ci": [
+          -4.829105000553647,
+          2.014946439718936
+        ],
+        "max_drawdown": -15741.0526711101,
+        "vs_always_short_per_day": 102.4986276767698,
+        "vs_always_short_ci": [
+          -366.5077391960725,
+          608.8508104943731
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "9f0d1a9",
+    "opened_at": "2026-11-08 17:54",
+    "always_short_total": -35848.08167187017,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -15498.020939196782,
+        "sharpe": -1.8602294292717736,
+        "sharpe_ci": [
+          -5.682097827907978,
+          1.5726259393864195
+        ],
+        "max_drawdown": -20360.65560333241,
+        "worst_day": -4502.065274684446,
+        "vs_always_short_per_day": 254.3757591584174,
+        "vs_always_short_ci": [
+          -384.5165309920746,
+          931.9356602105712
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -14663.028407369264,
+        "sharpe": -1.612675401773763,
+        "sharpe_ci": [
+          -5.101868701122474,
+          1.9160592809340926
+        ],
+        "max_drawdown": -20115.268620008253,
+        "worst_day": -4228.676423342834,
+        "vs_always_short_per_day": 264.8131658062613,
+        "vs_always_short_ci": [
+          -318.721788428338,
+          910.5442305552652
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -10143.073076053994,
+        "sharpe": -1.570113549236123,
+        "sharpe_ci": [
+          -4.840290519626141,
+          2.0711137616953934
+        ],
+        "max_drawdown": -17112.481027623617,
+        "worst_day": -4502.065274684446,
+        "vs_always_short_per_day": 321.31260744770213,
+        "vs_always_short_ci": [
+          -181.92745465037783,
+          833.56133797108
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -18019.84208895201,
+        "sharpe": -2.344339896293951,
+        "sharpe_ci": [
+          -5.469859326968436,
+          1.2102973809702282
+        ],
+        "max_drawdown": -19036.60451045276,
+        "worst_day": -4228.676423342834,
+        "vs_always_short_per_day": 222.85299478647698,
+        "vs_always_short_ci": [
+          -229.4897886221842,
+          709.7758032198892
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2020H2",
+    "start": "2020-07-01",
+    "end": "2020-12-31",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -7257.657915403934
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -25418.048007856065,
+        "sharpe": -3.3879561003894167,
+        "sharpe_ci": [
+          -6.6823759177888995,
+          -0.07992101148143967
+        ],
+        "max_drawdown": -26755.696713442398,
+        "vs_always_short_per_day": -227.00487615565174,
+        "vs_always_short_ci": [
+          -895.5431112531935,
+          479.00316369621106
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -16849.37048147292,
+        "sharpe": -2.2146170076054865,
+        "sharpe_ci": [
+          -5.34363622060745,
+          1.1135695323233505
+        ],
+        "max_drawdown": -24883.27405785224,
+        "vs_always_short_per_day": -119.89640707586241,
+        "vs_always_short_ci": [
+          -708.6445844223659,
+          505.91432027686756
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -20162.348696785433,
+        "sharpe": -3.3270924843149032,
+        "sharpe_ci": [
+          -5.792543568976261,
+          -0.19050276565576832
+        ],
+        "max_drawdown": -22055.772849472236,
+        "vs_always_short_per_day": -161.30863476726884,
+        "vs_always_short_ci": [
+          -735.910917295095,
+          435.30152138755875
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -10863.862456432289,
+        "sharpe": -1.5428350271233806,
+        "sharpe_ci": [
+          -4.553136949875553,
+          1.9515411769877695
+        ],
+        "max_drawdown": -16411.579740011763,
+        "vs_always_short_per_day": -45.077556762854634,
+        "vs_always_short_ci": [
+          -601.4867760301739,
+          528.47270228429
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "e4470e6",
+    "opened_at": "2026-11-08 18:05",
+    "always_short_total": -19737.16051487668,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 80,
+        "total": -28055.327142949827,
+        "sharpe": -3.795325765473039,
+        "sharpe_ci": [
+          -7.007457461378889,
+          -0.5707210643698355
+        ],
+        "max_drawdown": -29327.318332297553,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": -103.9770828509144,
+        "vs_always_short_ci": [
+          -755.6981353664818,
+          581.7526008915892
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 80,
+        "total": -19617.890276750622,
+        "sharpe": -2.610717436283032,
+        "sharpe_ci": [
+          -5.705104802638607,
+          0.6903413276500842
+        ],
+        "max_drawdown": -26848.493587413395,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 1.490877976575689,
+        "vs_always_short_ci": [
+          -577.7546555775322,
+          615.4634467223937
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -21721.524610833698,
+        "sharpe": -3.6086764305402474,
+        "sharpe_ci": [
+          -6.002325383015676,
+          -0.6302035568537493
+        ],
+        "max_drawdown": -23401.418715673888,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": -24.804551199462857,
+        "vs_always_short_ci": [
+          -590.1152898951689,
+          555.48835287027
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 80,
+        "total": -12856.124616480485,
+        "sharpe": -1.8486411120518977,
+        "sharpe_ci": [
+          -4.813663948268517,
+          1.619947603747427
+        ],
+        "max_drawdown": -17804.542156089898,
+        "worst_day": -6000.0,
+        "vs_always_short_per_day": 86.01294872995234,
+        "vs_always_short_ci": [
+          -456.299519181727,
+          648.7754121694907
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2021H1",
+    "start": "2021-01-01",
+    "end": "2021-06-30",
+    "primary": "today_cost",
+    "today_cost_frac": 0.0169,
+    "results_today_cost": {
+      "always_short_fly": {
+        "total": -15268.800779374555
+      },
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 77,
+        "total": -927.2132644722981,
+        "sharpe": -0.13655314580388814,
+        "sharpe_ci": [
+          -3.554071370020451,
+          3.5093128569879437
+        ],
+        "max_drawdown": -8510.74853689414,
+        "vs_always_short_per_day": 186.2543833104188,
+        "vs_always_short_ci": [
+          -354.35551661144535,
+          742.5567511601644
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 77,
+        "total": -2941.0532262358943,
+        "sharpe": -0.41881340417646457,
+        "sharpe_ci": [
+          -4.085196597343298,
+          3.042734926461551
+        ],
+        "max_drawdown": -7893.814238240504,
+        "vs_always_short_per_day": 160.10061757322924,
+        "vs_always_short_ci": [
+          -374.90700633895847,
+          713.6749605966613
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 77,
+        "total": 1058.1171125606122,
+        "sharpe": 0.17485917679911012,
+        "sharpe_ci": [
+          -3.1337466777573963,
+          3.866761386220341
+        ],
+        "max_drawdown": -8372.735893399456,
+        "vs_always_short_per_day": 212.03789470045663,
+        "vs_always_short_ci": [
+          -279.15254679188797,
+          706.0369609456309
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 77,
+        "total": 493.06077158723815,
+        "sharpe": 0.0792034091952359,
+        "sharpe_ci": [
+          -3.3761659034950195,
+          3.668627808188027
+        ],
+        "max_drawdown": -5712.107826883667,
+        "vs_always_short_per_day": 204.69950066184143,
+        "vs_always_short_ci": [
+          -282.4188724349065,
+          687.4607908946024
+        ]
+      }
+    },
+    "strategies": [
+      "ml_ridge+cal+ctx -postevt",
+      "ml_ridge+cal+ctx+es -postevt",
+      "ml_ridge+cal+ctx -postevt sell-only",
+      "ml_ridge+cal+ctx+es -postevt sell-only"
+    ],
+    "commit": "6f9573a",
+    "opened_at": "2026-11-08 18:13",
+    "always_short_total": -25269.335563004537,
+    "results": {
+      "ml_ridge+cal+ctx -postevt": {
+        "n_test_days": 77,
+        "total": -4958.688695813063,
+        "sharpe": -0.7500287283134396,
+        "sharpe_ci": [
+          -4.122743594782874,
+          2.9276682854788416
+        ],
+        "max_drawdown": -9499.085878548183,
+        "worst_day": -4689.5206570193695,
+        "vs_always_short_per_day": 263.77463463885033,
+        "vs_always_short_ci": [
+          -261.0340955039705,
+          808.8757454493337
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt": {
+        "n_test_days": 77,
+        "total": -7112.363474945876,
+        "sharpe": -1.0408133409476268,
+        "sharpe_ci": [
+          -4.683774739652598,
+          2.3907618200684753
+        ],
+        "max_drawdown": -9205.994230821343,
+        "worst_day": -3621.2859925289677,
+        "vs_always_short_per_day": 235.8048323124501,
+        "vs_always_short_ci": [
+          -285.75020227849313,
+          769.8610626589633
+        ]
+      },
+      "ml_ridge+cal+ctx -postevt sell-only": {
+        "n_test_days": 77,
+        "total": -996.7461526044489,
+        "sharpe": -0.16821928136998224,
+        "sharpe_ci": [
+          -3.401543235847875,
+          3.5072931303063974
+        ],
+        "max_drawdown": -8413.25719845076,
+        "worst_day": -4689.5206570193695,
+        "vs_always_short_per_day": 315.22843390129987,
+        "vs_always_short_ci": [
+          -165.24620160486705,
+          796.9798830688642
+        ]
+      },
+      "ml_ridge+cal+ctx+es -postevt sell-only": {
+        "n_test_days": 77,
+        "total": -1793.9215905102806,
+        "sharpe": -0.2946334176295077,
+        "sharpe_ci": [
+          -3.6978229849395885,
+          3.329901632339899
+        ],
+        "max_drawdown": -6226.855502294583,
+        "worst_day": -3621.2859925289677,
+        "vs_always_short_per_day": 304.87550613628895,
+        "vs_always_short_ci": [
+          -169.93980566118802,
+          779.3374967101695
+        ]
+      }
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2021H2",
+    "start": "2021-07-01",
+    "end": "2021-12-31",
+    "opened_at": "2026-11-09 13:38",
+    "commit": "437c1d1",
+    "strategies": [
+      "C1_profit (improvement round)"
+    ],
+    "primary": "today_cost_half_gap",
+    "note": "opened together for the C1 sealed test",
+    "results_sealed_c1": {
+      "half": {
+        "always_sell": {
+          "total": -72869.93887158055,
+          "sharpe": -2.9156418401665825,
+          "sharpe_ci": [
+            -5.436192964485307,
+            -0.35948998988278097
+          ],
+          "max_dd": -85919.66711168448,
+          "trades": 752,
+          "days": 143,
+          "vs_C0": {
+            "mean": -443.8266474379687,
+            "ci": [
+              -860.7917891826418,
+              -30.208538495126707
+            ],
+            "p_le_0": 0.98075
+          },
+          "vs_always": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          }
+        },
+        "C0_current": {
+          "total": -9402.728287951015,
+          "sharpe": -0.9907034672407468,
+          "sharpe_ci": [
+            -3.4915058864367756,
+            1.6997632830456035
+          ],
+          "max_dd": -18877.348564860593,
+          "trades": 127,
+          "days": 143,
+          "vs_C0": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          },
+          "vs_always": {
+            "mean": 443.8266474379687,
+            "ci": [
+              30.208538495126863,
+              860.7917891826419
+            ],
+            "p_le_0": 0.01925
+          }
+        },
+        "C1_profit": {
+          "total": -36545.65442268289,
+          "sharpe": -2.472753843295748,
+          "sharpe_ci": [
+            -4.859388446732511,
+            0.1213488043426664
+          ],
+          "max_dd": -40243.79071665579,
+          "trades": 290,
+          "days": 143,
+          "vs_C0": {
+            "mean": -189.81067227085228,
+            "ci": [
+              -379.03276778888164,
+              -6.408890003402739
+            ],
+            "p_le_0": 0.97825
+          },
+          "vs_always": {
+            "mean": 254.01597516711638,
+            "ci": [
+              -101.2617312417063,
+              620.1273790295221
+            ],
+            "p_le_0": 0.073
+          }
+        }
+      },
+      "touch": {
+        "always_sell": {
+          "total": -78876.75278781458,
+          "sharpe": -3.18468660525158,
+          "sharpe_ci": [
+            -5.708710697807078,
+            -0.6285817703008264
+          ],
+          "max_dd": -90591.31943864,
+          "trades": 752,
+          "days": 143,
+          "vs_C0": {
+            "mean": -479.01152860382103,
+            "ci": [
+              -892.25186719838,
+              -69.1557745381622
+            ],
+            "p_le_0": 0.9875
+          },
+          "vs_always": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          }
+        },
+        "C0_current": {
+          "total": -10378.104197468194,
+          "sharpe": -1.1005351212241756,
+          "sharpe_ci": [
+            -3.5788942438620293,
+            1.5825097319134547
+          ],
+          "max_dd": -19293.071892261883,
+          "trades": 127,
+          "days": 143,
+          "vs_C0": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          },
+          "vs_always": {
+            "mean": 479.01152860382103,
+            "ci": [
+              69.15577453816226,
+              892.2518671983801
+            ],
+            "p_le_0": 0.0125
+          }
+        },
+        "C1_profit": {
+          "total": -38680.30366348999,
+          "sharpe": -2.6336048873735374,
+          "sharpe_ci": [
+            -5.013147457093528,
+            -0.0549671920770436
+          ],
+          "max_dd": -41882.99881846815,
+          "trades": 290,
+          "days": 143,
+          "vs_C0": {
+            "mean": -197.91747878336923,
+            "ci": [
+              -386.34705152925727,
+              -15.305433272620913
+            ],
+            "p_le_0": 0.9835
+          },
+          "vs_always": {
+            "mean": 281.0940498204517,
+            "ci": [
+              -69.41952290603945,
+              646.8645099245077
+            ],
+            "p_le_0": 0.0515
+          }
+        }
+      },
+      "verdict": "FAIL"
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte",
+    "block": "2022H1",
+    "start": "2022-01-01",
+    "end": "2022-05-13",
+    "opened_at": "2026-11-09 13:38",
+    "commit": "437c1d1",
+    "strategies": [
+      "C1_profit (improvement round)"
+    ],
+    "primary": "today_cost_half_gap",
+    "note": "opened together for the C1 sealed test",
+    "results_sealed_c1": {
+      "half": {
+        "always_sell": {
+          "total": -72869.93887158055,
+          "sharpe": -2.9156418401665825,
+          "sharpe_ci": [
+            -5.436192964485307,
+            -0.35948998988278097
+          ],
+          "max_dd": -85919.66711168448,
+          "trades": 752,
+          "days": 143,
+          "vs_C0": {
+            "mean": -443.8266474379687,
+            "ci": [
+              -860.7917891826418,
+              -30.208538495126707
+            ],
+            "p_le_0": 0.98075
+          },
+          "vs_always": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          }
+        },
+        "C0_current": {
+          "total": -9402.728287951015,
+          "sharpe": -0.9907034672407468,
+          "sharpe_ci": [
+            -3.4915058864367756,
+            1.6997632830456035
+          ],
+          "max_dd": -18877.348564860593,
+          "trades": 127,
+          "days": 143,
+          "vs_C0": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          },
+          "vs_always": {
+            "mean": 443.8266474379687,
+            "ci": [
+              30.208538495126863,
+              860.7917891826419
+            ],
+            "p_le_0": 0.01925
+          }
+        },
+        "C1_profit": {
+          "total": -36545.65442268289,
+          "sharpe": -2.472753843295748,
+          "sharpe_ci": [
+            -4.859388446732511,
+            0.1213488043426664
+          ],
+          "max_dd": -40243.79071665579,
+          "trades": 290,
+          "days": 143,
+          "vs_C0": {
+            "mean": -189.81067227085228,
+            "ci": [
+              -379.03276778888164,
+              -6.408890003402739
+            ],
+            "p_le_0": 0.97825
+          },
+          "vs_always": {
+            "mean": 254.01597516711638,
+            "ci": [
+              -101.2617312417063,
+              620.1273790295221
+            ],
+            "p_le_0": 0.073
+          }
+        }
+      },
+      "touch": {
+        "always_sell": {
+          "total": -78876.75278781458,
+          "sharpe": -3.18468660525158,
+          "sharpe_ci": [
+            -5.708710697807078,
+            -0.6285817703008264
+          ],
+          "max_dd": -90591.31943864,
+          "trades": 752,
+          "days": 143,
+          "vs_C0": {
+            "mean": -479.01152860382103,
+            "ci": [
+              -892.25186719838,
+              -69.1557745381622
+            ],
+            "p_le_0": 0.9875
+          },
+          "vs_always": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          }
+        },
+        "C0_current": {
+          "total": -10378.104197468194,
+          "sharpe": -1.1005351212241756,
+          "sharpe_ci": [
+            -3.5788942438620293,
+            1.5825097319134547
+          ],
+          "max_dd": -19293.071892261883,
+          "trades": 127,
+          "days": 143,
+          "vs_C0": {
+            "mean": 0.0,
+            "ci": [
+              0.0,
+              0.0
+            ],
+            "p_le_0": 1.0
+          },
+          "vs_always": {
+            "mean": 479.01152860382103,
+            "ci": [
+              69.15577453816226,
+              892.2518671983801
+            ],
+            "p_le_0": 0.0125
+          }
+        },
+        "C1_profit": {
+          "total": -38680.30366348999,
+          "sharpe": -2.6336048873735374,
+          "sharpe_ci": [
+            -5.013147457093528,
+            -0.0549671920770436
+          ],
+          "max_dd": -41882.99881846815,
+          "trades": 290,
+          "days": 143,
+          "vs_C0": {
+            "mean": -197.91747878336923,
+            "ci": [
+              -386.34705152925727,
+              -15.305433272620913
+            ],
+            "p_le_0": 0.9835
+          },
+          "vs_always": {
+            "mean": 281.0940498204517,
+            "ci": [
+              -69.41952290603945,
+              646.8645099245077
+            ],
+            "p_le_0": 0.0515
+          }
+        }
+      },
+      "verdict": "FAIL"
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte_ndxp",
+    "block": "2025-01..2026-09",
+    "start": "2025-01-01",
+    "end": "2026-09-04",
+    "opened_at": "2026-11-09 13:54",
+    "commit": "625ba12",
+    "strategies": [
+      "event-day seller"
+    ],
+    "results_event_seller": {
+      "ndx": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 37615.02533395613,
+          "event_mean_day": 783.6463611240861,
+          "other_mean_day": 89.39355018795203,
+          "diff_mean_day": 694.252810936134,
+          "diff_ci": [
+            -18.512422991740504,
+            1369.4126086982765
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 30017.535211477447,
+          "event_mean_day": 625.3653169057801,
+          "other_mean_day": -104.00716868242988,
+          "diff_mean_day": 729.37248558821,
+          "diff_ci": [
+            39.625275591008645,
+            1387.5226811274722
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 23193.122080881512,
+          "event_mean_day": 483.1900433516982,
+          "other_mean_day": -275.4070669479645,
+          "diff_mean_day": 758.5971102996627,
+          "diff_ci": [
+            89.52103186722654,
+            1405.4849773384726
+          ]
+        }
+      },
+      "rut": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 20101.64276009902,
+          "event_mean_day": 418.7842241687296,
+          "other_mean_day": -46.90391326672543,
+          "diff_mean_day": 465.6881374354551,
+          "diff_ci": [
+            -379.14359263068525,
+            1252.8970830417104
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 8421.374050324004,
+          "event_mean_day": 175.4452927150834,
+          "other_mean_day": -307.942079762141,
+          "diff_mean_day": 483.3873724772244,
+          "diff_ci": [
+            -323.3348183828789,
+            1243.5006885047053
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": -1550.9595308501666,
+          "event_mean_day": -32.3116568927118,
+          "other_mean_day": -533.9651890997258,
+          "diff_mean_day": 501.65353220701394,
+          "diff_ci": [
+            -278.47143994411755,
+            1234.4529309962106
+          ]
+        }
+      },
+      "pooled_mid": {
+        "diff_mean_day": 580.5900081105885,
+        "diff_ci": [
+          52.87374938295659,
+          1088.412527607606
+        ]
+      },
+      "verdict": "PASS"
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte_rutw",
+    "block": "2025-01..2026-09",
+    "start": "2025-01-01",
+    "end": "2026-09-04",
+    "opened_at": "2026-11-09 13:54",
+    "commit": "625ba12",
+    "strategies": [
+      "event-day seller"
+    ],
+    "results_event_seller": {
+      "ndx": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 37615.02533395613,
+          "event_mean_day": 783.6463611240861,
+          "other_mean_day": 89.39355018795203,
+          "diff_mean_day": 694.252810936134,
+          "diff_ci": [
+            -18.512422991740504,
+            1369.4126086982765
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 30017.535211477447,
+          "event_mean_day": 625.3653169057801,
+          "other_mean_day": -104.00716868242988,
+          "diff_mean_day": 729.37248558821,
+          "diff_ci": [
+            39.625275591008645,
+            1387.5226811274722
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 327,
+          "event_total": 23193.122080881512,
+          "event_mean_day": 483.1900433516982,
+          "other_mean_day": -275.4070669479645,
+          "diff_mean_day": 758.5971102996627,
+          "diff_ci": [
+            89.52103186722654,
+            1405.4849773384726
+          ]
+        }
+      },
+      "rut": {
+        "mid": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 20101.64276009902,
+          "event_mean_day": 418.7842241687296,
+          "other_mean_day": -46.90391326672543,
+          "diff_mean_day": 465.6881374354551,
+          "diff_ci": [
+            -379.14359263068525,
+            1252.8970830417104
+          ]
+        },
+        "half": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": 8421.374050324004,
+          "event_mean_day": 175.4452927150834,
+          "other_mean_day": -307.942079762141,
+          "diff_mean_day": 483.3873724772244,
+          "diff_ci": [
+            -323.3348183828789,
+            1243.5006885047053
+          ]
+        },
+        "touch": {
+          "event_days": 48,
+          "other_days": 333,
+          "event_total": -1550.9595308501666,
+          "event_mean_day": -32.3116568927118,
+          "other_mean_day": -533.9651890997258,
+          "diff_mean_day": 501.65353220701394,
+          "diff_ci": [
+            -278.47143994411755,
+            1234.4529309962106
+          ]
+        }
+      },
+      "pooled_mid": {
+        "diff_mean_day": 580.5900081105885,
+        "diff_ci": [
+          52.87374938295659,
+          1088.412527607606
+        ]
+      },
+      "verdict": "PASS"
+    },
+    "forced": null
+  },
+  {
+    "data": "odte_0dte_pre2016",
+    "block": "2013-04..2015-12",
+    "start": "2013-04-01",
+    "end": "2015-12-31",
+    "opened_at": "2026-11-09 15:11",
+    "commit": "4873334",
+    "strategies": [
+      "H1",
+      "H2",
+      "H3",
+      "H4"
+    ],
+    "results_fresh_2013": {
+      "sessions": 113,
+      "H1": {
+        "half": {
+          "event_days": 30,
+          "other_days": 56,
+          "lowkey_days": 19,
+          "event_mean": 123.47536374058794,
+          "other_mean": -39.94357336375693,
+          "diff": 163.41893710434488,
+          "ci": [
+            -1229.0873535263638,
+            1628.360420230957
+          ],
+          "lowkey_minus_other": -206.83038409855865,
+          "lowkey_ci": [
+            -1812.1163750555459,
+            1384.1197977531456
+          ]
+        },
+        "touch": {
+          "event_days": 30,
+          "other_days": 56,
+          "lowkey_days": 19,
+          "event_mean": 81.89765647991439,
+          "other_mean": -78.04922277733772,
+          "diff": 159.9468792572521,
+          "ci": [
+            -1220.5548216276675,
+            1611.5621037094347
+          ],
+          "lowkey_minus_other": -211.26250047069067,
+          "lowkey_ci": [
+            -1804.7796537868458,
+            1366.9022534850476
+          ]
+        },
+        "passes": false
+      },
+      "H2": {
+        "afternoon_minus_morning": -127.95034058938778,
+        "ci": [
+          -397.4352460607302,
+          137.28377428691545
+        ],
+        "days": 87,
+        "passes": false
+      },
+      "H3": {
+        "stress_mean_day": 162.23481790037113,
+        "ci": [
+          -2665.9430892549126,
+          2819.4228686839606
+        ],
+        "days": 8,
+        "passes": false
+      },
+      "H4": {
+        "index_capture_bp": -2.2743109233432506,
+        "ci": [
+          -7.324955150193295,
+          2.4103996838650046
+        ],
+        "days": 112,
+        "option_trade_per_contract": -50.85203421456473,
+        "option_ci": [
+          -96.84318261827742,
+          -2.4931702477591084
+        ],
+        "option_days": 112,
+        "passes": false
+      },
+      "passed": []
+    },
+    "forced": null
+  }
+]

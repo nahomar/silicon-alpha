@@ -36,6 +36,10 @@ OUT_DIR = ROOT / "data" / "odte_0dte"
 DATASET = "OPRA.PILLAR"
 SCHEMA = "cbbo-1m"
 PARENT = "SPXW.OPT"
+# Cash-settled 0DTE roots: options root -> (Yahoo ticker of the settlement index, data folder)
+ROOTS = {"SPXW": ("^GSPC", OUT_DIR),
+         "NDXP": ("^NDX", ROOT / "data" / "odte_0dte_ndxp"),
+         "RUTW": ("^RUT", ROOT / "data" / "odte_0dte_rutw")}
 TZ = "America/New_York"
 
 
@@ -50,8 +54,12 @@ def _retry(fn, label: str, attempts: int = 5):
     for i in range(attempts):
         try:
             return fn()
-        except db.BentoClientError:
-            raise
+        except db.BentoClientError as e:
+            # 429 (rate limit) is temporary: wait and retry. Other 4xx (billing, auth, bad request)
+            # are raised at once: retrying cannot help and could hide an account problem.
+            if getattr(e, "http_status", None) != 429 or i == attempts - 1:
+                raise
+            time.sleep(5 * (i + 1))
         except (db.BentoError, requests.exceptions.RequestException,
                 ConnectionError, TimeoutError) as e:
             if i == attempts - 1:
@@ -70,8 +78,9 @@ def session_window(day: pd.Timestamp) -> tuple:
     return start.isoformat(), end.isoformat()
 
 
-def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
-    """Databento cbbo DataFrame -> canonical chain rows for `day`'s expiry.
+def reduce_frame(df: pd.DataFrame, day: pd.Timestamp, expiry=None) -> pd.DataFrame:
+    """Databento cbbo DataFrame -> canonical chain rows for `day`'s expiry
+    (or `expiry`, e.g. the next expiration quoted during `day`'s session).
 
     Symbols are OSI: 'SPXW  261106C05800000' = root(6) yymmdd C/P strike*1000(8).
     The quote time is ts_recv (when the consolidated quote was recorded),
@@ -80,7 +89,8 @@ def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
     if df.empty:
         return df.iloc[0:0]
     sym = df["symbol"].astype(str)
-    keep = sym.str.slice(6, 12) == pd.Timestamp(day).strftime("%y%m%d")
+    exp = pd.Timestamp(expiry if expiry is not None else day).normalize()
+    keep = sym.str.slice(6, 12) == exp.strftime("%y%m%d")
     if not keep.any():
         return df.iloc[0:0]
     d = df.loc[keep]
@@ -90,7 +100,7 @@ def reduce_frame(df: pd.DataFrame, day: pd.Timestamp) -> pd.DataFrame:
     out = pd.DataFrame({
         "quote_datetime": ts.to_numpy(),
         "root": s.str.slice(0, 6).str.strip().to_numpy(),
-        "expiration": pd.Timestamp(day).normalize(),
+        "expiration": exp,
         "strike": s.str.slice(13, 21).astype(np.int64).to_numpy() / 1000.0,
         "option_type": s.str.slice(12, 13).to_numpy(),
         "bid": d["bid_px_00"].astype("float64").to_numpy(),
@@ -113,7 +123,40 @@ def band_filter(chain: pd.DataFrame, band: float) -> pd.DataFrame:
     return chain[(chain["strike"] >= lo) & (chain["strike"] <= hi)].reset_index(drop=True)
 
 
-def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.DataFrame:
+def zero_dte_symbols(root: str, day: pd.Timestamp, center: float, band: float,
+                     step: float = 5.0) -> list:
+    """OSI symbols for `day`'s expiry, every `step` points within +/- band.
+
+    Asking only for these, instead of the parent (every listed expiry), cuts
+    the bytes, cost and time several-fold. Strikes that are not listed simply
+    do not resolve and are skipped by the API.
+    """
+    lo = np.floor(center * (1 - band) / step) * step
+    hi = np.ceil(center * (1 + band) / step) * step
+    ymd = pd.Timestamp(day).strftime("%y%m%d")
+    return [f"{root:<6s}{ymd}{cp}{int(round(k * 1000)):08d}"
+            for k in np.arange(lo, hi + step / 2, step) for cp in ("C", "P")]
+
+
+def fetch_raw(client, day: pd.Timestamp, out_dir: Path, symbols: list,
+              schema: str) -> Path:
+    """Save one session's raw DBN (e.g. tick-level cmbp-1 for TradeFM) as is."""
+    start, end = session_window(day)
+    f = out_dir / f"{day:%Y-%m-%d}.{schema}.dbn.zst"
+    tmp = out_dir / f".{f.name}.part"
+
+    def _get():
+        tmp.unlink(missing_ok=True)
+        client.timeseries.get_range(dataset=DATASET, schema=schema, symbols=symbols,
+                                    stype_in="raw_symbol", start=start, end=end,
+                                    path=str(tmp))
+    _retry(_get, f"{day:%Y-%m-%d} {schema}")
+    tmp.replace(f)
+    return f
+
+
+def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float,
+                  parent: str = PARENT, symbols=None, expiry=None) -> pd.DataFrame:
     import databento as db
     start, end = session_window(day)
     tmp = tmp_dir / f"{day:%Y%m%d}.dbn.zst"
@@ -121,14 +164,15 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.D
         def _get():
             tmp.unlink(missing_ok=True)
             client.timeseries.get_range(dataset=DATASET, schema=SCHEMA,
-                                        symbols=[PARENT], stype_in="parent",
+                                        symbols=symbols or [parent],
+                                        stype_in="raw_symbol" if symbols else "parent",
                                         start=start, end=end, path=str(tmp))
         _retry(_get, f"{day:%Y-%m-%d}")
         store = db.DBNStore.from_file(str(tmp))
         parts = []
         for chunk in store.to_df(count=500_000, map_symbols=True):
             chunk = chunk.reset_index()
-            parts.append(reduce_frame(chunk, day))
+            parts.append(reduce_frame(chunk, day, expiry))
         chain = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     finally:
         tmp.unlink(missing_ok=True)
@@ -137,14 +181,17 @@ def fetch_session(client, day: pd.Timestamp, tmp_dir: Path, band: float) -> pd.D
     return band_filter(chain, band)
 
 
-def fetch_settlements(days: list, out: Path) -> pd.DataFrame:
+def fetch_settlements(days: list, out: Path, index: str = "^GSPC") -> pd.DataFrame:
     import yfinance as yf
     lo = min(days) - pd.Timedelta(days=7)
     hi = max(days) + pd.Timedelta(days=1)
-    h = yf.Ticker("^GSPC").history(start=f"{lo:%Y-%m-%d}", end=f"{hi:%Y-%m-%d}",
+    h = yf.Ticker(index).history(start=f"{lo:%Y-%m-%d}", end=f"{hi:%Y-%m-%d}",
                                    auto_adjust=False)
     s = pd.DataFrame({"date": pd.to_datetime(h.index).tz_localize(None).normalize(),
                       "spx_close": h["Close"].to_numpy()})
+    if out.exists():                       # append only: stored closes (research labels) never change
+        old = pd.read_csv(out, parse_dates=["date"])
+        s = pd.concat([old, s[~s["date"].isin(set(old["date"]))]], ignore_index=True).sort_values("date")
     s.to_csv(out, index=False)
     return s
 
@@ -156,8 +203,23 @@ def main() -> int:
     ap.add_argument("--end", required=True, help="last session, inclusive")
     ap.add_argument("--max-usd", type=float, required=True)
     ap.add_argument("--band", type=float, default=0.06)
-    ap.add_argument("--out", default=str(OUT_DIR))
+    ap.add_argument("--root", default="SPXW", choices=list(ROOTS),
+                    help="cash-settled 0DTE options root")
+    ap.add_argument("--out", default=None, help="default: the root's own data folder")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--fast", action="store_true",
+                    help="request only the session's own expiry near the money, "
+                         "several sessions in parallel")
+    ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--next-expiry", action="store_true",
+                    help="with --fast: quote the NEXT expiration during each session "
+                         "(next date with a same-day file in data/odte_0dte)")
+    ap.add_argument("--schema", default=SCHEMA,
+                    help="cbbo-1m (minute quotes, reduced) or a tick schema such as cmbp-1")
+    ap.add_argument("--keep-raw", action="store_true",
+                    help="save each session's raw DBN instead of reducing it (tick data)")
+    ap.add_argument("--days-file", default=None,
+                    help="CSV with a `date` column: fetch exactly these sessions")
     a = ap.parse_args()
 
     import databento as db
@@ -166,22 +228,70 @@ def main() -> int:
         print("DATABENTO_API_KEY is not set")
         return 1
     client = db.Historical(key)
-    out = Path(a.out)
+    parent = f"{a.root}.OPT"
+    index, default_out = ROOTS[a.root]
+    out = Path(a.out) if a.out else default_out
     out.mkdir(parents=True, exist_ok=True)
 
     days = list(pd.bdate_range(a.start, a.end))
+    if a.days_file:
+        days = sorted(pd.to_datetime(pd.read_csv(a.days_file)["date"]))
+    syms, nexp = {}, {}
+    if a.next_expiry:
+        # The next expiration after each session, from the session calendar (SPXW/NDXP/RUTW list
+        # every session). Fixed 2026-11-11: this used to be set only in --fast mode and taken from
+        # the 0DTE files on disk, so a normal run silently saved SAME-DAY quotes as "next expiry".
+        cal = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
+        for d in days:
+            later = cal[cal > d]
+            if len(later):
+                nexp[d] = later[0]
+        missing = [d for d in days if d not in nexp]
+        if missing:
+            print(f"no next expiration known for {len(missing)} day(s); skipped: {[f'{x:%Y-%m-%d}' for x in missing]}")
+            days = [d for d in days if d in nexp]
+    if a.fast:
+        # Band centre = previous session's index close (known before the open).
+        import yfinance as yf
+        h = yf.Ticker(index).history(start=pd.Timestamp(a.start) - pd.Timedelta(days=10),
+                                     end=pd.Timestamp(a.end) + pd.Timedelta(days=1),
+                                     auto_adjust=False)["Close"]
+        h.index = pd.to_datetime(h.index).tz_localize(None).normalize()
+        for d in days:
+            prev = h[h.index < d]
+            if not len(prev):
+                continue
+            e = nexp.get(d, d)
+            syms[d] = zero_dte_symbols(a.root, e, float(prev.iloc[-1]), a.band + 0.01)
     todo, costs = [], {}
-    for d in days:
-        if (out / f"{d:%Y-%m-%d}.parquet").exists():
-            continue
+    def done(d):
+        if a.keep_raw:
+            return (out / f"{d:%Y-%m-%d}.{a.schema}.dbn.zst").exists()
+        return (out / f"{d:%Y-%m-%d}.parquet").exists()
+
+    def price(d):
         s, e = session_window(d)
-        c = float(_retry(lambda: client.metadata.get_cost(
-            dataset=DATASET, schema=SCHEMA, symbols=[PARENT],
-            stype_in="parent", start=s, end=e), f"{d:%Y-%m-%d} price"))
-        if c <= 0:
-            print(f"{d:%Y-%m-%d}  no data (holiday?) -- skipped")
+        sym, st = (syms[d], "raw_symbol") if d in syms else ([parent], "parent")
+        try:
+            return d, float(_retry(lambda: client.metadata.get_cost(
+                dataset=DATASET, schema=a.schema, symbols=sym,
+                stype_in=st, start=s, end=e), f"{d:%Y-%m-%d} price"))
+        except db.BentoClientError as ex:
+            # On a market holiday nothing is listed for the window, so the
+            # symbols do not resolve: 422, not a $0 quote.
+            if "symbology_invalid_request" in str(ex):
+                return d, 0.0
+            raise
+
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+    pending = [d for d in days if not done(d)]
+    with _TPE(max_workers=max(1, a.workers if a.fast else 1)) as ex:
+        priced = dict(ex.map(price, pending))      # free metadata calls, in parallel
+    for d in pending:
+        if priced[d] <= 0:
+            print(f"{d:%Y-%m-%d}  no listed contracts / no data (holiday) -- skipped")
             continue
-        costs[d] = c
+        costs[d] = priced[d]
         todo.append(d)
     total = sum(costs.values())
     print(f"{len(todo)} sessions to fetch, estimated ${total:.2f} (cap ${a.max_usd:.2f})")
@@ -193,26 +303,42 @@ def main() -> int:
             print(f"  {d:%Y-%m-%d}  ${costs[d]:.2f}")
         return 0
 
-    spent = 0.0
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    spent, lock = [0.0], threading.Lock()
+
+    def one(d, td):
+        with lock:
+            if spent[0] + costs[d] > a.max_usd:
+                print(f"{d:%Y-%m-%d}  STOP: would pass the cap (spent ${spent[0]:.2f})")
+                return
+            spent[0] += costs[d]              # reserve before downloading
+        if a.keep_raw:
+            f = fetch_raw(client, d, out, syms[d], a.schema)
+            print(f"{d:%Y-%m-%d}  raw {a.schema} {f.stat().st_size/1e9:.2f} GB  ${costs[d]:.2f}  "
+                  f"(spent ${spent[0]:.2f})", flush=True)
+            return
+        chain = fetch_session(client, d, Path(td), a.band, parent=parent,
+                              symbols=syms.get(d) if a.fast else None, expiry=nexp.get(d))
+        if chain.empty:
+            print(f"{d:%Y-%m-%d}  empty after filtering")
+            return
+        f = out / f"{d:%Y-%m-%d}.parquet"
+        tmp = f.with_suffix(".tmp")
+        chain.to_parquet(tmp, index=False)
+        tmp.replace(f)                        # atomic: a killed run leaves no half file
+        print(f"{d:%Y-%m-%d}  {len(chain):>8,} rows  "
+              f"{chain['strike'].nunique()} strikes  ${costs[d]:.2f}  "
+              f"(spent ${spent[0]:.2f})", flush=True)
+
     with tempfile.TemporaryDirectory(dir=out) as td:
-        for d in todo:
-            if spent + costs[d] > a.max_usd:
-                print(f"STOP: next session would pass the cap (spent ${spent:.2f})")
-                break
-            chain = fetch_session(client, d, Path(td), a.band)
-            spent += costs[d]
-            if chain.empty:
-                print(f"{d:%Y-%m-%d}  empty after filtering")
-                continue
-            chain.to_parquet(out / f"{d:%Y-%m-%d}.parquet", index=False)
-            print(f"{d:%Y-%m-%d}  {len(chain):>8,} rows  "
-                  f"{chain['strike'].nunique()} strikes  ${costs[d]:.2f}  "
-                  f"(spent ${spent:.2f})", flush=True)
+        with ThreadPoolExecutor(max_workers=a.workers if a.fast else 1) as ex:
+            list(ex.map(lambda d: one(d, td), todo))
 
     have = sorted(pd.Timestamp(p.stem) for p in out.glob("20??-??-??.parquet"))
-    if have:
+    if have and not a.keep_raw:
         try:
-            s = fetch_settlements(have, out / "settlements.csv")
+            s = fetch_settlements(have, out / "settlements.csv", index=index)
             print(f"settlements: {len(s)} SPX closes -> {out/'settlements.csv'}")
         except Exception as e:
             print(f"settlements fetch failed ({e}); study will use last forward")
