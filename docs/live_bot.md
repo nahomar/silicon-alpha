@@ -213,3 +213,12 @@ launchctl load ~/Library/LaunchAgents/com.siliconalpha.bot.evening.plist
     sklearn (max diff 0.0 in both envs) and version-proof.
   - tests/odte/test_frozen.py now passes in .venv-live too.
   - **Rule: live-path tests run in .venv-live.**
+- **2026-11-12 order policy switched (paper), per E2 (docs/execution_plan.md):**
+  `order_policy="mid_then_cross"`.
+  - Sell the fly at mid; if unfilled after 300 s, re-price at the CURRENT touch from live quotes
+    (`_current_touch`).
+  - Wait 60 s more, then cancel.
+  - Never past `max_loss_per_trade` / `max_loss_per_day`: a cross that would exceed them is
+    refused and logged as `cross_refused`.
+  - The journal logs `cross` events with touch_at_decision.
+  - Old behaviour: `order_policy="ladder"`.

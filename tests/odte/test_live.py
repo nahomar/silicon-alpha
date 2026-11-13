@@ -74,7 +74,45 @@ def test_replay_day_order_fill_and_settlement(tmp_path):
     assert s["fills"] == 1 and s["decisions"] == 6
     log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
     assert '"kind": "fill"' in log and '"kind": "settle"' in log and "max filled trades today" in log
-    assert 0 <= s["share_of_gap_paid"][0] <= 0.5 + 1e-9
+    # default policy (E2): mid, then the current touch -> at most the whole gap
+    assert '"kind": "cross"' in log and 0 <= s["share_of_gap_paid"][0] <= 1.0 + 1e-9
+
+
+def test_ladder_policy_still_available(tmp_path):
+    """order_policy='ladder' keeps the old walk: never more than half the gap."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class SecondRung(ReplayBroker):
+        def modify(self, h, price):
+            super().modify(h, price)
+            o = self.orders[h]
+            o.update(filled=o["order"].qty, avg=price, live=False)
+
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP",
+                 shadow_times=(), max_trades_per_day=1, order_policy="ladder")
+    s = run_day(cfg, SecondRung("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["fills"] == 1 and 0 <= s["share_of_gap_paid"][0] <= 0.5 + 1e-9
+
+
+def test_current_touch_and_rung_waits():
+    from types import SimpleNamespace
+    from odte.live.runner import _current_touch, _rung_wait
+    q = pd.DataFrame({"option_type": ["C", "P", "C", "P"], "strike": [700.0, 700.0, 703.0, 697.0],
+                      "bid": [1.0, 1.1, 0.10, 0.12], "ask": [1.1, 1.2, 0.15, 0.17]})
+    br = SimpleNamespace(snapshot_xsp=lambda: q, snapshot=lambda: q)
+    o = SimpleNamespace(symbol="XSP", K=700.0, W=3.0)
+    assert abs(_current_touch(br, o) - (1.0 + 1.1 - 0.15 - 0.17)) < 1e-12
+    bad = SimpleNamespace(snapshot_xsp=lambda: q.iloc[:2], snapshot=lambda: q.iloc[:2])
+    assert np.isnan(_current_touch(bad, o))
+    cfg = Config()
+    assert _rung_wait(cfg, 0) == 300 and _rung_wait(cfg, 1) == 60
+    assert _rung_wait(Config(order_policy="ladder"), 3) == Config().walk_wait_s
 
 
 def test_shadow_strategies_and_pricing():

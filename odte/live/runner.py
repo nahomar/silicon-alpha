@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import asdict
 
@@ -335,10 +336,14 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                     if why is None:
                         budget = min(cfg.max_loss_per_trade, cfg.max_loss_per_day - opened_worst)
                         if xfly is not None:                     # XSP's own book
-                            o = fly.build(xfly, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession,
+                            steps, conc = ((1, 1.0) if cfg.order_policy == "mid_then_cross"
+                                           else (cfg.walk_steps, cfg.max_concession))
+                            o = fly.build(xfly, cfg.symbol, budget, steps, conc,
                                           cfg.tick(), native=True)
                         else:                                     # no XSP quotes: SPX / 10 (logged)
-                            o = fly.build(r, cfg.symbol, budget, cfg.walk_steps, cfg.max_concession, cfg.tick())
+                            steps, conc = ((1, 1.0) if cfg.order_policy == "mid_then_cross"
+                                           else (cfg.walk_steps, cfg.max_concession))
+                            o = fly.build(r, cfg.symbol, budget, steps, conc, cfg.tick())
                         if o is not None and o.qty > cfg.max_qty:
                             o.worst_case = o.worst_case / o.qty * cfg.max_qty
                             o.qty = cfg.max_qty
@@ -382,17 +387,36 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
                           seconds=(now - active["since"]).total_seconds())
                     fills.append({"o": o, "qty": q, "credit": avg, "hhmm": active["hhmm"]})
                     active = None
-                elif (now - active["since"]).total_seconds() >= cfg.walk_wait_s:
+                elif (now - active["since"]).total_seconds() >= _rung_wait(cfg, active["rung"]):
                     active["rung"] += 1
-                    if active["rung"] < len(o.ladder):
-                        broker.modify(active["h"], o.ladder[active["rung"]])
+                    cross = cfg.order_policy == "mid_then_cross" and active["rung"] == 1
+                    price = None
+                    if cross:                                # E2: the CURRENT touch, within the risk budget
+                        now_touch = _current_touch(broker, o)
+                        price = fly._round_tick(now_touch if math.isfinite(now_touch) else o.ladder[-1], cfg.tick(),
+                                                down=True)
+                        new_worst = fly.worst_case_per_fly(o.W, price) * o.qty if price > 0 else float("inf")
+                        if (price <= 0 or new_worst > cfg.max_loss_per_trade + 1e-9
+                                or opened_worst - o.worst_case + new_worst > cfg.max_loss_per_day + 1e-9):
+                            j.log(now, "cross_refused", hhmm=active["hhmm"], touch_now=round(now_touch, 3)
+                                  if math.isfinite(now_touch) else None, reason="risk budget or no price")
+                            price = None
+                        else:
+                            opened_worst += new_worst - o.worst_case
+                            o.worst_case = new_worst
+                    elif active["rung"] < len(o.ladder):
+                        price = o.ladder[active["rung"]]
+                    if price is not None:
+                        broker.modify(active["h"], price)
                         active["since"] = now
-                        j.log(now, "reprice", hhmm=active["hhmm"], price=o.ladder[active["rung"]])
+                        active["price"] = price
+                        j.log(now, "cross" if cross else "reprice", hhmm=active["hhmm"], price=price,
+                              touch_at_decision=o.touch)
                     else:
                         broker.cancel(active["h"])
                         opened_worst -= o.worst_case
-                        j.log(now, "unfilled", hhmm=active["hhmm"], last_price=o.ladder[-1], mid=o.mid,
-                              touch=o.touch)
+                        j.log(now, "unfilled", hhmm=active["hhmm"], last_price=active.get("price", o.ladder[-1]),
+                              mid=o.mid, touch=o.touch)
                         unfilled.append({"hhmm": active["hhmm"], "o": o})
                         active = None
             broker.sleep(1)
@@ -498,6 +522,24 @@ def run_day(cfg: Config, broker, day, prev_settle=np.nan, prev_ratio=np.nan, tag
     summary["reconcile_ok"] = _reconcile(broker, day, fills, j, alert)
     j.log(broker.now(), "day_summary", **summary)
     return summary
+
+
+def _rung_wait(cfg: Config, rung: int) -> float:
+    if cfg.order_policy == "mid_then_cross":
+        return cfg.mid_wait_s if rung == 0 else cfg.cross_wait_s
+    return cfg.walk_wait_s
+
+
+def _current_touch(broker, o) -> float:
+    """Touch credit of the order's fly from the broker's latest quotes (NaN if unavailable)."""
+    try:
+        q = broker.snapshot_xsp() if o.symbol == "XSP" else broker.snapshot()
+        q = q[(q["bid"] > 0) & (q["ask"] >= q["bid"])].groupby(["option_type", "strike"]).tail(1)
+        q = q.set_index(["option_type", "strike"])
+        K, W = float(o.K), float(o.W)
+        return float(q.at[("C", K), "bid"] + q.at[("P", K), "bid"] - q.at[("C", K + W), "ask"] - q.at[("P", K - W), "ask"])
+    except Exception:
+        return float("nan")
 
 
 def reconcile_problems(rec: dict, journal_fills: int) -> list:

@@ -40,6 +40,11 @@ class Config:
     walk_steps: int = 5
     walk_wait_s: int = 30
     max_concession: float = 0.5
+    # E2 (docs/execution_plan.md, 2026-11-12): wait at mid up to mid_wait_s, then re-price at the
+    # CURRENT touch and wait cross_wait_s; never past the risk budget. "ladder" = the old walk above.
+    order_policy: str = "mid_then_cross"
+    mid_wait_s: int = 300
+    cross_wait_s: int = 60
     combo_tick: float | None = None     # None: 0.01 for XSP, 0.05 for SPX
     max_attempts_per_day: int = 6       # orders placed (filled or not)
 
