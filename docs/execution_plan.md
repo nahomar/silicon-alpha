@@ -110,3 +110,15 @@ orders, how long to wait, when to use SPX vs XSP."
     which favours never missing trades.
   - The NBBO fill rule understates real fills inside the spread, which flatters "cross" vs
     LADDER.
+
+## E4: SPY as the traded instrument (added 2026-11-12, before computing)
+- Data: SPY same-day options, 1-minute, 2024-11-11 .. 2026-11-10 (data/odte_etf/SPY; owner approved).
+- Same measurement as E1, three ways, at every half-hour 10:00-15:30:
+  - cost per $1k worst-case risk of the bot's fly (wings ≥ 1.5 × straddle), at half-gap and at the
+    touch, for **SPX vs XSP vs SPY**, each on its own quotes;
+  - **the locked model's fly picks priced natively on XSP and SPY** (zoo.trade, quoted spreads,
+    k_day = 1; SPY settled at its 16:00 close; American exercise, dividends and share delivery
+    ignored, so SPY results are an upper bound until those are handled);
+  - the same fees model for all three (a caveat: SPX exchange fees are higher, so this flatters SPX).
+- Read-out only (no switch rule yet). If SPY is clearly cheaper, a pre-registered live comparison
+  follows, including how to close before 16:00 to avoid share delivery.
