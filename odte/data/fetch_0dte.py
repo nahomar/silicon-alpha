@@ -54,8 +54,12 @@ def _retry(fn, label: str, attempts: int = 5):
     for i in range(attempts):
         try:
             return fn()
-        except db.BentoClientError:
-            raise
+        except db.BentoClientError as e:
+            # 429 (rate limit) is temporary: wait and retry. Other 4xx (billing, auth, bad request)
+            # are raised at once: retrying cannot help and could hide an account problem.
+            if getattr(e, "http_status", None) != 429 or i == attempts - 1:
+                raise
+            time.sleep(5 * (i + 1))
         except (db.BentoError, requests.exceptions.RequestException,
                 ConnectionError, TimeoutError) as e:
             if i == attempts - 1:
