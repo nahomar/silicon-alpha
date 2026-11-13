@@ -152,3 +152,41 @@ orders, how long to wait, when to use SPX vs XSP."
   - **SPX roughly doubles the per-trade edge (+$130 vs +$72) and is cash-settled; it needs about
     $1.4k worst-case risk per contract.** When the risk budget per trade reaches about $1.5k,
     trade SPX.
+
+## N1 clarification (2026-11-12 21:30 PT, before running; odte/research/noise_hedged.py)
+- Decisions: the locked model's 732 SPX decision times in the 61 sessions of data B (every half hour
+  10:00-15:30), each scored for **all four menu shapes** (fly, condor, put spread, call spread, the
+  research legs of zoo.legs_for), entry at mid plus fees, held to the official close, per $1k
+  worst-case risk.
+- Hedge: each minute from entry to 15:59, hold minus the structure's Black-76 delta in the parity
+  forward (each leg's own implied vol from its mid, carried forward when a leg has no quote), last
+  interval to the official close. Mids are the 1-minute NBBO snapshots (cbbo-1m, the same quotes as
+  the labels) rather than 1-second data sampled at each minute: same prices to within a second, and
+  the same code then runs on the whole history as a secondary check.
+- **Primary noise ratio** = std(unhedged) / std(hedged) over all decision x shape rows. The
+  pre-registered rule applies: >= 3x -> hedged P&L becomes a secondary metric in every later
+  comparison.
+- **Selection skill** = mean(picked) - mean(not picked) over decision x shape rows (picked = the
+  shape the locked model chose), unhedged and hedged, with 90% day-bootstrap CIs; the CI widths are
+  the practical noise comparison.
+
+## N1 result (2026-11-12): rule met, hedged P&L becomes a secondary metric (reports/execution/n1_hedged.json)
+- 2,928 rows (732 decision times x 4 shapes, 61 sessions). Per $1k worst-case risk, at mid + fees.
+- **Noise:** std unhedged $418 vs minute-hedged $122, **ratio 3.42** (fly 3.39, condor 3.14,
+  put spread 3.95, call spread 3.38). Rule (>= 3) met.
+- **The locked model's selection skill** (picked shape minus the rest):
+
+  | | Estimate | 90% CI | CI width |
+  |---|---|---|---|
+  | Unhedged | +$77.7 | [+7.7, +150.0] | 142 |
+  | **Hedged** | **+$16.5** | **[+2.0, +31.2]** | 29 |
+  | Removed part (where the index went) | +$61.2 | [−2.3, +128.5] | 131 |
+
+- **Read-out:**
+  - The model picks options that were genuinely overpriced against the movement that followed:
+    the hedged skill is positive with a CI above 0, so the edge is not only lucky direction.
+  - **Hedging does not speed up verdicts on this model.** The CI is 4.9x narrower, but the measured
+    skill is 4.7x smaller too, so the signal-to-noise is about the same (z ~1.9 both ways).
+    Most of the unhedged skill sits in the removed part, which is itself too noisy to call.
+  - Use: report hedged P&L beside every comparison. It is the faster yardstick for anything whose
+    edge is in option pricing (vol selling, execution), not for direction.
