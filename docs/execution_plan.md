@@ -122,3 +122,33 @@ orders, how long to wait, when to use SPX vs XSP."
   - the same fees model for all three (a caveat: SPX exchange fees are higher, so this flatters SPX).
 - Read-out only (no switch rule yet). If SPY is clearly cheaper, a pre-registered live comparison
   follows, including how to close before 16:00 to avoid share delivery.
+
+## E1 + E4 results (2026-11-12; reports/execution/e1_costs.*, e4_spy_itm.parquet)
+- **Cost of the bot's fly** per $1k worst-case risk (medians, 2024-11 .. 2026-11, every half-hour):
+
+  | | Half-gap | Touch | Worst case per contract |
+  |---|---|---|---|
+  | SPX | $7.69 | $15.38 | $1,425 |
+  | XSP | $19.87 | $39.74 | $165 |
+  | SPY | $6.17 | $12.35 | $177 |
+
+  - XSP is the dearest at every hour; costs rise into the close (XSP $15.8 at 10:30 →
+    $31.4 at 15:30).
+  - Costs fell each year (XSP $29.9 → $23.4 → $15.5 for 2024 / 25 / 26).
+- **The locked model's fly picks priced natively** (1,861 decisions, 262 days, paired, $ per $1k):
+
+  | | Half-gap | Touch |
+  |---|---|---|
+  | SPX | **+130.1** [109, 151] | +122.3 |
+  | XSP | **+72.2** [52, 93] | +48.2 [28, 68] |
+  | SPY held to the close | +137.5 | +130.2 (share delivery: not safe for this account) |
+  | SPY, all legs closed at 15:55 / 15:58 / 15:59 | +6.9 / +10.5 / +14.9 | −16.4 / −8.8 / −4.5 |
+  | **SPY, only ITM legs closed at 15:59 (1 leg in 93%)** | **+73.1** [54, 91] | +56.1 [38, 74] |
+  | SPY-ITM − XSP (paired) | +0.9 [−10.3, +11.9] | +7.9 [−3.4, +19.1] |
+
+- **Read-out:**
+  - SPY is no better than XSP once share delivery is handled, and it adds last-minute
+    execution and pin risk. **Stay on XSP.**
+  - **SPX roughly doubles the per-trade edge (+$130 vs +$72) and is cash-settled; it needs about
+    $1.4k worst-case risk per contract.** When the risk budget per trade reaches about $1.5k,
+    trade SPX.
