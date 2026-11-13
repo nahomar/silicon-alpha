@@ -76,3 +76,11 @@ orders, how long to wait, when to use SPX vs XSP."
   - Fractional Kelly with parameter uncertainty and a 1-day CVaR(95%) cap, on the effective
     number of independent bets per day, estimated from the correlation of same-day decisions
     across times and indexes.
+- **Clarification before running E2 (2026-11-12):**
+  - E2 uses the locked model's SPX decisions where it picked the **fly**, the only structure the
+    live bot orders. Each is simulated on SPX and on XSP's own fly (the bot's
+    `fly.fly_from_quotes`, wings ≥ 1.5 × straddle).
+  - Limits are not rounded to ticks.
+  - Fees are the shadow book's 4 × $1.20.
+  - The decision second is the half-hour mark. Quotes are the last 1-second NBBO at or before
+    each second.
