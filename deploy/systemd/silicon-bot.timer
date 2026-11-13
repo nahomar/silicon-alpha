@@ -1,0 +1,10 @@
+[Unit]
+Description=silicon-alpha timer: 06:00 PT / 09:00 ET on weekdays (same as the Mac)
+
+[Timer]
+OnCalendar=Mon..Fri 09:00 America/New_York
+Persistent=false
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

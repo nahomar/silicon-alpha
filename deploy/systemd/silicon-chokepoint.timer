@@ -1,0 +1,10 @@
+[Unit]
+Description=silicon-alpha timer: every 2 hours
+
+[Timer]
+OnCalendar=*-*-* 00/2:05:00
+Persistent=false
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
