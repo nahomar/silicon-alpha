@@ -159,6 +159,12 @@ def live() -> int:
             n["batches"] += 1
             n["events"] += c.get("events", 0)
             n["gkg"] += c.get("gkg", 0)
+    # GDELT sometimes publishes a batch's GKG late (or never): retry any missing in the last 2 hours
+    for s in stamps(pd.Timestamp(latest) - pd.Timedelta(hours=2), pd.Timestamp(latest)):
+        gk_f = OUT / "gkg" / f"{s[:4]}-{s[4:6]}-{s[6:8]}" / f"{s[8:]}.parquet"
+        ev_f = OUT / "events" / f"{s[:4]}-{s[4:6]}-{s[6:8]}" / f"{s[8:]}.parquet"
+        if ev_f.exists() and not gk_f.exists():
+            n["gkg"] += batch(s, gkg=True).get("gkg", 0)
     OUT.mkdir(parents=True, exist_ok=True)
     state.write_text(json.dumps({"last": str(pd.Timestamp(latest)), "updated": str(pd.Timestamp.utcnow())}))
     print(f"{pd.Timestamp.utcnow():%Y-%m-%d %H:%M} live: {n['batches']} batches, {n['events']} African events, "
