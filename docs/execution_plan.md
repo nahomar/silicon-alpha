@@ -84,3 +84,29 @@ orders, how long to wait, when to use SPX vs XSP."
   - Fees are the shadow book's 4 × $1.20.
   - The decision second is the half-hour mark. Quotes are the last 1-second NBBO at or before
     each second.
+
+## E2 result (2026-11-12): SWITCH (reports/execution/e2.json)
+- **Primary** = the locked model's SPX fly decisions with 1-second NBBO, 2026-08-17 .. 2026-11-10:
+  145 decisions / 23 days on XSP, 141 on SPX. Per $1k risk per decision, unfilled = $0.
+  - **XSP:**
+    - MID300_cross (mid for up to 5 min, then take the touch) **+$131.5**, vs LADDER
+      **+$62.1 [+18.5, +101.0]**;
+    - TOUCH +$125.1 (+$55.7 [+12.2, +93.0]);
+    - LADDER +$69.4, fill rate 57%;
+    - "skip" variants fill 3-51% and are all worse.
+  - **SPX:** the same ordering. MID60_cross +$211, vs LADDER +$58.8 [−13.8, +121.1]
+    (CI includes 0).
+  - **Adverse selection, measured:** decisions LADDER filled were worth +$129 at mid; those it
+    missed were worth +$191. Easy fills are the worse trades, so missing trades costs more than
+    paying the gap.
+- **Secondary** (all 721 XSP decision times): the same sign, smaller and not significant
+  (MID300_cross +$17.3 [−12.0, +44.0]).
+- **Rule met** (best XSP policy ≥ $2 better than LADDER with CI lower > 0): **switch the paper
+  bot to MID300_cross**.
+  - The final step re-prices at the CURRENT touch, as simulated.
+  - Checked on live days via the journal (fills, seconds, share of gap paid).
+- **Caveats:**
+  - This window's edge was unusually high (+$156 per $1k at mid vs about +$47 in development),
+    which favours never missing trades.
+  - The NBBO fill rule understates real fills inside the spread, which flatters "cross" vs
+    LADDER.
