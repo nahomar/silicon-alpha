@@ -23,6 +23,9 @@ from odte.research import library, zoo
 OUT = zoo.ROOT / "reports" / "execution"
 SHAPES = ("fly", "condor", "put_spread", "call_spread")
 PICKS = zoo.ROOT / "reports" / "round2" / "b0_spx_picks_1s_window.parquet"
+# a structure quoted with < $10 of worst-case risk per 1x is a broken quote (2022-06-02 10:30: a call
+# spread "worth" $2.40 of risk turned a normal hedge into +$166k per $1k); skip it
+MIN_RISK = 10.0
 HHMM = [f"{h:02d}:{m:02d}" for h in range(10, 16) for m in (0, 30)]
 
 
@@ -94,7 +97,7 @@ def score_day(day: pd.Timestamp, settle: float, hhmms=HHMM) -> list[dict]:
             n = sum(abs(q) for _, _, q in legs)
             lo, bounded = zoo.worst_payoff(legs, F0)
             risk = -((-V) * 100 - n * zoo.FEE + lo * 100)
-            if not (bounded and risk > 0):
+            if not (bounded and risk >= MIN_RISK):
                 continue
             pnl = (-V + zoo.payoff(legs, settle)) * 100 - n * zoo.FEE
             pos_delta = np.zeros(len(win))

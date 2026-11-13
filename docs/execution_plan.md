@@ -190,3 +190,19 @@ orders, how long to wait, when to use SPX vs XSP."
     Most of the unhedged skill sits in the removed part, which is itself too noisy to call.
   - Use: report hedged P&L beside every comparison. It is the faster yardstick for anything whose
     edge is in option pricing (vol selling, execution), not for direction.
+- **Secondary, whole development history** (2016 .. 2026-11-06, 2,088 days, 94,637 rows;
+  reports/execution/n1_hedged_all.json): noise ratio **3.26**, and 2.6-4.0 in every year.
+  - One broken quote was excluded by a guard added after it was seen: 2022-06-02 10:30, a call spread
+    quoted with $2.40 of risk, which alone pulled the ratio to 0.81. Rows with < $10 risk are now
+    skipped (MIN_RISK). The primary 61-day result has no such rows (smallest risk $365) and is
+    unchanged.
+- **Observation, not a claim (exploratory, development data):** over history, the minute-hedged
+  trades earned more than the same trades unhedged: +$28.3 vs +$5.3 per $1k at mid (difference
+  −$23.0, t −4.5 over days; fly −$35.8, condor −$27.6, call spread −$18.3, put spread −$10.0).
+  - This fits intraday trending: short-gamma positions lose on their delta when moves continue.
+  - **It has faded:** −$72 in 2018, −$40 in 2021-22, −$23 in 2024, **−$2.7 in 2025 and 2026**. In
+    the 61-day window it reversed (unhedged +$40 vs hedged +$16).
+  - Hedge costs are not included, and at this account's size one MES future ($5 per point) is
+    larger than the whole delta of an XSP fly, so minute hedging is not possible yet.
+  - Candidate for a pre-registered test (H1: hedged in bands with MES/ES, costs included, last 2
+    years as the test) once the account trades SPX. Not pursued now.
