@@ -36,6 +36,18 @@ JOBS = {
 LOG = ROOT / "data" / "odte_1s" / "spend_log.jsonl"
 
 
+def spent_so_far(prefix: str) -> float:
+    """Dollars already spent on parts whose name starts with `prefix` (resumed runs count them)."""
+    if not LOG.exists():
+        return 0.0
+    tot = 0.0
+    for line in LOG.read_text().splitlines():
+        r = json.loads(line)
+        if r["part"] == prefix or (prefix == "M" and r["part"].startswith("M_")):
+            tot += r["usd"]
+    return tot
+
+
 def sessions(a, b) -> list:
     st = pd.read_csv(ROOT / "data" / "odte_0dte" / "settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
     cal = pd.DatetimeIndex(pd.read_parquet(ROOT / "data" / "calendar" / "sessions.parquet")["session"])
@@ -65,7 +77,10 @@ def run(name: str, dry: bool = False) -> int:
         costs = dict(ex.map(price, todo))
     todo = [(d, c) for d, c in todo if costs[d] > 0]
     total = sum(costs[d] for d, _ in todo)
-    print(f"{name}: {len(todo)} sessions to fetch, estimated ${total:.2f} (cap ${cap:.3f})", flush=True)
+    prev = spent_so_far(name)
+    cap = cap - prev                                  # the approval covers the whole part, resumed or not
+    print(f"{name}: {len(todo)} sessions to fetch, estimated ${total:.2f}; already spent ${prev:.2f}; "
+          f"remaining cap ${cap:.3f}", flush=True)
     if total > cap:
         print("ABORT: estimate exceeds the cap; nothing downloaded.")
         return 2
@@ -142,8 +157,11 @@ def run_multi(dry: bool = False, workers: int = 4) -> int:
     todo = [(j, c) for j, c in zip(jobs, costs) if c > 0]
     total = sum(c for _, c in todo)
     by = pd.Series({r: sum(c for (j, c) in todo if j[0] == r) for r in MULTI}).round(3).to_dict()
-    print(f"M: {len(todo)} market-sessions to fetch, estimated ${total:.2f} (cap ${MULTI_CAP:.2f}); by market {by}", flush=True)
-    if total > MULTI_CAP:
+    prev = spent_so_far("M")
+    cap = MULTI_CAP - prev
+    print(f"M: {len(todo)} market-sessions to fetch, estimated ${total:.2f}; already spent ${prev:.2f}; remaining cap "
+          f"${cap:.2f}; by market {by}", flush=True)
+    if total > cap:
         print("ABORT: estimate exceeds the cap; nothing downloaded.")
         return 2
     if dry:
@@ -153,7 +171,7 @@ def run_multi(dry: bool = False, workers: int = 4) -> int:
     def fetch(item):
         (r, d, syms), cost = item
         with lock:
-            if spent[0] + cost > MULTI_CAP + 1e-9:
+            if spent[0] + cost > cap + 1e-9:
                 return
             spent[0] += cost
         s, e = session_window(d)
