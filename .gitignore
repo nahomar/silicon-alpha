@@ -102,3 +102,6 @@ data/supply/aci/
 
 # CHOKEPOINT stage 2 raw stores (large, regenerable)
 data/africa/
+
+# NASA POWER weather vintages (public data, ~10 MB; synced to the server by deploy/sync_data.sh)
+data/supply/nasa_power.parquet

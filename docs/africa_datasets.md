@@ -7,7 +7,8 @@ pre-registered lag probe passes** for a commodity.
 | Dataset | Coverage | Mode | Where |
 |---|---|---|---|
 | GDELT 2.0 events | 54 countries + W. Sahara, every 15 min, 100+ languages | backfill 2015-02-19 →, one file per day | data/africa/gdelt/events_daily/ |
-| GDELT 2.0 events + resource/disruption GKG | same | live catch-up (`chokepoint.data.gdelt live`); 15-min job in infra/live/com.siliconalpha.africa.gdelt.plist, **to be installed by the owner** | data/africa/gdelt/{events,gkg}/ |
+| GDELT 2.0 events + resource/disruption GKG | same | live catch-up (`chokepoint.data.gdelt live`); 15-min job in infra/live/com.siliconalpha.africa.gdelt.plist (installed 2026-11-12; moves to the server timer silicon-gdelt) | data/africa/gdelt/{events,gkg}/ |
+| NASA POWER daily weather (rain, max/min temperature, max wind) | 53 producing sites: cocoa belt, coffee/tea, Copperbelt, Zambezi/Kariba, GERD, Akosombo, maize belt, mines (PGM, manganese, bauxite, iron, uranium, gold, lithium, graphite), oil fields, Suez/Bab el-Mandeb; 2015 → | backfill + daily poll inside the supply poll (`chokepoint.data.weather`), vintages kept. Replaces Open-Meteo (non-commercial terms); NASA data has no commercial restriction. Lags 2-4 days | data/supply/nasa_power.parquet (untracked) |
 
 ## Next: free, no account needed
 | Dataset | What | Why |
@@ -16,7 +17,6 @@ pre-registered lag probe passes** for a commodity.
 | USGS Mineral Commodity Summaries (world production by country) | every mineral × every producing country | the dependency map (chokepoint/countries.py) |
 | Energy Institute Statistical Review | oil and gas production by country | oil exposure (Libya, Nigeria, Angola, Algeria, Egypt) |
 | FAOSTAT | crop production by country (cocoa, coffee, cashew, tea, cotton, sugar) | agricultural chokepoints |
-| Open-Meteo archive + forecast | daily rain / temperature for producing regions (cocoa belt, Copperbelt, Kariba catchment, …) | slow physical signals. **Free tier is non-commercial: the owner should confirm use** |
 | Prices | US equities/ETFs (data/prices/xnas_daily.parquet: CCJ, URA, USO, XLE, AA, FCX, …); FRED daily Brent/WTI | the probes' price side |
 
 ## Need the owner (free registration; Claude cannot create accounts)
