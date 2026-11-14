@@ -16,7 +16,7 @@ for every series here, including the 24/7 ones. Yahoo's BTC-USD bar for
 d-1 closes at 00:00 UTC on d, which is 19:00-20:00 ET on d-1, before d's
 open.
 
-Source: Yahoo via yfinance (free). Cached at data/context/daily.parquet.
+Source: Yahoo via yfinance (free); Cboe's own files for the Cboe indices when Yahoo fails. Cached at data/context/daily.parquet.
 
 Usage:
   python3 -m odte.data.context fetch --start 2025-09-01 --end 2026-11-30
@@ -46,11 +46,43 @@ CTX_FEATURES = [
 ]
 
 
+# Cboe's own free daily files: the backup when Yahoo rate-limits us (HTTP 429 -> "no data").
+CBOE = {"vix1d": "VIX1D", "vix9d": "VIX9D", "vix": "VIX", "vix3m": "VIX3M", "vvix": "VVIX", "skew": "SKEW"}
+CBOE_URL = "https://cdn.cboe.com/api/global/us_indices/daily_prices/{}_History.csv"
+
+
+def cboe(name: str, start, end) -> pd.Series:
+    """Daily close of a Cboe index from Cboe's history file (last column = close)."""
+    import io
+
+    import requests
+    r = requests.get(CBOE_URL.format(CBOE[name]), timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    r.raise_for_status()
+    d = pd.read_csv(io.StringIO(r.text))
+    s = pd.Series(pd.to_numeric(d.iloc[:, -1], errors="coerce").to_numpy(),
+                  index=pd.to_datetime(d.iloc[:, 0], format="%m/%d/%Y")).dropna()
+    s = s[(s.index >= pd.Timestamp(start)) & (s.index < pd.Timestamp(end))]
+    return s[~s.index.duplicated(keep="last")].sort_index()
+
+
 def fetch(start, end, save: bool = True) -> pd.DataFrame:
     import yfinance as yf
     cols = {}
     for name, tk in TICKERS.items():
-        h = yf.Ticker(tk).history(start=start, end=end, auto_adjust=False)
+        try:
+            h = yf.Ticker(tk).history(start=start, end=end, auto_adjust=False)
+        except Exception as e:  # noqa: BLE001 -- Yahoo throttling must not kill the run
+            print(f"  {tk}: {type(e).__name__}")
+            h = pd.DataFrame()
+        if h.empty and name in CBOE:
+            try:
+                s = cboe(name, start, end)
+                if len(s):
+                    print(f"  {tk}: from Cboe")
+                    cols[name] = s
+                    continue
+            except Exception as e:  # noqa: BLE001
+                print(f"  {tk}: Cboe backup failed ({type(e).__name__})")
         if h.empty:
             print(f"  {tk}: no data")
             continue
