@@ -95,3 +95,21 @@ Code: odte/research/partner_g.py -> reports/partners/.
   weekend vs weekday nights; worst night and max drawdown per MES.
 
 Code: odte/research/partner_o.py -> reports/partners/o.json.
+
+### Result (2026-11-15): LEAD, not PASS (reports/partners/o.json)
+- **O1 FAIL (t too low).** 2,624 nights. After 0.75-point costs: +0.60 points a night (+$759 a year per
+  MES), t 1.12; positive in both eras (2016-21 +0.77, 2022-26 +0.40) but well short of t 2.
+  - Before costs +1.35 points, t 2.52: the overnight premium is there; MES costs eat over half of it.
+  - At 1.5-point costs it loses (−0.15). By year: losing in 2016, 2022 (−2.73 a night) and 2023.
+  - The day leg (09:30 -> 16:00) earns nothing (−0.10 points, t −0.14), as the papers say.
+  - Worst night −218 points (−$1,090 per MES); max drawdown −$5.3k per MES.
+- **O2 PASS.** Correlation with B0 0.04. Combined Sharpe 0.59 -> 0.76; P(losing year) 25.2% -> 19.95%.
+  It earned in 2020 and 2021, the two years B0 lost (scaled: +41 and +65 a day vs B0 −35 and −72), but
+  lost in 2022 (−51) when B0 was flat.
+  - Size check: equal volatility means ~3.4 MES per B0 unit (~$115k of S&P overnight per $1k of B0 risk
+    per trade). That is a large overnight position for a small account.
+- **Verdict: LEAD.** Both eras positive, t >= 1, O2 passes. Per the rule: forward evidence only, no claim
+  of an edge. Forward nights can be scored from public daily open/close data, so no bot change is needed.
+- Not a pass, and not changed after the fact: a cheaper way to hold it (SPY bought in the closing auction,
+  sold in the opening auction) would cost far less than MES, but that is a new test to fix in writing
+  before it is run, not a reason to re-score this one.
