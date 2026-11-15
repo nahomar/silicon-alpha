@@ -63,3 +63,35 @@ Code: odte/research/partner_g.py -> reports/partners/.
 - Reported only: every symbol, every time and the rich-only filter are strongly negative
   (USO −$903/day, EEM −$1,226, XLF −$580; 10:00 −$439, 12:00 −$305, 14:00 −$369; rich-only −$840).
 - **Verdict:** not added. Same-day ETF options outside SPY/QQQ/IWM are not a place to sell premium.
+
+## O: hold the S&P overnight (fixed 2026-11-15, before computing)
+
+### Why
+- B0 is an intraday bet that ends at 16:00. The night (16:00 -> 09:30) is a different window, so its
+  results should not line up with B0's.
+- Published evidence that most of the stock market's long-run gain arrives overnight while the trading
+  day earns little: Cooper, Cliff & Gulen (2008); Lou, Polk & Skouras (2019). Honest label: this is
+  mostly a risk premium (being long stocks while markets are closed), not a pricing mistake.
+
+### The rule (no fitted parameters)
+- Every session D: buy 1 MES at the close of the 15:59 ET bar, sell at the open of the 09:30 bar of the
+  next session (weekends included). ES minute data (data/futures/es_1m.parquet), same contract at both
+  ends (nights spanning a contract roll are skipped).
+- Cost 0.75 index points per round trip (as test M). P&L in points; $5 per point per MES.
+
+### Pass rules
+- **O1 (stands on its own):** mean net P&L per night > 0 in both 2016-2021 and 2022-2026 (by the date the
+  night ends), AND pooled t-stat >= 2.0.
+- **O2 (helps B0):** B0's walk-forward days 2019-06-26 .. 2026-11-06. Each night's P&L is booked on the
+  first B0 day on or after the morning it ends (pre-2022 Tue/Thu nights roll forward; nothing is
+  dropped). Correlation <= 0.10, AND the combination (equal daily volatility, weights from 2019-06-26 ..
+  2021-12-31 only) has a higher Sharpe AND a lower P(losing year) than B0 alone (same bootstrap and
+  seed as before).
+- **Verdict:** PASS (O1 and O2) -> paper contender (needs MES quotes: CME data, owner decides). LEAD
+  (both eras > 0, t >= 1.0, O2) -> shadow only. FAIL otherwise. No tuning.
+
+### Reported only
+- The day leg (long 09:30 open -> 15:59 close) for comparison; by year; costs 0 and 1.5 points;
+  weekend vs weekday nights; worst night and max drawdown per MES.
+
+Code: odte/research/partner_o.py -> reports/partners/o.json.
