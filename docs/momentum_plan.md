@@ -47,3 +47,20 @@ Owner: "we need another idea on top of it that can help this strategy so we can 
 - By year; hit rate; average win and loss.
 
 Code: odte/research/gamma_momentum.py -> reports/momentum/.
+
+## Result (2026-11-15): FAIL (reports/momentum/momentum.json)
+- **M1 FAIL.** 707 trades (2,066 SPX 0DTE days considered; short-gamma days with no contract roll).
+  - After 0.75-point costs: −1.13 points per trade (−$5.66 per MES), t −1.91.
+  - 2016-21: +0.05 (t 0.05, 211 trades). 2022-26: −1.63 (t −2.34, 496 trades).
+  - Before costs: −0.38 points (t −0.64). There is no momentum into the close to pay for the costs.
+  - By year: positive only in 2018, 2020 and 2021; negative every year 2022-26 (2024 −4.2 points).
+- **M2 FAIL.** Correlation with B0 −0.06 overall, −0.28 on the 141 days both traded (it does hedge B0 on
+  those days), but it loses money: the combination's Sharpe falls from 0.59 to −0.02 and P(losing
+  year) rises from 25% to 51%.
+- Reported only:
+  - Every variant is negative in 2022-26: no gamma filter −1.20 (t −3.18), gex >= 0 −0.86, Gao first-half-hour
+    signal −1.14, entry one minute late −1.50, entry 15:45 −1.50, entry 15:00 −0.18.
+  - The published close momentum has not survived into the 0DTE era in our data; if anything the last
+    30 minutes lean slightly against the day's move.
+- Post-hoc observation, not a finding: momentum was mildly positive in 2019-21, the years B0 lost.
+- **Verdict:** not added. No tuning.
