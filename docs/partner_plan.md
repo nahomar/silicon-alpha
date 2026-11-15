@@ -55,10 +55,11 @@ Code: odte/research/partner_g.py -> reports/partners/.
   (3-6 trades a day, $1k risk each; t −14.6); both halves negative (−$1,248, −$915).
   - Per trade at the touch: GLD −$257, TLT −$283 per $1k. At half-gap: GLD −$152, TLT −$224.
   - Even held to the close ignoring share delivery, at half-gap: GLD −$42, TLT −$144 per $1k.
-  - Why: there is no premium to harvest before costs, and the costs are large relative to risk. A TLT
+  - Why: whatever premium exists before costs is small (GLD held to the close at half-gap is only −$42,
+    of which fees alone are ~$33), and the costs are large relative to risk. A TLT
     fly risks ~$35 per contract, so $1.20 per contract on 4 legs alone is ~14% of the risk; GLD's
     relative spreads are several times SPX's. Closing in-the-money legs at 15:59 adds more.
-- **G2 FAIL.** Correlation with B0 +0.04 (low, as hoped), but combined Sharpe 1.22 -> −5.5.
+- **G2 FAIL.** B0 over the same days: Sharpe 1.22. Correlation with B0 +0.04 (low, as hoped), but the combination's Sharpe falls to −5.5.
 - Reported only: every symbol, every time and the rich-only filter are strongly negative
   (USO −$903/day, EEM −$1,226, XLF −$580; 10:00 −$439, 12:00 −$305, 14:00 −$369; rich-only −$840).
 - **Verdict:** not added. Same-day ETF options outside SPY/QQQ/IWM are not a place to sell premium.
