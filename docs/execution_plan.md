@@ -136,6 +136,9 @@ orders, how long to wait, when to use SPX vs XSP."
     $31.4 at 15:30).
   - Costs fell each year (XSP $29.9 → $23.4 → $15.5 for 2024 / 25 / 26).
 - **The locked model's fly picks priced natively** (1,861 decisions, 262 days, paired, $ per $1k):
+  - **Correction 2026-11-14:** the picks came from the final locked model (trained through
+    2026-09-07), so they are in-sample before the exam; the instrument comparison stands, the absolute
+    levels are inflated. Walk-forward levels: docs/stress_plan.md.
 
   | | Half-gap | Touch |
   |---|---|---|

@@ -44,3 +44,35 @@ drawdowns, walk-forward, parameter sensitivity.
 - **Overall:** all four PASS -> "robust on history"; the strategy goes to paper as the order
   strategy (owner's yes needed). Any FAIL is reported as it is, and names what to fix.
   These are all on development data; the forward paper test remains the judge.
+
+## Result (2026-11-14): FAIL on 3 of 4 (reports/stress/stress_spx.json)
+- **Centre** (walk-forward picks from 2019-06-26; 1,210 trades on 644 of 1,588 SPX sessions;
+  touch costs): **+$25.3/day per $1k-per-trade risk** (+$6.4k/yr), Sharpe **0.59**, max drawdown
+  −$18.8k.
+- **T1 walk-forward: FAIL.**
+  - Positive in 5 of 7 full years, but Sharpe −0.95 in 2018-21 (rule > 0.5); 1.02 in 2022-26.
+  - By year, $/day per $1k: 2019 +37.7 (half year), **2020 −35.1, 2021 −71.7**, 2022 +8.0,
+    2023 +61.2, 2024 +40.3, 2025 +51.0, 2026 +66.2. Exam window +72.5.
+  - It works only since SPX got daily expiries (2022); before that it lost. Regime-dependent.
+  - Bug fixed before reading the verdict: the first run counted only years with >= 200 sessions
+    (dropping 2020-21, which have ~160 Mon/Wed/Fri sessions). The verdict is FAIL either way.
+- **T2 costs and fills: FAIL.**
+  - Costs are not the problem: +$29.0 half, +$25.3 touch, +$21.7 at 1.5x, +$18.0 at 2x.
+  - Missing 20% of the winning trades: −$15.7/day (median of 1,000 draws). The edge needs nearly
+    every winner. The bot's order rule (cross after 5 minutes) is built not to miss trades, so
+    this is less of a live risk than the number suggests, but the rule is as written.
+- **T3 Monte Carlo: FAIL.**
+  - P(losing year) **25%** (rule <= 20%). One-year P&L: median +$6.6k, 5th percentile −$10.1k.
+  - Max drawdown: actual −$18.8k; reshuffled days median −$19.2k, 95th −$30.7k, 99th −$36.8k;
+    one-year 99th −$23.2k (all per $1k-per-trade sizing; one SPX contract is about 1.4x).
+- **T4 sensitivity: PASS (plateau).**
+  - Every one-step neighbour is positive with Sharpe >= 50% of the centre's 0.59.
+  - Several neighbours are better (alpha 3000-10000, threshold +10-20, more trades per day:
+    1/day 0.34, 2/day 0.59, 3/day 0.76, all 1.20). Choosing one of them now would be fitting to
+    this table; any change needs its own pre-registered test on unseen days.
+- **Correction to E1's absolute numbers:** E1 took its picks from the final locked model, which was
+  trained on data through 2026-09-07, so for 2024-11 .. 2026-09 the picks were in-sample. Its SPX vs
+  XSP vs SPY cost comparison (same picks on all three, paired) stands; its absolute P&L (SPX
+  +$130 per $1k per trade, and the +$32.9k/yr per contract quoted to the owner on 2026-11-14) is
+  inflated. The walk-forward figure for 2022-26 here is about +$45.6/day per $1k-per-trade.
+- **Verdict:** not robust enough for real money. Paper trading continues as the forward judge.
