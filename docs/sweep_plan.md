@@ -476,3 +476,6 @@ prices and universe benchmark as sweep 3 E, NYSE days, moves over 50% removed as
   FAIL: T1 after 10-year auctions (t 1.66, second half −0.39), T3 after 30-year (0.66), T5 weak/strong
   auctions (−0.28), J1 January small-cap effect (t 1.87, second half 0.34: faded), J2 turn of the year
   (1.42), I1 S&P additions (131, t −0.22), I2 deletions (93, t 0.73).
+- **Sweep 5 data notes (after fetching, before scoring):** FINRA files exist from 2018-08-01 (June-July 2018
+  return 403), 2,031 days. Coinbase: 496 USD products (listed and delisted), 520,279 daily rows. K5 rebalances
+  weekly on Sundays like K1-K3. K4 counts only the basket's position flips as turnover.
