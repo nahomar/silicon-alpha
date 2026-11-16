@@ -113,3 +113,48 @@ Code: odte/research/partner_o.py -> reports/partners/o.json.
 - Not a pass, and not changed after the fact: a cheaper way to hold it (SPY bought in the closing auction,
   sold in the opening auction) would cost far less than MES, but that is a new test to fix in writing
   before it is run, not a reason to re-score this one.
+
+## T: the turn of the month (fixed 2026-11-15, before computing)
+
+### Why
+- Ariel (1987), Lakonishok & Smidt (1988), McConnell & Xu (2008, RFS): a large share of the stock
+  market's monthly gain has arrived from the last trading day of a month through the first three
+  trading days of the next (salary and pension money coming in, month-end rebalancing).
+- B0 is an intraday bet every day; T is a few-days-long position once a month, so their results
+  should not line up.
+- Evidence against, recorded up front: later studies find the effect weaker after it was published;
+  and T is long the S&P over the same nights as partner O, so the two overlap.
+
+### The rule (no fitted parameters)
+- Trading days: the NYSE calendar (weekdays minus NYSE holidays and the 2018-12-05 and 2025-01-09
+  closures). Checked against the ES data before writing this: every full or half ES session is an
+  NYSE day, and the only NYSE days missing from the ES file are the quarterly expiry Fridays
+  (mid-month, never inside a window).
+- Day −1 = the last trading day of a month; days +1, +2, +3 = the first three of the next month.
+- Buy 1 MES at the close of day −2 (the last regular-hours bar before 16:00 ET: 15:59, or 13:14 on half
+  days) and sell at the close of day +3. Held over 4 trading days and the 4 nights before them. Same
+  contract at both ends (ES rolls mid-month, so none should be skipped); a missing close skips the window.
+- Cost 0.75 index points per round trip (as M and O). $5 per point per MES.
+- Windows that end 2016-01-01 .. 2026-11-06 (about 130).
+
+### Pass rules
+- **T1 (stands on its own):** mean net P&L per window > 0 in both 2016-2021 and 2022-2026 (by the date
+  the window ends), AND t-stat >= 2.0.
+- **T2 (helps B0):** each held day is marked close to close (cost booked on the exit day) and booked on
+  the first B0 day on or after it, as for O. B0's walk-forward days 2019-06-26 .. 2026-11-06.
+  Correlation <= 0.10, AND the combination (equal daily volatility, weights from 2019-06-26 ..
+  2021-12-31 only) has a higher Sharpe AND a lower P(losing year) than B0 alone (same bootstrap and seed).
+- **Verdict:** PASS (T1 and T2) -> paper contender (MES quotes needed: owner decides). LEAD (both eras > 0,
+  t >= 1.0, T2) -> shadow only. FAIL otherwise. No tuning.
+- Power, stated up front: if these days earned no more than ordinary days, being long 4 days a month
+  gives t of about 0.9 over these 10.8 years; t >= 2 needs them to earn about 2.5 times an ordinary day.
+  If the whole month's gain still arrived in these 4 days, t would be about 5.
+
+### Reported only
+- **Is it the calendar or just being long?** Mean daily close-to-close return on window days vs all other
+  trading days, Welch t-stat. Without a real difference T is only part-time buy-and-hold.
+- Each day (−1, +1, +2, +3) separately; the nights vs the 09:30-16:00 days inside the window.
+- Costs 0 and 1.5 points; by year; worst window; max drawdown per MES.
+- Correlation with O's daily series; B0 + O + T together (same equal-volatility method).
+
+Code: odte/research/partner_t.py -> reports/partners/t.json.
