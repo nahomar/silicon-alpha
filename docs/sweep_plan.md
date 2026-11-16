@@ -366,3 +366,28 @@ by 20-day dollar volume)
   repeats). A company with several tickers uses its most traded. A held stock with no price that day counts
   as 0. Costs: each leg's 20 bps round trip is spread evenly over its holding days. Scored over days with a
   position (E1: days with both a long and a short). E2: each release forecasts the next 364 days later.
+
+## Sweep 4: what happens to a stock after each kind of SEC filing (fixed 2026-11-15, before extracting)
+Source: the EDGAR submissions files downloaded for sweep 3 (1,632 of the most traded US companies), every
+filing 2018-06..2026-08, prices and universe as sweep 3 E. Day 0 = the first trading day whose close comes
+after the acceptance time. Position: enter at the close of day 0, hold days 1-20, return minus the universe's
+equal-weight return, 20 bps per round trip spread over the holding days; calendar-time daily mean over active
+events. Two-sided: the better direction is scored with p = 2×P(T > |t|), costs always subtract. PASS: t ≥ 2.0
+in that direction, both halves of the window the same sign, AND BH q ≤ 0.10 across all sweep 4 ideas (with
+~30 ideas a lone t of 2 is expected by luck). LEAD: p < 0.05 and both halves agree. Days 1-5 and 1-60
+reported. Events of the same type for the same company within 30 days are dropped after the first.
+- Ownership: S1 SC 13D (new 5%+ stake with intent; activists), S2 SC 13D/A, S3 SC 13G (passive 5%), S4
+  DFAN14A (proxy fight material from dissidents), S5 SC TO-T (third-party tender offer). For S1-S3, finance
+  companies (SIC 6000-6799) are left out because they file these about other firms.
+- Insiders: S6 Form 144 (an insider's notice of a planned sale), S7 Form 3 (a new insider).
+- New shares: S8 424B4 (final prospectus, IPO or follow-on), S9 424B5 (shelf takedown), S10 S-3 or S-3ASR
+  (shelf registration), S11 S-8 (employee stock plan), S12 8-K 3.02 (unregistered equity sale).
+- Trouble: S13 NT 10-K or NT 10-Q (late filing notice), S14 8-K 4.02 (past results no longer reliable),
+  S15 8-K 4.01 (auditor change), S16 8-K 3.01 (delisting or listing-rule notice), S17 8-K 2.05 (restructuring
+  costs), S18 8-K 1.02 (material agreement ended), S19 8-K 1.03 (bankruptcy).
+- Other 8-K items: S20 1.01 (material agreement), S21 2.01 (acquisition or sale completed), S22 2.03 (new
+  debt), S23 5.02 (executive or director change), S24 5.03 (bylaw or charter change), S25 5.07 (shareholder
+  vote results), S26 7.01 (Reg FD disclosure), S27 8.01 (other events), S28 2.02 alone, days 1-20 (vs E1's
+  sorted version).
+- Not testable here: insider buys vs sells (needs each Form 4's contents, about 600k downloads, or SEC's
+  bulk insider data sets, a separate download the owner would OK).
