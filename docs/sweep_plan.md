@@ -212,3 +212,21 @@ Code: odte/research/sweep1.py -> reports/sweep1/ (one table, every idea, nothing
   auction days, triple-witching day, Reddit crowding (15 months of data).
 - **Verdict:** B7 earns a forward paper test (it needs only daily closes, so forward days can be scored
   without any bot change); the four LEADs are watched forward. No claim of an edge until forward days agree.
+
+## Forward check of B7 and the LEADs (fixed 2026-11-15, before any forward day exists)
+Tracking only: no bot change, nothing traded. Whether anything is ever traded is the owner's decision.
+- **Ideas:** B7, B9, B16, A1, with the exact sweep rules. E-claims-buy needs 0DTE option quotes at 10:00
+  on Thursdays; it is scored later from the bot's recorded quotes, not by this script.
+- **Forward days:** NYSE trading days from Mon 2026-11-16 on. 2026-11-09..13 (after the sweep's last day,
+  before this note) are left out: their closes were already on disk.
+- **Prices:** SPX index closes from data/context/daily.parquet (Yahoo; the bot refreshes it every morning).
+  A1 uses Yahoo's ^GSPC open and close. The backtest used ES futures, and the index stands in for MES. To
+  match the futures, a carry charge of SPX(prior close) × 2.5% × calendar days / 365 comes off each long
+  position-day (and is credited to a short one), about 0.5 points a day. Costs as in the sweep: 0.375 points
+  per unit of position change, so 0.75 per A1 Monday.
+- **Judging rule, per idea:** draw as many trading days as the forward period has, with replacement, from the
+  idea's backtest daily net P&L (all days, zero days included, 2016-01-04..2026-11-06), 10,000 times, seed
+  20261115. Forward total below the 5th percentile of those draws → BROKEN (dropped). Otherwise CONSISTENT.
+  CONSISTENT does not prove an edge: B7 holds about 22 days a year, so six months is about 11 held days and
+  can only catch an idea that has stopped working. A t-test against zero is reported, not judged.
+- **Reviews:** monthly, and a formal review on 2027-05-14. Any rule change after today is labeled post-hoc.
