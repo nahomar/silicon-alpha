@@ -229,7 +229,7 @@ def part_x() -> int:
 
 
 # ----------------------------------------------------------------------------------------------- E earnings
-def stock_panel(n_top: int = 1000):
+def stock_panel(n_top: int = 1000, max_move: float | None = None):
     from odte.research.sweep1 import SPLITS
     x = pd.read_parquet(ROOT / "data" / "prices" / "xnas_daily.parquet")
     x = x[(x["close"] > 0)].drop_duplicates(["date", "symbol"])
@@ -248,6 +248,8 @@ def stock_panel(n_top: int = 1000):
     for s in SPLITS:
         split |= big & ((ratio / s - 1).abs() < 0.03)
     ret = ret.mask(split).astype("float32")
+    if max_move is not None:                                     # post-hoc data-error filter (sweep 4b)
+        ret = ret.mask(ret.abs() > max_move)
     adv20 = (C * V).rolling(20, min_periods=15).mean()
     dates = C.index
     last = pd.Series(dates, index=dates).groupby([dates.year, dates.month]).max()

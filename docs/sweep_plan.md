@@ -431,3 +431,15 @@ Coinbase; long-short books are a test of the effect, not a tradeable book there.
   smaller firms, so the same 28 ideas are re-run once on a wider universe: price ≥ $5 and top 2,500 by
   20-day dollar volume (the SEC files cover about the 2,500 most traded names). Same rules, its own BH
   correction; labeled as a second look.
+- **Sweep 4b result, as fixed:** uninformative. Nearly every filing type showed the same "short, ~11 bps a
+  day, t ~1.2": the wider universe's equal-weight return is 17.9 bps a day against a median stock's 1.5,
+  pulled up by bad prices (149 one-day moves over +100%: reverse splits and bad prints the split filter
+  misses; the top-1,000 universe has 36). Only S14 was a LEAD (t 2.03).
+- **Post-hoc 1, daily moves over 50% removed as data errors:** top 1,000: all FAIL (sweep 4 unchanged). Top
+  2,500: LEADs S3 13G long (t 2.67), S7 Form 3 long (2.07), S22 new debt long (2.04), S14 restatement short
+  (2.04); every q ≥ 0.21. The routine earnings release (S28) also "drifted" over 60 days (t 4.28), a sign of
+  survivorship: SEC's ticker map lists only companies still trading today.
+- **Post-hoc 2, benchmark = the SEC-covered (surviving) companies only:** S3 (1.60), S7 (−1.19), S22
+  (−0.78) disappear, so they were survivorship. S14 remains a weak LEAD: after a company says past results
+  are no longer reliable (8-K Item 4.02), its stock lags by about 29 bps a day over the next 20 days
+  (t 2.29, ~6% in total), but only 77 events in 8 years, q 0.60, second half t 0.34. Not a strategy.

@@ -102,9 +102,12 @@ def day0_index(df: pd.DataFrame, dates: pd.DatetimeIndex) -> np.ndarray:
     return np.searchsorted(dates.values, base.values.astype("datetime64[ns]"))
 
 
-def main(n_top: int = 1000) -> int:
+def main(n_top: int = 1000, max_move: float | None = None, survivor_bench: bool = False) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    ret, uni = stock_panel(n_top)
+    ret, uni = stock_panel(n_top, max_move)
+    if survivor_bench:                                           # post-hoc: benchmark = SEC-covered (surviving) names only
+        covered = set(company_map().values())
+        uni = {k: v & covered for k, v in uni.items()}
     dates = ret.index
     ue = sorted(uni)
     mkt = pd.Series(np.nan, index=dates)
@@ -181,7 +184,7 @@ def main(n_top: int = 1000) -> int:
     for k, v in sc.items():
         v["verdict"] = ("PASS" if v["t"] >= 2.0 and v["halves_agree"] and v["q"] <= 0.10 else
                         "LEAD" if v["p"] < 0.05 and v["halves_agree"] else "FAIL")
-    (OUT / ("sweep4.json" if n_top == 1000 else f"sweep4b_top{n_top}.json")).write_text(json.dumps(res, indent=2, default=float))
+    (OUT / (("sweep4" if n_top == 1000 else f"sweep4b_top{n_top}") + ("" if max_move is None else f"_clean{max_move}") + ("_survivor" if survivor_bench else "") + ".json")).write_text(json.dumps(res, indent=2, default=float))
     print(f"{'idea':48} {'events':>6} {'dir':>5} {'bps/d':>6} {'t':>6} {'q':>5} {'h1 t':>5} {'h2 t':>5} {'t5':>5} {'t60':>5} verdict")
     for k, v in res.items():
         if "p" not in v:
@@ -193,4 +196,5 @@ def main(n_top: int = 1000) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(int(sys.argv[1]) if len(sys.argv) > 1 else 1000))
+    a = sys.argv[1:]
+    sys.exit(main(int(a[0]) if a else 1000, float(a[1]) if len(a) > 1 else None, "survivor" in a))
