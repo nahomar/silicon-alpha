@@ -443,3 +443,22 @@ Coinbase; long-short books are a test of the effect, not a tradeable book there.
   (−0.78) disappear, so they were survivorship. S14 remains a weak LEAD: after a company says past results
   are no longer reliable (8-K Item 4.02), its stock lags by about 29 bps a day over the next 20 days
   (t 2.29, ~6% in total), but only 77 events in 8 years, q 0.60, second half t 0.34. Not a strategy.
+
+## Sweep 6 (fixed 2026-11-15, before fetching): Treasury auctions, S&P 500 changes, the January effect
+Scoring as sweep 3 (PASS: t ≥ 2.0 and both halves positive; LEAD: p < 0.05 and both halves positive), two-
+sided where marked; BH q across sweep 6 reported.
+### T. Treasury auction cycle (auction dates and results: Treasury's Fiscal Data API "auctions_query";
+prices: Yahoo adjusted closes of IEF for 10-year notes and TLT for 30-year bonds, 2003-2026-10; 2 bps per side)
+- T1 after the auction: long from the auction-day close to the close 3 trading days later (10-year, IEF).
+- T2 before the auction: short from the close 5 trading days before to the close the day before (IEF).
+- T3, T4: T1, T2 for 30-year bond auctions with TLT.
+- T5 weak auctions (two-sided): bid-to-cover below the average of the same term's previous 6 auctions → short
+  IEF/TLT from the auction close for 3 days; strong → long. 10- and 30-year pooled.
+### I. S&P 500 changes (Wikipedia's "List of S&P 500 companies" changes table: effective dates and tickers;
+prices and universe benchmark as sweep 3 E, NYSE days, moves over 50% removed as data errors, 2018-06..2026-08)
+- I1 added stocks, two-sided: close of the effective date to 20 trading days later, minus the universe.
+- I2 deleted stocks (that still trade), two-sided, same window.
+### J. January effect (Yahoo ^RUT and ^GSPC price indices, 1988-2026)
+- J1: long ^RUT, short ^GSPC from the Dec 15 close (or the trading day before) to the Jan 31 close; one value
+  per year; 2 bps per side per leg.
+- J2: the same over the last 5 trading days of December plus the first 5 of January.
