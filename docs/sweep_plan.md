@@ -424,3 +424,10 @@ Coinbase; long-short books are a test of the effect, not a tradeable book there.
   shorts), E2 announcement premium 0.03 bps/day (t 0.01), E3 big-loser bounce +5.3 bps/day (t 0.96).
   Post-hoc E1 with the reaction measured over days −1..+1: t −0.68 (hold 60), −1.21 (20), −1.23 (5). The
   textbook drift after earnings surprises is not present in large US stocks in 2018-2026.
+- **Sweep 4 result:** all 27 scored ideas FAIL (S19 bankruptcy: 4 events, not scored); largest |t| 1.74
+  (S3 SC 13G, halves disagree); every q 0.99. In the 1,000 most traded US stocks, 2018-2026, no kind of
+  SEC filing is followed by a drift worth trading after 20 bps costs.
+- **Sweep 4b (fixed now, after sweep 4's null, before running):** the published filing effects sit mostly in
+  smaller firms, so the same 28 ideas are re-run once on a wider universe: price ≥ $5 and top 2,500 by
+  20-day dollar volume (the SEC files cover about the 2,500 most traded names). Same rules, its own BH
+  correction; labeled as a second look.

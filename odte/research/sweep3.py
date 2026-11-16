@@ -229,7 +229,7 @@ def part_x() -> int:
 
 
 # ----------------------------------------------------------------------------------------------- E earnings
-def stock_panel():
+def stock_panel(n_top: int = 1000):
     from odte.research.sweep1 import SPLITS
     x = pd.read_parquet(ROOT / "data" / "prices" / "xnas_daily.parquet")
     x = x[(x["close"] > 0)].drop_duplicates(["date", "symbol"])
@@ -254,7 +254,7 @@ def stock_panel():
     uni = {}
     for d in last:
         a = adv20.loc[d].where(C.loc[d] >= 5).dropna()
-        uni[d] = set(a.sort_values(ascending=False).index[:1000])
+        uni[d] = set(a.sort_values(ascending=False).index[:n_top])
     return ret, uni
 
 

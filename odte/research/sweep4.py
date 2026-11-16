@@ -102,9 +102,9 @@ def day0_index(df: pd.DataFrame, dates: pd.DatetimeIndex) -> np.ndarray:
     return np.searchsorted(dates.values, base.values.astype("datetime64[ns]"))
 
 
-def main() -> int:
+def main(n_top: int = 1000) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    ret, uni = stock_panel()
+    ret, uni = stock_panel(n_top)
     dates = ret.index
     ue = sorted(uni)
     mkt = pd.Series(np.nan, index=dates)
@@ -181,7 +181,7 @@ def main() -> int:
     for k, v in sc.items():
         v["verdict"] = ("PASS" if v["t"] >= 2.0 and v["halves_agree"] and v["q"] <= 0.10 else
                         "LEAD" if v["p"] < 0.05 and v["halves_agree"] else "FAIL")
-    (OUT / "sweep4.json").write_text(json.dumps(res, indent=2, default=float))
+    (OUT / ("sweep4.json" if n_top == 1000 else f"sweep4b_top{n_top}.json")).write_text(json.dumps(res, indent=2, default=float))
     print(f"{'idea':48} {'events':>6} {'dir':>5} {'bps/d':>6} {'t':>6} {'q':>5} {'h1 t':>5} {'h2 t':>5} {'t5':>5} {'t60':>5} verdict")
     for k, v in res.items():
         if "p" not in v:
@@ -193,4 +193,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(int(sys.argv[1]) if len(sys.argv) > 1 else 1000))
