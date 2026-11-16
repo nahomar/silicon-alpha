@@ -263,3 +263,42 @@ close-only price idea of family B, on markets sweep 1 never looked at.
   extra), Asia (^N225, ^HSI, ^KS11, ^BSESN, ^TWII + extra); and H3b, more markets on the same rules and
   years: Europe ^SSMI, ^IBEX, FTSEMIB.MI, ^AEX, ^OMXSPI; Asia ^STI, 000001.SS, ^JKSE, ^KLSE, ^NZ50 (Pacific).
   A region "holds up" if its pooled t ≥ 2.0 and more than half its markets are positive.
+
+### Sweep 2 result (2026-11-15; code odte/research/sweep2.py, output reports/sweep2/sweep2.json)
+Data: 27 Yahoo indices; 3 rows dropped as >25% moves (^BVSP 1995-03-10, 1999-01-15; ^HSI 1987-10-26).
+
+| idea | S&P 1990-2015 t | S&P 1962-89 t | abroad pooled t | markets + | verdict |
+|---|---|---|---|---|---|
+| B1 200-day long/flat | 2.72 | 4.03 | 3.77 | 11/12 | CONFIRMED |
+| B2 200-day long/short | 1.06 | 2.75 | 1.32 | 10/12 | NOT CONFIRMED |
+| B3 10-month rule | 3.27 | 2.74 | 3.85 | 12/12 | CONFIRMED |
+| B4 12-month momentum | 2.25 | 1.44 | 1.16 | 9/12 | PARTLY |
+| B5 1-day reversal | 0.85 | −12.18 | −2.47 | 6/12 | NOT CONFIRMED |
+| B6 5-day reversal | 1.10 | −5.92 | −0.45 | 5/12 | NOT CONFIRMED |
+| **B7 three down closes** | **3.04** | −3.16 | **2.13** | **10/12** | **CONFIRMED** |
+| B8 internal bar strength | 1.68 | −6.81 | −2.18 | 3/12 | NOT CONFIRMED |
+| B9 RSI(2) < 10 | 2.84 | −3.52 | 1.98 | 10/12 | PARTLY |
+| B10 252-day high | 0.25 | 2.00 | 1.91 | 6/12 | NOT CONFIRMED |
+| B16 big-move reversal | 1.13 | −4.17 | −0.40 | 8/12 | NOT CONFIRMED |
+
+- **B7:** the S&P 1990-2015 agrees (t 3.04; held days beat other days, timing t 2.92), as do the Nasdaq-100
+  (t 4.41), Dow (2.56) and MidCap 400 (2.04); not the Russell 2000 (0.51). Before 1990 it reverses (t −3.16),
+  as stated in advance. By region (report only): Europe holds up (9/9 positive, pooled t 2.36); Asia does
+  not (5/9, t −0.48). Post-hoc: S&P by period t 1.79 (1990s), 2.58 (2000-07), 1.15 (2008-15), 3.15 (2016-26).
+  **Warning, post-hoc:** Europe pooled was strong 2000-2015 (t 2.36, timing t 6.40) and faded 2016-2026
+  (t 0.59). A real, widely known effect (short-term reversal in large developed indices), not a private
+  edge, and one that has weakened abroad.
+- **B9:** PARTLY (pooled abroad t 1.98, just short). **B16:** NOT CONFIRMED, the lead is dropped.
+- **B1 and B3 (trend, long or flat):** CONFIRMED by the letter of the rule, but the rule asks "does it make
+  money", and an idea that is long ~73% of the time collects the market's premium. Their timing t on the S&P
+  is ~0 (0.02, 0.77). Post-hoc 2000-2026: B3 raised Sharpe over buy-and-hold in 8 of 8 markets checked and
+  about halved the worst drawdown (S&P −57% → −26%, Nasdaq −83% → −36%, DAX −73% → −30%). Their value is
+  smaller crashes, not extra return. In sweep 1 (S&P 2016-26, a long bull market) they failed.
+- **Asia:** 1-day reversal is strongly negative there (pooled t −7.25: daily moves continue). Probably stale
+  index prices (thinly traded members), not a tradeable effect; futures data would be needed to tell.
+- **H4, B7 as a 0DTE put credit spread at 10:00:** t 0.59 (184 trades); B9, B16 versions also near zero.
+  B7's gain does not show up in a same-day 10:00 option trade.
+- **Verdict:** B7 stays the lead candidate and moves from "one sample, on the line" to "confirmed on the S&P
+  history it never saw and in Europe, but weaker abroad since 2016". Forward check continues as fixed.
+  New candidate: B3 (10-month rule) in place of plain buy-and-hold as B0's partner, for smaller drawdowns;
+  it needs its own pre-registered partner test.
