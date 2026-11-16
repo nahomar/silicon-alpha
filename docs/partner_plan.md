@@ -158,3 +158,49 @@ Code: odte/research/partner_o.py -> reports/partners/o.json.
 - Correlation with O's daily series; B0 + O + T together (same equal-volatility method).
 
 Code: odte/research/partner_t.py -> reports/partners/t.json.
+
+### Result (2026-11-15): LEAD by the rule, but there is no turn-of-month effect (reports/partners/t.json)
+- **T1 FAIL (t too low).** 131 windows, none skipped. After costs +8.8 points a window (+$529 a year per
+  MES), t 1.30; positive in both eras (2016-21 +8.4, t 1.21; 2022-26 +9.3, t 0.75). Costs barely matter
+  (one round trip a month; +9.6 before costs). Worst window −255 points; max drawdown −$2.7k per MES.
+- **T2 PASS.** Correlation with B0 −0.001. Combined Sharpe 0.59 -> 0.72; P(losing year) 25.2% -> 19.5%.
+  It earned in 2020 (scaled +81 a day vs B0 −35) but little in 2021 (+8 vs −72). Weight ~5.1 MES per B0 unit.
+- **The calendar check (reported only) says the effect is not there.** Window days averaged +0.060% a
+  day, other days +0.054% (Welch t 0.13). Day −1 lost (−1.3 points a day). T is part-time buy-and-hold:
+  it made money because stocks rose over 2016-26, and it helps B0 because B0 does not move with the market.
+- Inside the windows the nights lost (−0.6 points, t −0.5) and the 09:30-16:00 sessions gained (+3.0,
+  t 2.0), the reverse of O's pattern; several splits were reported, so this is treated as noise.
+- Correlation with O 0.28 (shared nights). B0 + O + T: Sharpe 0.81, P(losing year) 17.2%.
+- **Verdict: LEAD by the rule, recorded as it is, with the label "equity premium, not a calendar
+  effect".** What O and T share is being long stocks, so the fair benchmark is plain buy-and-hold (B).
+
+## B: plain buy-and-hold next to B0, the benchmark O and T must beat (fixed 2026-11-15, before computing)
+
+### Why
+- O and T both earn mostly the stock market's normal gain, and both help B0 because B0 does not move with
+  the market. If simply owning the index all the time helps B0 as much, O and T only add complexity.
+- It is also the simplest possible partner: an index fund, no bot change.
+
+### The rule (no fitted parameters)
+- Long 1 MES at all times, 2016-01-01 .. 2026-11-06, marked close to close on each trading day (last
+  regular-hours close, NYSE calendar, as T).
+- When the contract changes between two closes (the quarterly roll), that day's mark is 0 (the file holds
+  one contract per minute, so the roll spread cannot be priced) and 0.75 points of cost is charged.
+  Recorded up front: this leaves out about 4 days of market moves a year.
+
+### Pass rules
+- **B1:** mean daily net mark > 0 in both 2016-2021 and 2022-2026, AND t-stat >= 2.0. Power: at the
+  market's usual Sharpe (~0.7 a year), t over 10.8 years is about 2.3, so this can fail by chance.
+- **B2:** as O2 (booked on the first B0 day on or after each day; equal volatility, weights from
+  2019-06-26 .. 2021-12-31; correlation <= 0.10; higher Sharpe AND lower P(losing year); same bootstrap
+  and seed).
+- **Verdict:** PASS / LEAD / FAIL as before.
+- **Head-to-head, fixed now:** O (or T) is worth more than an index fund only if B0+O (or B0+T) beats
+  B0+B on BOTH Sharpe and P(losing year). Otherwise the honest partner is an index fund and O/T are
+  dropped as separate ideas.
+
+### Reported only
+- Sharpe and P(losing year) of B0+B, B0+O, B0+T, B0+O+T and B0+B+O (each partner at equal volatility).
+- Correlation of O and T with B.
+
+Code: odte/research/partner_b.py -> reports/partners/b.json.
