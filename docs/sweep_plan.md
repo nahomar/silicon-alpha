@@ -230,3 +230,31 @@ Tracking only: no bot change, nothing traded. Whether anything is ever traded is
   CONSISTENT does not prove an edge: B7 holds about 22 days a year, so six months is about 11 held days and
   can only catch an idea that has stopped working. A t-test against zero is reported, not judged.
 - **Reviews:** monthly, and a formal review on 2027-05-14. Any rule change after today is labeled post-hoc.
+
+## Sweep 2: the price-pattern ideas on data the sweep never saw (fixed 2026-11-15, before any data is fetched)
+Question: B7 passed on the S&P 2016-26. If the effect is real it should show up where it was not selected:
+the S&P before 2016, other US indices, and markets abroad. The same test is a fresh search for every
+close-only price idea of family B, on markets sweep 1 never looked at.
+- **Ideas (rules exactly as in sweep 1):** B1 200-day trend long/flat, B2 200-day long/short, B3 10-month
+  rule, B4 12-month momentum, B5 1-day reversal, B6 5-day reversal, B7 three down closes, B8 internal bar
+  strength (Yahoo high/low), B9 RSI(2) < 10, B10 252-day high, B16 big-move reversal. Each in its written
+  direction (no flipping).
+- **Data:** Yahoo daily index prices (price indices, no dividends). Rows whose close equals the previous close
+  exactly are dropped (holiday placeholders); rows with a daily move over 25% are dropped and listed.
+- **H1, the S&P before the sample:** ^GSPC 1990-01-01..2015-12-31. 1962-1989 is reported only: before index
+  futures and fast trading, index closes were partly stale and short-term reversal is not expected there
+  (a known feature of old index data, stated here before looking).
+- **H2, other US indices (reported, same years as the sweep so not independent):** ^NDX, ^RUT, ^DJI, ^MID,
+  from 1990 (or their first Yahoo day) to 2026-11-06.
+- **H3, abroad:** ^FTSE, ^GDAXI, ^FCHI, ^STOXX50E, ^N225, ^HSI, ^AXJO, ^GSPTSE, ^KS11, ^BSESN, ^BVSP, ^TWII,
+  2000-01-01..2026-11-06, each on its own trading days. Pooled = equal-weight average of the markets that
+  traded each date.
+- **Scoring:** daily net return = position × next-day return − 1 bp per unit of position change. t over all
+  days. Timing t (reported): Welch test of held-day vs other-day gross returns.
+- **Verdict per idea:** CONFIRMED if H1 net t ≥ 2.0 AND H3 pooled net t ≥ 2.0 with at least 7 of 12 markets
+  positive; PARTLY if one of the two; NOT CONFIRMED if neither. An idea that failed in sweep 1 but is
+  CONFIRMED here becomes a new candidate for its own forward test, not a trade. BH q across the 11 pooled
+  H3 tests is reported.
+- **H4, an option version on the S&P (reported; same dates B7 was selected on, so weak evidence):** on days
+  whose B7 / B9 / B16-long signal is on, sell the 0DTE put credit spread at 10:00 (library y_put_spread_touch);
+  B16-short days sell the call credit spread. One-sided t vs zero and Welch vs all other days' same trade.
