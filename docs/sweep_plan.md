@@ -344,3 +344,13 @@ by 20-day dollar volume)
     minus the universe's equal-weight return; 10 bps per side.
   - E3 the reverse of E1's short side only (big losers bounce?): long the bottom decile, hold days 2-6,
     minus the universe; 10 bps per side.
+- **P result (run first, before X and E were coded):** FAIL. B0+B3 Sharpe 0.74 vs B0+B 0.89; P(losing year)
+  19.1% vs 15.2% (B3 whipsawed in 2022: B0+B3 −$12.8k vs B0+B −$9.7k per B0 unit). B stays the partner.
+  B0+B3+B7 1.29 / 4.1% vs B0+B+B7 1.35 / 3.8%.
+- **X implementation notes (written after the fetch, before scoring):** ETF prices start 1996-03 (EWY, EWT,
+  EWZ 2000; EZA 2003; FXI 2004; TUR 2008; INDA 2012), sectors 1998-12. A month is scored only when at least
+  6 assets are eligible. Months run through 2026-10. Currencies: Japan's 3-month rate starts 2002-04 and
+  Switzerland's 1999-07, so they join then; the UK and euro-area rates end 2026-01 and are carried forward
+  (at most 12 months). Month m's carry accrual and month-end m−1's ranking both use month m−1's rates
+  (market rates seen in real time; OECD's monthly average stands in). X6 ranks on the 12-1 month excess
+  return (spot + carry), X7 on the 60-month spot change (so X7 starts about 2004).
