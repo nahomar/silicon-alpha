@@ -238,6 +238,9 @@ def stock_panel():
     del x
     C.index = pd.DatetimeIndex(C.index)
     V.index = C.index
+    from odte.research.partner_t import nyse_days
+    keep = C.index.isin(nyse_days("2018-01-01", "2026-12-31"))   # the file has ~150 sparse weekend/holiday dates
+    C, V = C[keep], V[keep]
     ratio = C / C.shift(1)
     ret = ratio - 1
     split = pd.DataFrame(False, index=C.index, columns=C.columns)

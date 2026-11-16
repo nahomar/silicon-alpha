@@ -391,3 +391,7 @@ reported. Events of the same type for the same company within 30 days are droppe
   sorted version).
 - Not testable here: insider buys vs sells (needs each Form 4's contents, about 600k downloads, or SEC's
   bulk insider data sets, a separate download the owner would OK).
+- **Data fix found in a dry run before E or sweep 4 was scored:** data/prices/xnas_daily.parquet has 150
+  non-NYSE dates (Saturdays, holidays; 98-1,419 symbols each vs ~9,100 on trading days). sweep3.stock_panel
+  now keeps NYSE days only. Sweep 1's family F used the unfixed panel (all F ideas FAILed); F is re-run with
+  the fix and reported as a post-hoc check.
