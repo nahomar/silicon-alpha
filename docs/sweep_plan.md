@@ -165,3 +165,14 @@ signal. Split handling: a daily move whose price ratio is within 3% of a common 
 - Stock opening/closing auction effects, intraday stock patterns: only daily closes on disk.
 
 Code: odte/research/sweep1.py -> reports/sweep1/ (one table, every idea, nothing dropped).
+
+## Implementation notes (added 2026-11-15 while coding, before any idea was scored)
+- Timing of other-market closes: data/context/daily.parquet is stamped by date, but some closes come after
+  the 16:00 S&P close (Bitcoin at 00:00 UTC; futures and the dollar index up to 17:00 ET). To keep "known
+  at the prior close" honest, C9 (dollar), C10 (10-year yield), C11 (oil), C12 (gold) and C13 (Bitcoin) use
+  values two trading days back (d-2); C1-C8 and C15 (Cboe indexes close by 16:15, HYG at 16:00) use d-1.
+- G1/G2: GDELT day files (data/africa/gdelt/events_daily, African events, dated when added) are complete
+  only after the day ends in UTC, so positions run on the 2nd-6th trading days after the spike day.
+  Costs: miners basket 0.20% per round trip, gold 0.05%, both on $10k.
+- "Trades" for the 20-per-era minimum: trades for intraday/overnight ideas; days held for day-by-day positions.
+- B8 high and low come from the minute bars' opens and closes (the file keeps no minute highs and lows).
