@@ -302,3 +302,45 @@ Data: 27 Yahoo indices; 3 rows dropped as >25% moves (^BVSP 1995-03-10, 1999-01-
   history it never saw and in Europe, but weaker abroad since 2016". Forward check continues as fixed.
   New candidate: B3 (10-month rule) in place of plain buy-and-hold as B0's partner, for smaller drawdowns;
   it needs its own pre-registered partner test.
+
+## Sweep 3 (fixed 2026-11-15, before any of its data is fetched or computed)
+Three new areas, free public data only. Scoring for every idea: net t ≥ 2.0 over its window AND positive net
+mean in both halves (split at the window's middle date) → PASS; BH q ≤ 0.10 across all sweep 3 ideas is
+reported. p < 0.05 and both halves positive but not PASS → LEAD.
+
+### P. A steadier partner for B0
+- P1: B3 (10-month rule on the S&P, long 1 MES or flat, ES marks as in sweep 1) in place of B (always long
+  1 MES). Equal-vol weights from 2019-06-26..2021-12-31, the B0 days, the bootstrap as in partner_plan.md.
+  B3 replaces B if B0+B3 has a higher Sharpe AND a lower P(losing year) than B0+B (the rule O and T faced).
+  Max drawdowns and B0+B3+B7 vs B0+B+B7 are reported.
+
+### X. Other markets (Yahoo adjusted closes with dividends; FRED for currencies)
+Monthly rebalance at month-end closes; an asset enters once it has 13 months of history; 10 bps per unit of
+turnover for ETFs, 5 bps for currencies.
+- Country ETFs (USD): EWJ EWG EWU EWQ EWH EWY EWT EWA EWC EWZ EWS EWM EWI EWP EWL EWN EWD EWW EWK EWO FXI EZA
+  TUR INDA SPY, 1996-2026-10.
+  - X1 12-1 month momentum: long top third, short bottom third, equal weight.
+  - X2 1-month reversal: long bottom third, short top third.
+- US sector ETFs: XLB XLE XLF XLI XLK XLP XLU XLV XLY (1999-2026-10; XLRE, XLC join when 13 months old).
+  - X3 12-1 month momentum: long top 3, short bottom 3. X4 1-month reversal: long bottom 3, short top 3.
+- Currencies vs USD (FRED daily spot DEX*: AUD CAD JPY GBP CHF EUR NZD NOK SEK; FRED monthly 3-month
+  interbank rates IR3TIB01*, US included), 1999-2026-10. Monthly return of a long-foreign position = spot
+  change + (foreign − US rate)/12 from the prior month's rates.
+  - X5 carry: long the 3 highest-rate currencies, short the 3 lowest (vs USD).
+  - X6 momentum: 12-1 month excess return; long top 3, short bottom 3.
+  - X7 value proxy: 5-year spot change; long the 3 biggest fallers, short the 3 biggest risers.
+
+### E. Company earnings (SEC EDGAR submissions: 8-K filings with Item 2.02, with acceptance time; prices
+from data/prices/xnas_daily.parquet, 2018-05..2026-08; universe as sweep 1 family F: price ≥ $5, top 1,000
+by 20-day dollar volume)
+- Day 0 = the first trading day whose close comes after the 8-K acceptance time (accepted 16:00 ET or later →
+  next trading day). Abnormal return AR = stock return over day 0..day 1 minus the universe's equal-weight
+  return over the same days. Ticker-to-CIK from SEC's current ticker map (delisted firms drop out: noted).
+  - E1 announcement-return drift: at the close of day 1, AR in the top decile of all announcements of the
+    prior 91 calendar days (≥ 200 of them) → long; bottom decile → short; hold to the close of day 61.
+    Daily return = mean of active longs − mean of active shorts; 10 bps per side on entry and exit.
+  - E2 announcement premium: expected date = the announcement ~1 year earlier (within 330-400 days) + 364
+    days. Long from the close 6 trading days before the expected date to the close of the expected date + 1,
+    minus the universe's equal-weight return; 10 bps per side.
+  - E3 the reverse of E1's short side only (big losers bounce?): long the bottom decile, hold days 2-6,
+    minus the universe; 10 bps per side.
