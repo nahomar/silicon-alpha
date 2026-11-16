@@ -204,3 +204,37 @@ Code: odte/research/partner_t.py -> reports/partners/t.json.
 - Correlation of O and T with B.
 
 Code: odte/research/partner_b.py -> reports/partners/b.json.
+
+### Result (2026-11-15): PASS, on the line; and it beats O and T head to head (reports/partners/b.json)
+- **B1 PASS (just).** 2,685 days, 43 rolls. +1.72 points a day (+$2,170 a year per MES), t 2.02. Both eras
+  positive (2016-21 +2.26, t 2.64; 2022-26 +1.05, t 0.66). Worst day −340 points; max drawdown −$7.0k per MES.
+  - Futures returns are the market's gain minus the interest rate (the cash behind them earns that interest
+    separately), which is why 2022-26 is lower than the index's own rise.
+- **B2 PASS.** Correlation with B0 −0.004. Combined Sharpe 0.59 -> 0.89; P(losing year) 25.2% -> 15.2%.
+  Weight ~2.3 MES per B0 unit. It carried B0 in 2020 and 2021 (scaled +60 and +89 a day vs B0 −35 and −72)
+  and lost in 2022 (−52 vs B0 +8).
+- **Head to head (fixed in advance): neither O nor T beats plain buy-and-hold.**
+
+  | next to B0 (equal volatility) | Sharpe | P(losing year) |
+  |---|---|---|
+  | B0 alone | 0.59 | 25.2% |
+  | B0 + B (buy-and-hold) | **0.89** | **15.2%** |
+  | B0 + O (overnight) | 0.76 | 20.0% |
+  | B0 + T (turn of month) | 0.72 | 19.5% |
+  | B0 + O + T | 0.81 | 17.2% |
+  | B0 + B + O | 0.87 | 17.4% |
+
+  O and T are mostly the same thing as B (correlation 0.58 and 0.43) with less time in the market.
+- Check made after seeing the result (not part of the rule): the skipped roll days held some large falls
+  (2020-03-23 −172 points, 2018-12-24 −116), so skipping them could flatter B. Filling every roll day with
+  the S&P's own close-to-close move (data/odte_0dte/settlements.csv): the 43 days net +0.7 points in total
+  (−546 in 2016-21, +546 in 2022-26), t 1.99, B0+B Sharpe 0.89, P(losing year) 15.5%. Same conclusion; the
+  t-stat sits right on 2 either way.
+- **Verdict: PASS.** The best partner found for B0 is not a new edge: it is owning the stock market, which
+  B0 does not move with. O and T are dropped as separate ideas per the head-to-head rule.
+- Limits: 2016-26 was a strong decade for US stocks; B lost in 2022 and will lose in any bear market.
+  B0's own record is mostly in-sample (it was chosen on 2022-26). Equal volatility means ~2.3 MES (about
+  $78k of S&P at 6,800) per $1k of B0 risk per trade; smaller holdings still help, just less. Real-money
+  sizing is the owner's decision.
+
+Code: odte/research/partner_b.py.
