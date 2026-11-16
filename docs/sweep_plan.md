@@ -462,3 +462,11 @@ prices and universe benchmark as sweep 3 E, NYSE days, moves over 50% removed as
 - J1: long ^RUT, short ^GSPC from the Dec 15 close (or the trading day before) to the Jan 31 close; one value
   per year; 2 bps per side per leg.
 - J2: the same over the last 5 trading days of December plus the first 5 of January.
+- **Sweep 6 implementation notes (after fetching, before scoring):** auctions: 502 ten-year and 334 thirty-
+  year (reopenings included via original_security_term), used from 2003 to 2026-10 (IEF/TLT start 2002-07-30).
+  Auctions close at 13:00 ET, so the 16:00 auction-day close is after the result. T2 runs from the close 5
+  trading days before the auction to the close the day before (4 days held). One value per auction; halves
+  by date. S&P changes: the current Wikipedia page no longer has the changes table, so the revision of
+  2026-06-30 (oldid 1361794875) is used: 402 rows, effective dates up to 2026-06-30. Day 0 = the first NYSE
+  day on or after the effective date; a ticker with no price on day 0, or fewer than 15 of the 20 days, is
+  dropped (renamed tickers drop out). Benchmark: the top-1,000 equal-weight, moves over 50% removed.
