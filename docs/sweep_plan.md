@@ -354,3 +354,15 @@ by 20-day dollar volume)
   (at most 12 months). Month m's carry accrual and month-end m−1's ranking both use month m−1's rates
   (market rates seen in real time; OECD's monthly average stands in). X6 ranks on the 12-1 month excess
   return (spot + carry), X7 on the 60-month spot change (so X7 starts about 2004).
+- **X result:** X5 currency carry PASS (1999-2026: +3.19% a year, t 2.44, halves t 2.21 / 1.14, Sharpe 0.46;
+  BH q 0.15 if it is sweep 3's smallest p, so it does not survive the correction). It is the textbook carry
+  premium: −21% in 2008 (Oct 2008 −10.5% in one month), max drawdown −28%, roughly flat 2013-2025.
+  Post-hoc: monthly correlation with B0 0.17; B0+carry monthly Sharpe 0.69 vs B0 0.60 (B0+B is better).
+  FAIL: X1 country momentum (t −0.25), X2 country reversal (−0.80), X3 sector momentum (−0.07), X4 sector
+  reversal (−1.56), X6 currency momentum (−0.31), X7 currency value (0.44).
+- **E implementation notes (written before the earnings data finished downloading, before scoring):**
+  SEC acceptance times are true UTC (Apple's 16:30 ET releases show 20:30Z in summer, 21:30Z in winter),
+  converted to New York time. A company's releases within 30 days of an earlier one are dropped (amendments,
+  repeats). A company with several tickers uses its most traded. A held stock with no price that day counts
+  as 0. Costs: each leg's 20 bps round trip is spread evenly over its holding days. Scored over days with a
+  position (E1: days with both a long and a short). E2: each release forecasts the next 364 days later.
