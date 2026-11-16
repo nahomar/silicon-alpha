@@ -258,3 +258,8 @@ close-only price idea of family B, on markets sweep 1 never looked at.
 - **H4, an option version on the S&P (reported; same dates B7 was selected on, so weak evidence):** on days
   whose B7 / B9 / B16-long signal is on, sell the 0DTE put credit spread at 10:00 (library y_put_spread_touch);
   B16-short days sell the call credit spread. One-sided t vs zero and Welch vs all other days' same trade.
+- **Added at the owner's request, after the data fetch and before any result was computed (report only; the
+  verdict rule above is unchanged):** results pooled by region, Europe (^FTSE, ^GDAXI, ^FCHI, ^STOXX50E +
+  extra), Asia (^N225, ^HSI, ^KS11, ^BSESN, ^TWII + extra); and H3b, more markets on the same rules and
+  years: Europe ^SSMI, ^IBEX, FTSEMIB.MI, ^AEX, ^OMXSPI; Asia ^STI, 000001.SS, ^JKSE, ^KLSE, ^NZ50 (Pacific).
+  A region "holds up" if its pooled t ≥ 2.0 and more than half its markets are positive.
