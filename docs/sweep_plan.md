@@ -395,3 +395,5 @@ reported. Events of the same type for the same company within 30 days are droppe
   non-NYSE dates (Saturdays, holidays; 98-1,419 symbols each vs ~9,100 on trading days). sweep3.stock_panel
   now keeps NYSE days only. Sweep 1's family F used the unfixed panel (all F ideas FAILed); F is re-run with
   the fix and reported as a post-hoc check.
+  Post-hoc F re-run on NYSE days only: still all FAIL (t F1 0.67, F2 0.38, F3 −0.31, F4 0.02, F5 0.03,
+  F6 −1.28, F7 0.40 reversed, F8 0.88 reversed, F9 1.13 reversed). Sweep 1's conclusion is unchanged.

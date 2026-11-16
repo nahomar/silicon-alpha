@@ -352,12 +352,16 @@ def fam_E() -> list:
 SPLITS = [1 / 2, 1 / 3, 2 / 3, 1 / 4, 1 / 5, 1 / 10, 3 / 2, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50]
 
 
-def fam_F() -> list:
+def fam_F(nyse_only: bool = False) -> list:
+    """nyse_only=True drops the file's ~150 sparse non-NYSE dates (post-hoc fix; the scored sweep used False)."""
     x = pd.read_parquet(ROOT / "data" / "prices" / "xnas_daily.parquet")
     x = x[(x["close"] > 0)].drop_duplicates(["date", "symbol"])
     C = x.pivot(index="date", columns="symbol", values="close").sort_index().astype("float32")
     V = x.pivot(index="date", columns="symbol", values="volume").reindex(C.index).astype("float32")
     del x
+    if nyse_only:
+        keep = pd.DatetimeIndex(C.index).isin(nyse_days("2018-01-01", "2026-12-31"))
+        C, V = C[keep], V[keep]
     ratio = C / C.shift(1)
     ret = ratio - 1
     split = pd.DataFrame(False, index=C.index, columns=C.columns)
