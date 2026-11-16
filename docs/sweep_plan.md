@@ -417,3 +417,10 @@ Coinbase; long-short books are a test of the effect, not a tradeable book there.
 - K4 Bitcoin lead: BTC up on UTC day d → long the equal-weight basket of the other coins on day d+1,
   else short it.
 - K5 time-series momentum: each coin long if its 20-day return > 0, else short; equal weight.
+- **E result:** 20,279 earnings releases (1,203 companies, 2018-06..2026-06) after the universe and 30-day
+  filters, from 48,872 Item 2.02 8-Ks. Check: day 0 has the largest moves (median |return| 3.21% vs 1.11% on a
+  random day), so the timing is right; day −1 is also raised (1.83%), consistent with some companies filing
+  the 8-K after a morning press release. All FAIL: E1 drift −1.08 bps/day (t −0.62; 2,070 longs, 2,062
+  shorts), E2 announcement premium 0.03 bps/day (t 0.01), E3 big-loser bounce +5.3 bps/day (t 0.96).
+  Post-hoc E1 with the reaction measured over days −1..+1: t −0.68 (hold 60), −1.21 (20), −1.23 (5). The
+  textbook drift after earnings surprises is not present in large US stocks in 2018-2026.
