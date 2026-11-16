@@ -176,3 +176,6 @@ Code: odte/research/sweep1.py -> reports/sweep1/ (one table, every idea, nothing
   Costs: miners basket 0.20% per round trip, gold 0.05%, both on $10k.
 - "Trades" for the 20-per-era minimum: trades for intraday/overnight ideas; days held for day-by-day positions.
 - B8 high and low come from the minute bars' opens and closes (the file keeps no minute highs and lows).
+- FOMC statement days are rows "fomc" OR "fomc_sep" in events.parquet (the calendar splits meetings with
+  and without projections; "fomc" alone is half the meetings). A19-A21, A24 and E-fomc use both. Found in a
+  dry run that printed trade counts only.
