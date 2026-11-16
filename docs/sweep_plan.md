@@ -470,3 +470,9 @@ prices and universe benchmark as sweep 3 E, NYSE days, moves over 50% removed as
   2026-06-30 (oldid 1361794875) is used: 402 rows, effective dates up to 2026-06-30. Day 0 = the first NYSE
   day on or after the effective date; a ticker with no price on day 0, or fewer than 15 of the 20 days, is
   dropped (renamed tickers drop out). Benchmark: the top-1,000 equal-weight, moves over 50% removed.
+- **Sweep 6 result:** T4 PASS by the rule only: short TLT from 5 days before each 30-year auction to the day
+  before, +0.22% per auction (260, 2003-2026), t 2.13, halves t 0.71 / 2.28, q 0.27 (does not survive the
+  correction). The same idea on 10-year notes (T2) shows nothing (t 0.25), so it is not a general pattern.
+  FAIL: T1 after 10-year auctions (t 1.66, second half −0.39), T3 after 30-year (0.66), T5 weak/strong
+  auctions (−0.28), J1 January small-cap effect (t 1.87, second half 0.34: faded), J2 turn of the year
+  (1.42), I1 S&P additions (131, t −0.22), I2 deletions (93, t 0.73).
