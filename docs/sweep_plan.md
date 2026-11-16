@@ -179,3 +179,36 @@ Code: odte/research/sweep1.py -> reports/sweep1/ (one table, every idea, nothing
 - FOMC statement days are rows "fomc" OR "fomc_sep" in events.parquet (the calendar splits meetings with
   and without projections; "fomc" alone is half the meetings). A19-A21, A24 and E-fomc use both. Found in a
   dry run that printed trade counts only.
+
+## Result (2026-11-15): 1 PASS, 4 LEAD, 104 FAIL, 8 not scored (reports/sweep1/sweep1.csv)
+117 ideas, 109 scored. The false-discovery rule applied across all 109.
+
+- **PASS: B7, buy the S&P after three down closes in a row, hold one day.** 234 days held in 10.8 years
+  (~8.6% of days). +$1,375 a year per MES after costs, t 3.33, q 0.094 (just under 0.10). Both eras
+  positive (2016-21 weak: +$2.1 a day averaged over all days; 2022-26 +$9.7). Lost only in 2019 (−$96).
+  - Checks made after the result (reported, not used for the verdict):
+    - Signal from ES 15:59 closes instead of the 16:00 index close: t 2.98 (+$1,227 a year). The
+      exact days differ near zero, and with t 2.98 the false-discovery rule would NOT pass it (q ~0.3):
+      the PASS sits on the line.
+    - Double costs (1.5 points): t 3.22. Without the best 3 / 5 / 10 days: t 3.01 / 2.75 / 2.05. The median
+      held day earns $25-31 per MES and 57-59% of held days win, so it is not one or two rebounds.
+    - Held days averaged $65.9 per MES; all other days $3.2.
+  - Honest label: short-term mean reversion after selling streaks (Connors-style), long only, so it also
+    collects the stock market's premium on the riskiest days. Worst held day −$740 per MES.
+- **LEAD (p < 0.05, both eras positive, not surviving the correction):**
+  - B9 RSI(2) < 10 -> long next day: t 2.98 (same family as B7: buying after sharp drops).
+  - E-claims-buy, buy the ATM 0DTE straddle at 10:00 on Thursdays (jobless-claims days): t 2.12, 27 trades
+    before 2022 and 236 after (Thursday expiries began in 2022). The opposite of what B0 does.
+  - B16 big-move reversal: t 2.05. A1 Monday 09:30-16:00 session long: t 2.00 (2016-21 ≈ 0).
+- **Partner check (vs B0 + buy-and-hold: Sharpe 0.89, P(losing year) 15.2%):** every PASS/LEAD helps.
+  B0+B+B7: Sharpe 1.31, P(losing year) 4.6%. B9 1.23 / 6.7%; E-claims-buy 1.21 / 11.0%; A1 1.10 / 10.7%;
+  B16 0.99 / 11.7%. Correlations with B0 between −0.09 and 0.
+- **Nothing found (all FAIL):** every US stock cross-section idea (F1-F9: momentum, reversal, low volatility,
+  MAX, volume, 52-week high, liquidity, seasonality; 2018-26); every Bitcoin idea (G4-G9); the Africa
+  unrest signals (G1-G2); dealer-gamma direction (D1-D6); the other-market signals (C1-C15, best C1 VIX
+  term structure t 1.94); the remaining calendar effects (pre-FOMC drift t 1.94, Halloween, opex weeks,
+  holidays, month and quarter ends); and 30 of 32 scored event-day option trades.
+- Not scored (fewer than 20 trades in an era): quad-witching and quarter-end option trades, long-bond
+  auction days, triple-witching day, Reddit crowding (15 months of data).
+- **Verdict:** B7 earns a forward paper test (it needs only daily closes, so forward days can be scored
+  without any bot change); the four LEADs are watched forward. No claim of an edge until forward days agree.
