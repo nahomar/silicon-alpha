@@ -479,3 +479,9 @@ prices and universe benchmark as sweep 3 E, NYSE days, moves over 50% removed as
 - **Sweep 5 data notes (after fetching, before scoring):** FINRA files exist from 2018-08-01 (June-July 2018
   return 403), 2,031 days. Coinbase: 496 USD products (listed and delisted), 520,279 daily rows. K5 rebalances
   weekly on Sundays like K1-K3. K4 counts only the basket's position flips as turnover.
+- **Sweep 5 result: all 8 FAIL.** Q1 short ratio weekly −3.4%/yr net (t −0.92); Q2 abnormal short ratio
+  −8.7%/yr net (t −3.09; both directions lose after costs); Q3 monthly −0.9%/yr (t −0.25). Post-hoc, before
+  costs: Q1 +7.8%/yr gross (t 2.10), Q2 +5.3% (1.90), Q3 +2.0% (0.57): heavily shorted stocks do lag, as
+  published, but the information fades within weeks and weekly turnover at 10 bps a side eats all of it.
+  Crypto: K1 1-week momentum t 0.46, K2 4-week −0.77, K3 low volatility 0.59, K4 Bitcoin lead −0.42 (best
+  direction), K5 time-series momentum 0.59; at 60 bps all are negative.
