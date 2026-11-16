@@ -397,3 +397,23 @@ reported. Events of the same type for the same company within 30 days are droppe
   the fix and reported as a post-hoc check.
   Post-hoc F re-run on NYSE days only: still all FAIL (t F1 0.67, F2 0.38, F3 −0.31, F4 0.02, F5 0.03,
   F6 −1.28, F7 0.40 reversed, F8 0.88 reversed, F9 1.13 reversed). Sweep 1's conclusion is unchanged.
+
+## Sweep 5 (fixed 2026-11-15, before fetching): short-sale volume and crypto cross-sections
+Scoring as sweep 3 (PASS: t ≥ 2.0 and both halves positive; LEAD: p < 0.05 and both halves positive; BH q
+across sweep 5 reported). Two-sided: the better direction is scored with p = 2×P(T > |t|).
+### Q. FINRA daily short-sale volume (Reg SHO consolidated files CNMSshvolYYYYMMDD.txt, public)
+2018-06..2026-08, stocks and universe as sweep 3 E (NYSE days only). SR = short volume / total volume.
+- Q1: each Friday close, rank the universe on 5-day average SR; long the lowest decile, short the highest;
+  hold one week; equal weight; 10 bps per unit of turnover.
+- Q2: as Q1 on abnormal shorting: 5-day average SR minus the prior 60-day average.
+- Q3: monthly: 20-day average SR at month end, hold one month.
+### K. Crypto (Coinbase Exchange public daily candles, USD pairs, UTC days), 2019-01..2026-11-06
+Universe each Sunday: USD pairs with ≥ 60 days of history, stablecoins and wrapped coins left out, top 20 by
+30-day average dollar volume. 25 bps per unit of turnover (60 bps reported). Spot cannot be shorted on
+Coinbase; long-short books are a test of the effect, not a tradeable book there.
+- K1 1-week momentum: long top quarter, short bottom quarter on the last 7 days' return, hold 7 days.
+- K2 4-week momentum: as K1 on 28 days.
+- K3 low volatility: 30-day volatility, long the lowest quarter, short the highest.
+- K4 Bitcoin lead: BTC up on UTC day d → long the equal-weight basket of the other coins on day d+1,
+  else short it.
+- K5 time-series momentum: each coin long if its 20-day return > 0, else short; equal weight.
