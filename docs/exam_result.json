@@ -1,0 +1,176 @@
+{
+  "spec": {
+    "model": "ridge_a1000",
+    "groups": [
+      "calendar",
+      "gex",
+      "term",
+      "flow",
+      "identity"
+    ],
+    "menu": [
+      "fly",
+      "condor",
+      "put_spread",
+      "call_spread"
+    ],
+    "features": [
+      "ev_cpi",
+      "ev_nfp",
+      "ev_ppi",
+      "ev_jolts",
+      "ev_claims",
+      "ev_ism_mfg",
+      "ev_ism_svc",
+      "ev_fomc",
+      "ev_fomc_sep",
+      "ev_fomc_minutes",
+      "ev_auction_long",
+      "ev_opex",
+      "ev_quad_witching",
+      "ev_vix_expiry",
+      "ev_month_end",
+      "ev_quarter_end",
+      "ev_pre_holiday",
+      "ev_post_holiday",
+      "ev_election",
+      "megacap_earnings",
+      "events_ahead",
+      "fomc_ahead",
+      "auction_ahead",
+      "minutes_to_next_event",
+      "gex_net",
+      "gex_0dte",
+      "gex_flip_dist",
+      "maxoi_dist",
+      "oi_pcr_0dte",
+      "ts_ratio",
+      "ts_spread",
+      "ts_ratio_chg",
+      "skew_next",
+      "skew_gap",
+      "straddle_next_chg",
+      "fly_chg5",
+      "fly_chg15",
+      "is_SPX",
+      "is_NDX",
+      "is_RUT",
+      "tod"
+    ],
+    "train_days": [
+      "2016-01-08",
+      "2026-09-04"
+    ],
+    "test_days": [
+      "2026-09-08",
+      "2026-11-06"
+    ],
+    "test_rows": 1584
+  },
+  "result": {
+    "half": {
+      "days": 44,
+      "mean_day": 323.37665741373206,
+      "ci90": [
+        -1161.6077911882032,
+        1681.8344861384755
+      ],
+      "total": 14228.572926204211,
+      "win_days": 0.6136363636363636,
+      "always_sell_mean_day": -1022.4556948319957,
+      "vs_always_mean": 1345.8323522457283,
+      "vs_always_ci90": [
+        -244.28220313548658,
+        3077.7951046540556
+      ],
+      "by_index": {
+        "NDX": {
+          "mean_day": -190.63642388377377,
+          "total": -8388.002650886046,
+          "days": 44
+        },
+        "RUT": {
+          "mean_day": -44.12469431727052,
+          "total": -1941.4865499599027,
+          "days": 44
+        },
+        "SPX": {
+          "mean_day": 558.1377756147766,
+          "total": 24558.062127050172,
+          "days": 44
+        }
+      },
+      "take_rate": 0.6401515151515151,
+      "trade_mix": {
+        "fly": 0.572,
+        "call_spread": 0.351,
+        "put_spread": 0.076,
+        "condor": 0.001
+      },
+      "per_trade_mean": 14.032123201384827,
+      "per_trade_win": 0.6765285996055227
+    },
+    "touch": {
+      "days": 44,
+      "mean_day": -120.86569672426027,
+      "ci90": [
+        -1574.6097738525102,
+        1219.7042919831167
+      ],
+      "total": -5318.090655867452,
+      "win_days": 0.5681818181818182,
+      "always_sell_mean_day": -1733.0050059464186,
+      "vs_always_mean": 1612.1393092221585,
+      "vs_always_ci90": [
+        109.68731617368077,
+        3280.3467862639354
+      ],
+      "by_index": {
+        "NDX": {
+          "mean_day": -343.91540325699066,
+          "total": -15132.27774330759,
+          "days": 44
+        },
+        "RUT": {
+          "mean_day": -298.3134061143423,
+          "total": -13125.78986903106,
+          "days": 44
+        },
+        "SPX": {
+          "mean_day": 521.3631126470729,
+          "total": 22939.976956471204,
+          "days": 44
+        }
+      },
+      "take_rate": 0.6401515151515151,
+      "trade_mix": {
+        "fly": 0.572,
+        "call_spread": 0.351,
+        "put_spread": 0.076,
+        "condor": 0.001
+      },
+      "per_trade_mean": -5.24466534109216,
+      "per_trade_win": 0.6666666666666666
+    },
+    "outcome": "WEAK PASS"
+  },
+  "importance": {
+    "calendar": {
+      "mean_day_without": 10.817457562708983,
+      "contribution": 312.5591998510231
+    },
+    "gex": {
+      "mean_day_without": -10.576994622867584,
+      "contribution": 333.95365203659964
+    },
+    "term": {
+      "mean_day_without": 331.2284560522656,
+      "contribution": -7.8517986385335234
+    },
+    "flow": {
+      "mean_day_without": 218.17076336776407,
+      "contribution": 105.205894045968
+    }
+  },
+  "freeze_commit": "ebadab696ba01cf27951dfb32b7769869b725f02"
+}

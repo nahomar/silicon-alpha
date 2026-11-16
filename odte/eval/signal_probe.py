@@ -59,7 +59,8 @@ def _per_ticker_features(close: pd.Series, vol: pd.Series,
     feats["vol_z"] = (vol - vol.rolling(30).mean()) / (vol.rolling(30).std() + 1e-9)
     feats["range"] = (high - low) / close.clip(lower=1e-9)
     feats["mom_sign"] = np.sign(r1.rolling(5).sum())
-    feats["minute"] = (feats.index.view("int64") // 60_000_000_000) % 390
+    from odte.timeutil import epoch_ns
+    feats["minute"] = (epoch_ns(feats.index) // 60_000_000_000) % 390
     # Target: next-bar direction (strictly future; this row's label uses t->t+1).
     feats["y"] = (r1.shift(-1) > 0).astype(float)
     feats["t"] = feats.index.view("int64")

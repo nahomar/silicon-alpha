@@ -53,12 +53,19 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "social" / "stocktwits"
 API = "https://api.stocktwits.com/api/2/streams/symbol"
-SYMBOLS = ("SPX", "SPY", "ES_F", "VIX")
+SYMBOLS = ("SPX", "ES_F", "VIX", "SPY")   # SPY last: busiest, slowest to backfill
 UA = "Mozilla/5.0 (silicon-alpha research recorder)"
-PAUSE_S = 0.8
+# ~200 calls/hour unauthenticated. 0.8 s bursts got us 429'd for hours, so
+# stay under the limit instead of bouncing off it (override for live tests).
+PAUSE_S = float(__import__("os").environ.get("STOCKTWITS_PAUSE_S", "20"))
 WRITE_EVERY = 20          # pages between writes during long runs
 COLUMNS = ["id", "stream", "created_utc", "retrieved_utc", "user_hash",
            "body", "sentiment", "symbols"]
+
+
+class RateLimited(Exception):
+    """HTTP 429. The limit is per IP, so the whole run stops and the next
+    5-minute round resumes; waiting it out here blocked the Reddit sync."""
 
 
 def _get(symbol: str, max_id=None, attempts: int = 6) -> list:
@@ -71,7 +78,9 @@ def _get(symbol: str, max_id=None, attempts: int = 6) -> list:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 raise
-            wait = 90 * (i + 1) if e.code == 429 else 10 * (i + 1)
+            if e.code == 429:              # ~200 calls/hour unauthenticated
+                raise RateLimited(symbol) from None
+            wait = 10 * (i + 1)
             if i == attempts - 1:
                 raise
             print(f"  {symbol}: HTTP {e.code}, retry in {wait}s", flush=True)
@@ -152,7 +161,17 @@ def _page_down(symbol: str, start_max, stop_id=None, stop_ts=None, st=None,
     """
     max_id, buf, total, pages = start_max, [], 0, 0
     while True:
-        msgs = _get(symbol, max_id)
+        try:
+            msgs = _get(symbol, max_id)
+        except RateLimited:
+            # Keep what was read; a catch-up re-reads its gap next run and a
+            # backfill resumes from the oldest row written.
+            total += _write(symbol, buf)
+            if track_oldest and buf:
+                st["oldest_id"] = min(r["id"] for r in buf)
+                st["oldest_utc"] = min(r["created_utc"] for r in buf)
+                _save_state(symbol, st)
+            raise
         time.sleep(PAUSE_S)
         pages += 1
         if not msgs:
@@ -237,7 +256,12 @@ def sync(start=None, symbols=SYMBOLS, min_free_gb: float = 1.0) -> dict:
         return {}
     out = {}
     for s in symbols:
-        out[s] = sync_symbol(s, start)
+        try:
+            out[s] = sync_symbol(s, start)
+        except RateLimited:
+            print(f"{s}: rate-limited (HTTP 429); stopping this run, the next "
+                  f"round resumes", flush=True)
+            break
         print(f"{s}: +{out[s]} new", flush=True)
     return out
 

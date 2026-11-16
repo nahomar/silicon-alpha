@@ -1,0 +1,17 @@
+[Unit]
+Description=silicon-alpha: evening watchdog + private records backup
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=silicon
+WorkingDirectory=/home/silicon/projects/silicon-alpha
+Environment=PYTHONPATH=/home/silicon/projects/silicon-alpha
+Environment=REPO=/home/silicon/projects/silicon-alpha
+Environment=PY=/home/silicon/projects/silicon-alpha/.venv-live/bin/python
+EnvironmentFile=-/home/silicon/.config/silicon-alpha/server.env
+ExecStart=/home/silicon/projects/silicon-alpha/.venv-live/bin/python -W ignore -m odte.live.watch
+TimeoutStartSec=30min
+StandardOutput=append:/home/silicon/projects/silicon-alpha/data/live/logs/evening.out
+StandardError=append:/home/silicon/projects/silicon-alpha/data/live/logs/evening.err

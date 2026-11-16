@@ -6,7 +6,11 @@ Submodules:
 """
 from .streaming_quantiles import StreamingQuantileFitter, StreamingLogEdgeFitter
 from .datashop_pack import DataShopPacker, pack_folder
-from .mixer import (
-    QualityWeights, WeightedShardTokenDataset, compute_row_weights,
-    describe_weighting,
-)
+
+try:                     # needs torch; the live bot's environment does not have it
+    from .mixer import (
+        QualityWeights, WeightedShardTokenDataset, compute_row_weights,
+        describe_weighting,
+    )
+except ImportError:      # pragma: no cover
+    pass

@@ -1,0 +1,1831 @@
+[
+  {
+    "id": "meic_chambless_5x30",
+    "name": "MEIC: five 0DTE iron condors every 30 min from 13:00 (Tammy Chambless)",
+    "family": "breakeven_multi_entry_ic",
+    "sources": [
+      "https://s3.us-east-2.amazonaws.com/f1.aeromir.com/2/2023/07/20230722-BCW-Tammy-Chambless-MEIC.pdf"
+    ],
+    "claimed_result": "Author's 2019-2022 backtest (683 days): 58.7% of days profitable, 16.6% losing, 24.7% breakeven; live since Aug 2022: 42% / 23% / 35%.",
+    "rule": {
+      "entry_time": [
+        "13:00",
+        "13:30",
+        "14:00",
+        "14:30",
+        "15:00"
+      ],
+      "structure": "iron_condor",
+      "short_k": 1.2,
+      "wing_points": 25,
+      "exit": {
+        "stop_loss": 0.2
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Times, 5 tranches, 10-30 pt widths (25 in her example) and the per-side 2x-credit stop are from her slides. Credit target converted to ~1.2 sigma (~10 delta). The engine stops the whole condor, so her per-side breakeven stop is approximated as a combined stop at 1.2x total credit (stop_loss 0.2, plausible range 0.1-0.25).",
+    "unexpressed_conditions": [
+      "strike chosen by target credit ($0.80-1.50 per side, average ~$1.20), not by distance",
+      "independent stop on each spread at 2x that spread's own credit; the other side is held to expiry",
+      "about an hour before the close the stop moves to the short leg only (min $1.00, or 3x the short's premium)",
+      "MEIC+ refinement: stop at 2x credit minus $0.10"
+    ]
+  },
+  {
+    "id": "meic_chambless_5x30_sl1",
+    "name": "MEIC with literal stop_loss 1.0 on the combined credit",
+    "family": "breakeven_multi_entry_ic",
+    "sources": [
+      "https://s3.us-east-2.amazonaws.com/f1.aeromir.com/2/2023/07/20230722-BCW-Tammy-Chambless-MEIC.pdf"
+    ],
+    "claimed_result": "Same source as meic_chambless_5x30 (2019-2022: 58.7% profitable days).",
+    "rule": {
+      "entry_time": [
+        "13:00",
+        "13:30",
+        "14:00",
+        "14:30",
+        "15:00"
+      ],
+      "structure": "iron_condor",
+      "short_k": 1.2,
+      "wing_points": 25,
+      "exit": {
+        "stop_loss": 1.0
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Literal application of the brief's 'breakeven stop = 1.0' convention. Because the engine applies it to the whole condor, this exits only when the condor costs 2x its total credit, which is much looser than MEIC's per-side stop.",
+    "unexpressed_conditions": [
+      "strike chosen by target credit ($0.80-1.50 per side, average ~$1.20), not by distance",
+      "independent stop on each spread at 2x that spread's own credit; the other side is held to expiry",
+      "about an hour before the close the stop moves to the short leg only (min $1.00, or 3x the short's premium)",
+      "MEIC+ refinement: stop at 2x credit minus $0.10"
+    ]
+  },
+  {
+    "id": "beic_sandvand_hourly",
+    "name": "Breakeven iron condor, about one entry per hour (John Einar Sandvand)",
+    "family": "breakeven_multi_entry_ic",
+    "sources": [
+      "https://www.thetaprofits.com/my-most-profitable-options-trading-strategy-0dte-breakeven-iron-condor/",
+      "https://www.sandvand.net/2023/04/30/how-i-trade-the-0dte-breakeven-iron-condor/"
+    ],
+    "claimed_result": "Author's live record Apr 2021-Feb 2026: ~9,100 trades, ~40% winners, 49 of 57 months profitable, average net P/L 0.28% of risk per trade.",
+    "rule": {
+      "entry_time": [
+        "10:00",
+        "11:00",
+        "12:00",
+        "13:00",
+        "14:00",
+        "15:00"
+      ],
+      "structure": "iron_condor",
+      "short_k": 1.1,
+      "wing_points": 30,
+      "exit": {
+        "stop_loss": 0.2
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Shorts at 10-15 delta (~1.0-1.3 sigma), wings ~30 pts, roughly hourly entries at least 30 min apart (count is discretionary; six hourly entries chosen). Per-side stop = total condor credit (side-level breakeven), approximated as combined stop_loss 0.2.",
+    "unexpressed_conditions": [
+      "per-side stop on short legs at the total condor credit",
+      "credits balanced between sides",
+      "stops tightened during the day",
+      "shorts bought back at $0.05"
+    ]
+  },
+  {
+    "id": "beic_oa_bot_morning",
+    "name": "Option Alpha breakeven iron condor bot: five entries 09:45-10:45",
+    "family": "breakeven_multi_entry_ic",
+    "sources": [
+      "https://optionalpha.com/bots/0dte-break-even-iron-condor-spy"
+    ],
+    "claimed_result": "none stated (template text seen only as a search-index snippet; the page redirects into the logged-in app).",
+    "rule": {
+      "entry_time": [
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "structure": "iron_condor",
+      "short_k": 1.1,
+      "wing_points": 30,
+      "exit": {
+        "stop_loss": 0.2
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Community template citing Sandvand: 5 synthetic condors every 15 min from 09:45, stop per spread at 100% of its credit. Strikes and width not visible; Sandvand's 1.1 sigma / 30 pts used. Original template trades SPY.",
+    "unexpressed_conditions": [
+      "per-spread stop at 100% of that spread's credit"
+    ]
+  },
+  {
+    "id": "oa_profitable_ifly_1015_monwed",
+    "name": "Option Alpha 'profitable trader' iron fly: 10:15 Mon/Wed, +15% / -25% / noon exit",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://optionalpha.com/blog/0dte-options-strategy-performance"
+    ],
+    "claimed_result": "Pattern of profitable Option Alpha users in ~230k 0DTE trades: IB opened ~10:15 Mon/Wed, closed at +15%, -25% or 12:00; platform-wide IB win rate 66.76%.",
+    "rule": {
+      "entry_time": "10:15",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 1.0,
+      "filters": {
+        "days_of_week": [
+          0,
+          2
+        ]
+      },
+      "exit": {
+        "take_profit": 0.15,
+        "stop_loss": 0.25,
+        "time_exit": "12:00"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Entry, days and all three exits are stated; wing width is not (1.0 sigma chosen). Mostly SPY trades. The rule is read off the cross-section of winning users, so it carries survivorship and data-mining bias.",
+    "unexpressed_conditions": [
+      "wing width unknown"
+    ]
+  },
+  {
+    "id": "ocafe_ifly_0945",
+    "name": "Options Cafe 0DTE SPX iron fly: 09:45, 30-pt wings, 2x-credit stop, VIX 12-25",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://options.cafe/blog/zero-dte-spx-iron-butterfly-strategy/",
+      "https://options.cafe/results/2024/zero-dte-spx-iron-butterflies/"
+    ],
+    "claimed_result": "Live: 2024 +$5,079 on 168 trades (77% win); Jan-Oct 2025 -$5,472 on 86 trades (78% win); average loser grew from ~$800 to ~$1,500.",
+    "rule": {
+      "entry_time": "09:45",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 30,
+      "filters": {
+        "vix_min": 12,
+        "vix_max": 25,
+        "skip_event_days": true,
+        "max_gap_pct": 0.75
+      },
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "exact",
+    "notes": "Entry, ATM short strike, 30-pt wings, exit at a loss of 2x credit, VIX band and FOMC/CPI/NFP skips are stated. 'Overnight SPX range under 0.75%' mapped to max_gap_pct 0.75 (proxy).",
+    "unexpressed_conditions": [
+      "skip the day after a >=1% SPX move",
+      "skip quad-witching and headline-risk days",
+      "require credit >= 50% of wing width"
+    ]
+  },
+  {
+    "id": "ocafe_ifly_0945_vix14_20",
+    "name": "Options Cafe iron fly, tightened VIX 14-20 filter (mid-2026 revision)",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://options.cafe/blog/zero-dte-spx-iron-butterfly-strategy/"
+    ],
+    "claimed_result": "none stated separately (author's revised filter after the 2025 losses; ~6-8 trades a month).",
+    "rule": {
+      "entry_time": "09:45",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 30,
+      "filters": {
+        "vix_min": 14,
+        "vix_max": 20,
+        "skip_event_days": true,
+        "max_gap_pct": 0.75
+      },
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "exact",
+    "notes": "Variant of ocafe_ifly_0945 with the author's later VIX band; 'otherwise calm' condition not expressible.",
+    "unexpressed_conditions": [
+      "skip the day after a >=1% SPX move",
+      "discretionary 'calm market' check"
+    ]
+  },
+  {
+    "id": "doc_ifly_1000_quick",
+    "name": "Theta Profits 'Doc' quick iron fly: 10:00, wings at expected move, out within an hour",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://www.thetaprofits.com/the-0dte-iron-fly-a-faster-more-disciplined-way-to-trade-spx/"
+    ],
+    "claimed_result": "Discretionary trader's record: 2023 121 trades ~95% win, PF 3.85; 2024 144 trades ~86% win, PF 1.92.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 1.0,
+      "filters": {
+        "max_morning_move_sigma": 0.5
+      },
+      "exit": {
+        "take_profit": 0.03,
+        "stop_loss": 0.15,
+        "time_exit": "11:00"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Wings = expected move (~1 sigma); target $50-100 per contract on a ~$2,000 credit (~3%); exit when price nears a long strike (~$350 loss, ~0.15x credit); flat within an hour (average hold 18 min). Trend-day avoidance is discretionary, proxied by a quiet-open filter.",
+    "unexpressed_conditions": [
+      "first 30-min range must sit inside the day's expected move",
+      "avoid trend / high-volatility days (discretionary)",
+      "stop is an underlying-price stop (price touches a long strike)"
+    ]
+  },
+  {
+    "id": "tl_ifly_20w_tp10",
+    "name": "tastylive 0DTE iron fly, $20 wings, 10% profit target",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://www.tastylive.com/shows/market-measures/episodes/zero-dte-winners-and-losers-for-iron-flies-08-07-2025"
+    ],
+    "claimed_result": "Per the episode summary in a search index: 78% win with a 10% target vs 61% with 20%; average P&L $92 vs $177 (page itself not readable).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 20,
+      "exit": {
+        "take_profit": 0.1
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Wing and target from the summary; entry time not stated (10:00 assumed); no stop stated (held otherwise). Numbers unverified.",
+    "unexpressed_conditions": [
+      "entry time unknown"
+    ]
+  },
+  {
+    "id": "tl_ifly_20w_tp20",
+    "name": "tastylive 0DTE iron fly, $20 wings, 20% profit target",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://www.tastylive.com/shows/market-measures/episodes/zero-dte-winners-and-losers-for-iron-flies-08-07-2025"
+    ],
+    "claimed_result": "Same episode summary: 61% win, average P&L $177.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 20,
+      "exit": {
+        "take_profit": 0.2
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Variant of tl_ifly_20w_tp10.",
+    "unexpressed_conditions": [
+      "entry time unknown"
+    ]
+  },
+  {
+    "id": "tl_ifly_20w_tp10_no_thu",
+    "name": "tastylive iron fly (10% target) skipping Thursdays",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://www.tastylive.com/shows/market-measures/episodes/zero-dte-winners-and-losers-for-iron-flies-08-07-2025"
+    ],
+    "claimed_result": "Same episode summary: Thursday reported as the worst day for 0DTE trades.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 20,
+      "filters": {
+        "days_of_week": [
+          0,
+          1,
+          2,
+          4
+        ]
+      },
+      "exit": {
+        "take_profit": 0.1
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Day-of-week variant; the source only says Thursday was worst, not that skipping it was tested."
+  },
+  {
+    "id": "tl_ifly_30w_1000",
+    "name": "tastylive $30-wide iron fly entered in the first hour (9:00-9:30 CT)",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://www.tastylive.com/shows/market-measures/episodes/best-times-for-0-dte-scalps-05-08-2025"
+    ],
+    "claimed_result": "Per the episode summary in a search index: two years of data, 9:00-9:30 CT the best window, ~60% POP and ~$6 average P&L.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 30,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "9:00-9:30 CT = 10:00-10:30 ET; exit rule not stated (the show calls them 'scalps'); held to expiry here. Numbers unverified.",
+    "unexpressed_conditions": [
+      "exit rule unknown"
+    ]
+  },
+  {
+    "id": "s0r_b31a_flat_day_ifly_1330",
+    "name": "Flat-day afternoon iron fly (spy-0dte-research B31-A)",
+    "family": "atm_iron_fly_practitioner",
+    "sources": [
+      "https://spy-0dte-research.pages.dev/research/"
+    ],
+    "claimed_result": "SPY, 2-year Option Alpha backtest: PF 1.97, 71.4% win, N=276; one of ~450 configurations tested.",
+    "rule": {
+      "entry_time": "13:30",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing_points": 50,
+      "filters": {
+        "max_morning_move_sigma": 1.0,
+        "max_gap_pct": 0.5
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "SPY $5 wings ~ SPX 50 pts. Filter is the day's change vs the prior close within +/-0.5%, proxied by gap <=0.5% and a 09:31-13:30 move <=1 sigma. Obscure, heavily searched configuration grid: high multiple-testing risk.",
+    "unexpressed_conditions": [
+      "day change since prior close within +/-0.5% (signed, gap-inclusive)"
+    ]
+  },
+  {
+    "id": "oa_ic_after_2h",
+    "name": "Iron condor opened more than 2h after the open (Option Alpha 25k-position study)",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionalpha.com/blog/0dte"
+    ],
+    "claimed_result": "Iron condors opened >2h after the open averaged +37% of premium (759 positions) vs -0.36% for those opened within 2h.",
+    "rule": {
+      "entry_time": "11:45",
+      "structure": "iron_condor",
+      "short_k": 1.0,
+      "wing": 0.5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Observational platform data (mostly SPY, avg width $7.58). Strike distance not stated (1.0 sigma chosen); 11:45 chosen as 'more than 2h after open'.",
+    "unexpressed_conditions": [
+      "strikes and width unknown"
+    ]
+  },
+  {
+    "id": "oa_ic_first_2h",
+    "name": "Iron condor opened within 2h of the open (control twin of oa_ic_after_2h)",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionalpha.com/blog/0dte"
+    ],
+    "claimed_result": "Iron condors opened within 2h of the open averaged -0.36% of premium.",
+    "rule": {
+      "entry_time": "10:30",
+      "structure": "iron_condor",
+      "short_k": 1.0,
+      "wing": 0.5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Same caveats as oa_ic_after_2h.",
+    "unexpressed_conditions": [
+      "strikes and width unknown"
+    ]
+  },
+  {
+    "id": "oa_oracle_ic_1109",
+    "name": "Option Alpha 0DTE Oracle example: $5-wide condor 0.32% OTM at 11:09 (Kirk Du Plessis)",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionalpha.com/learn/top-0dte-options-strategies"
+    ],
+    "claimed_result": "$285 credit on a $5-wide SPX condor (132.6% reward/risk); a 1-year Oracle backtest is shown only as an image.",
+    "rule": {
+      "entry_time": "11:09",
+      "structure": "iron_condor",
+      "short_k": 0.5,
+      "wing_points": 5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "0.32% OTM converted with sigma-to-close ~0.65% of spot at 11:09 -> ~0.5 sigma. Near-the-money, narrow-wing condor.",
+    "unexpressed_conditions": [
+      "strike set as % OTM, not sigma"
+    ]
+  },
+  {
+    "id": "oa_oracle_ic_1444",
+    "name": "Option Alpha example: $5-wide condor 0.2% OTM at 14:44",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionalpha.com/learn/top-0dte-options-strategies"
+    ],
+    "claimed_result": "Illustrative EV +$36/trade (68% x $196 - 32% x $304); SPX closed within 0.2% of its 2 pm price on 65.6% of the prior 180 days.",
+    "rule": {
+      "entry_time": "14:44",
+      "structure": "iron_condor",
+      "short_k": 0.6,
+      "wing_points": 5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "0.2% OTM with sigma-to-close ~0.33% at 14:44 -> ~0.6 sigma.",
+    "unexpressed_conditions": [
+      "strike set as % OTM, not sigma"
+    ]
+  },
+  {
+    "id": "cboe_schwartz_dollar_ic",
+    "name": "Henry Schwartz (Cboe) 'dollar rule' condor: 10-pt spreads for ~$1 per side, set and forget",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://www.cboe.com/insights/posts/henry-schwartzs-zero-day-spx-iron-condor-strategy-a-deep-dive"
+    ],
+    "claimed_result": "No systematic result; example condor sold for $2.00 near 12:49 ET expired worthless (+$200).",
+    "rule": {
+      "entry_time": "12:50",
+      "structure": "iron_condor",
+      "short_k": 1.1,
+      "wing_points": 10,
+      "filters": {
+        "skip_event_days": true
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Credit target (~$1.00 per 10-wide side) converted to ~1.1 sigma; no stops; avoid Fed days. Entry is discretionary (after morning volatility settles); 12:50 taken from the example.",
+    "unexpressed_conditions": [
+      "strike chosen by $1.00 target credit per side",
+      "discretionary entry timing"
+    ]
+  },
+  {
+    "id": "op_ic_0935_10d_sl2",
+    "name": "OptionsPilot base condor: 09:35, 10-delta shorts, 25-pt wings, 200% stop",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionspilot.app/blog/0dte-options-backtesting-zero-days-expiration-strategies"
+    ],
+    "claimed_result": "Jun 2022-Dec 2025: 877 trades, 78.2% win, net +$6,820, Sharpe 0.41, max DD -$11,400 (vendor backtest).",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "iron_condor",
+      "short_k": 1.28,
+      "wing_points": 25,
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "exact",
+    "notes": "Vendor marketing page; fills and costs undisclosed. '200% stop-loss on credit received' read as a loss of 2x credit."
+  },
+  {
+    "id": "op_ic_0935_10d_sl2_noevents",
+    "name": "OptionsPilot condor skipping FOMC/CPI/NFP days",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionspilot.app/blog/0dte-options-backtesting-zero-days-expiration-strategies"
+    ],
+    "claimed_result": "81% win; ~35% higher net P&L than the unfiltered base (also skips GDP days; dropping the 8 FOMC days alone added >$4,200).",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "iron_condor",
+      "short_k": 1.28,
+      "wing_points": 25,
+      "filters": {
+        "skip_event_days": true
+      },
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "exact",
+    "notes": "GDP days are not in the engine's event set.",
+    "unexpressed_conditions": [
+      "also skip GDP release days"
+    ]
+  },
+  {
+    "id": "op_ic_0935_10d_sl2_vix14_22",
+    "name": "OptionsPilot condor only when VIX is 14-22",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://optionspilot.app/blog/0dte-options-backtesting-zero-days-expiration-strategies"
+    ],
+    "claimed_result": "80% win, Sharpe 0.58; trades with VIX above 25 had negative expected value.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "iron_condor",
+      "short_k": 1.28,
+      "wing_points": 25,
+      "filters": {
+        "vix_min": 14,
+        "vix_max": 22
+      },
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "exact",
+    "notes": "Assumes the base condor's stop is kept (not restated for the variant)."
+  },
+  {
+    "id": "orats_ic_0945_20d_5d",
+    "name": "ORATS example condor: 09:45, 20-delta shorts, 5-delta longs, 200% stop",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://orats.com/intraday-backtester"
+    ],
+    "claimed_result": "QQQ 0DTE since Oct 2020: 1,156 trades, 81% win, Sharpe 0.64 (vendor example).",
+    "rule": {
+      "entry_time": "09:45",
+      "structure": "iron_condor",
+      "short_k": 0.84,
+      "wing": 0.8,
+      "exit": {
+        "stop_loss": 2.0
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Run on QQQ, not SPX. 5-delta long legs converted to a wing of ~0.8 sigma (1.64 - 0.84).",
+    "unexpressed_conditions": [
+      "long legs chosen by delta rather than fixed width"
+    ]
+  },
+  {
+    "id": "zh_otm2_strangle_open_analog",
+    "name": "Far-OTM (~2.5 sigma) strangle sold at the expiry-day open (Chinese 'sell the doomsday lottery')",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://finance.sina.com.cn/roll/2020-05-12/doc-iircuyvi2757216.shtml",
+      "https://quant.pobo.net.cn/quant/download/report/options/初级-年化200%25-期权卖方策略初探.pdf"
+    ],
+    "claimed_result": "广发期货, 50ETF 2015-2020 (59 expiries): selling the OTM-2 strangle at the T-1 close won 100%; 光大证券: OTM contracts with <2 days left very likely expire worthless.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "iron_condor",
+      "short_k": 2.5,
+      "wing": 1.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Extrapolated: the sources sell at the prior close (1DTE; see zh_otm2_strangle_t1_1dte). Same ~2.5 sigma distance applied at the expiry-day open. Chinese ETF options expire monthly, so source samples are ~12 events/year.",
+    "unexpressed_conditions": [
+      "光大's stop: close if the option stops being OTM (underlying-price stop)"
+    ]
+  },
+  {
+    "id": "zh_85pct_range_strangle",
+    "name": "Sell strikes outside the 85% range on the last trading day (期权酱 'original doomsday seller')",
+    "family": "otm_iron_condor",
+    "sources": [
+      "https://m.sohu.com/a/848829358_121105245/"
+    ],
+    "claimed_result": "none stated.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "iron_condor",
+      "short_k": 1.44,
+      "wing": 1.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Two-sided 85% range = +/-1.44 sigma (~7 delta per side). Volatility input, entry time and stop are not given in the source.",
+    "unexpressed_conditions": [
+      "range computed from an unspecified volatility estimate (possibly realized)"
+    ]
+  },
+  {
+    "id": "oa_orb60_spread",
+    "name": "Option Alpha 60-min opening-range-breakout credit spread",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionalpha.com/blog/opening-range-breakout-0dte-options-trading-strategy-explained"
+    ],
+    "claimed_result": "60-min ORB, $15-wide SPX spreads: total P/L $23,387, 89.4% win, avg $39/trade, PF 1.44, max DD -$3,453 (period not stated).",
+    "rule": {
+      "entry_time": "10:30",
+      "structure": "put_credit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0.8,
+      "wing_points": 15,
+      "filters": {
+        "min_morning_move_sigma": 0.3
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Breakout up -> short put spread at the range low; breakout down -> short call spread at the range high; hold to the close. Proxy: enter at 10:30 in the direction of the 09:31-10:30 move if it is >=0.3 sigma, short strike ~0.8 sigma (typical 60-min range).",
+    "unexpressed_conditions": [
+      "entry triggered by a break of the opening-range high/low any time up to 12:00, not at a fixed time",
+      "short strike placed at the opposite opening-range boundary",
+      "opening range must be >= 0.2% of the open"
+    ]
+  },
+  {
+    "id": "oa_orb30_spread",
+    "name": "Option Alpha 30-min ORB credit spread",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionalpha.com/blog/opening-range-breakout-0dte-options-trading-strategy-explained"
+    ],
+    "claimed_result": "30-min ORB: $19,555, 82.6% win, avg $31, PF 1.19, max DD -$8,306.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "put_credit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0.6,
+      "wing_points": 15,
+      "filters": {
+        "min_morning_move_sigma": 0.25
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Same proxy as oa_orb60_spread with a 30-min range.",
+    "unexpressed_conditions": [
+      "entry triggered by a break of the opening-range high/low any time up to 12:00, not at a fixed time",
+      "short strike placed at the opposite opening-range boundary",
+      "opening range must be >= 0.2% of the open"
+    ]
+  },
+  {
+    "id": "oa_orb15_spread",
+    "name": "Option Alpha 15-min ORB credit spread",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionalpha.com/blog/opening-range-breakout-0dte-options-trading-strategy-explained"
+    ],
+    "claimed_result": "15-min ORB: $19,053, 78.1% win, avg $35, PF 1.17, max DD -$7,602.",
+    "rule": {
+      "entry_time": "09:45",
+      "structure": "put_credit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0.45,
+      "wing_points": 15,
+      "filters": {
+        "min_morning_move_sigma": 0.2
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Same proxy as oa_orb60_spread with a 15-min range.",
+    "unexpressed_conditions": [
+      "entry triggered by a break of the opening-range high/low any time up to 12:00, not at a fixed time",
+      "short strike placed at the opposite opening-range boundary",
+      "opening range must be >= 0.2% of the open"
+    ]
+  },
+  {
+    "id": "oa_orb60_bot_filtered",
+    "name": "Option Alpha public 60-min ORB bot: VIX<25, no FOMC, 15% target",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionalpha.com/blog/opening-range-breakout-0dte-options-trading-strategy-explained",
+      "https://optionalpha.com/blog/whats-new-in-option-alpha-june-2025"
+    ],
+    "claimed_result": "none stated (bot settings seen only in a search-index snippet: range >=0.2%, min reward/risk 180%, VIX<25, avoid FOMC, target 15% or $300).",
+    "rule": {
+      "entry_time": "10:30",
+      "structure": "put_credit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0.8,
+      "wing_points": 15,
+      "filters": {
+        "min_morning_move_sigma": 0.3,
+        "vix_max": 25,
+        "skip_event_days": true
+      },
+      "exit": {
+        "take_profit": 0.15
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "skip_event_days also drops CPI/NFP days (the bot avoids FOMC only).",
+    "unexpressed_conditions": [
+      "entry triggered by a break of the opening-range high/low any time up to 12:00, not at a fixed time",
+      "short strike placed at the opposite opening-range boundary",
+      "opening range must be >= 0.2% of the open",
+      "minimum reward/risk 180%",
+      "skip FOMC only"
+    ]
+  },
+  {
+    "id": "oa_sma5_contrarian_spread",
+    "name": "Option Alpha contrarian SMA5 credit spread, Mon/Wed mornings",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionalpha.com/blog/0dte-options-strategy-performance"
+    ],
+    "claimed_result": "Contrarian SMA5 conditions (short call spread when open > 5-day SMA, short put spread when below): profit factor >2.0, win rate >75%, ~17% of trades.",
+    "rule": {
+      "entry_time": "10:15",
+      "structure": "put_credit_spread",
+      "direction": "against_morning_move",
+      "short_k": 0.84,
+      "wing": 0.5,
+      "filters": {
+        "days_of_week": [
+          0,
+          2
+        ]
+      },
+      "exit": {
+        "take_profit": 0.15,
+        "stop_loss": 0.25,
+        "time_exit": "12:00"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "The real signal is the open vs the 5-day SMA (multi-day); against_morning_move is only an intraday proxy. Strikes not stated (20 delta chosen); exits borrowed from the same study's iron-fly findings.",
+    "unexpressed_conditions": [
+      "side chosen by open vs 5-day SMA (contrarian)",
+      "strike and width unknown"
+    ]
+  },
+  {
+    "id": "gh_vix1d_half_em_spread",
+    "name": "VIX1D half-expected-move credit spread at 09:45 (open-source GitHub bot)",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://github.com/thunderscarf/SPX_0DTE_Options_Selling_Public"
+    ],
+    "claimed_result": "537-day backtest: 78.2% win, EV $25.73/trade, 15.7% annualized, Sharpe 0.97, max DD -16.2%.",
+    "rule": {
+      "entry_time": "09:45",
+      "structure": "put_credit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0.5,
+      "wing_points": 5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Short strike at half of the VIX1D-implied daily move (~0.5 sigma), $5 wide, held to expiry. The side comes from a multi-day moving-average/ADX trend regime, proxied here by the 09:31-09:45 move.",
+    "unexpressed_conditions": [
+      "side by multi-day trend regime (moving averages / ADX)",
+      "strike from VIX1D, not the 0DTE straddle"
+    ]
+  },
+  {
+    "id": "op_pcs_1300_8d",
+    "name": "OptionsPilot afternoon put spread: 13:00, 8 delta, 20 pts wide",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://optionspilot.app/blog/0dte-options-backtesting-zero-days-expiration-strategies"
+    ],
+    "claimed_result": "650+ trades, 86% win, +$38/trade, Sharpe 0.62 (vendor backtest, paired with event-day avoidance).",
+    "rule": {
+      "entry_time": "13:00",
+      "structure": "put_credit_spread",
+      "direction": "fixed_put",
+      "short_k": 1.4,
+      "wing_points": 20,
+      "filters": {
+        "skip_event_days": true
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Exit not stated; held to expiry. 8 delta ~ 1.4 sigma."
+  },
+  {
+    "id": "zh_sell_5d_put_open",
+    "name": "Sell ~5-delta puts at the open, hold to expiry (金衍君 50ETF seller test)",
+    "family": "directional_credit_spread",
+    "sources": [
+      "https://finance.sina.com.cn/option/2021-04-13/doc-ikmxzfmk6396360.shtml"
+    ],
+    "claimed_result": "50ETF: selling |delta|~0.05 puts (delta from 20-day historical vol) held to expiry was the best seller variant; 0.10-delta puts and all short calls hit the risk limit. No return figures.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "put_credit_spread",
+      "direction": "fixed_put",
+      "short_k": 1.5,
+      "wing": 1.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Naked put capped with a 1-sigma wing. Delta from realized (not implied) vol puts the strike closer than 5 implied delta; ~1.5 sigma used. Source picks the shortest-dated contract, not specifically the expiry day.",
+    "unexpressed_conditions": [
+      "delta computed from 20-day realized volatility",
+      "naked short put"
+    ]
+  },
+  {
+    "id": "om_short_call_25d_1000",
+    "name": "OptionMetrics 0DTE covered-call leg: sell a 25-delta call at 10:00",
+    "family": "short_call_overlay",
+    "sources": [
+      "https://optionmetrics.com/blog/0dte-covered-calls-arent-special-timing-them-is/"
+    ],
+    "claimed_result": "0DTE 25-delta SPX covered call (calls sold at the bid, plus long index), May 2022-2025: 16.5% CAGR, Sharpe 1.04, best of 0/5/10/30 DTE.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "call_credit_spread",
+      "direction": "fixed_call",
+      "short_k": 0.67,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Tests only the option leg: the naked short call is capped with a far (3 sigma) wing, and the long-index leg is dropped.",
+    "unexpressed_conditions": [
+      "naked short call",
+      "long SPX underlying leg"
+    ]
+  },
+  {
+    "id": "om_short_call_1pct_1000",
+    "name": "OptionMetrics 0DTE covered-call leg: sell a 1.0%-OTM call at 10:00",
+    "family": "short_call_overlay",
+    "sources": [
+      "https://optionmetrics.com/?p=3003"
+    ],
+    "claimed_result": "2018-2025: 1.0%-OTM 0DTE covered call 14.2% annualized, Sharpe 0.79 vs SPX 12.4% (ATM version 6.8%).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "call_credit_spread",
+      "direction": "fixed_call",
+      "short_k": 1.4,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "1.0% OTM with sigma-to-close ~0.72% at 10:00 -> ~1.4 sigma. Option leg only.",
+    "unexpressed_conditions": [
+      "strike set as % OTM",
+      "long SPX underlying leg"
+    ]
+  },
+  {
+    "id": "om_short_call_lowskew",
+    "name": "OptionMetrics skew-timed 0DTE call sale (only when 25-delta put-call skew < 3%)",
+    "family": "short_call_overlay",
+    "sources": [
+      "https://optionmetrics.com/blog/0dte-covered-calls-arent-special-timing-them-is/"
+    ],
+    "claimed_result": "Skew filter cut trades by ~half and lifted the covered call from 16.5% to 19.8% CAGR, Sharpe 1.04 to 1.14.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Needs a 10:00 0DTE skew filter (25-delta put IV minus 25-delta call IV below 3%). The chains contain the data, but the engine vocabulary has no skew filter."
+  },
+  {
+    "id": "dev_short_straddle_1000",
+    "name": "Short ATM 0DTE straddle at 10:00, held to close (Dim-Eraker-Vilkov)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096"
+    ],
+    "claimed_result": "Long ATM straddle bought at 10:00, 2012-Jun 2023: mean -0.7%, median -18.6%, annualized SR -0.13 (seller earns the mirror before costs).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper holds a naked ATM straddle to the 16:00 close; the short side is approximated by an iron fly with far (3 sigma) wings. Their returns are for the buyer, scaled to a 6-hour equivalent.",
+    "unexpressed_conditions": [
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "dev_short_straddle_1300",
+    "name": "Short ATM 0DTE straddle at 13:00 (Dim-Eraker-Vilkov)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096"
+    ],
+    "claimed_result": "Long straddle at 13:00: mean -7.1% (6h-scaled; ~-3.6% raw), annualized SR -0.71.",
+    "rule": {
+      "entry_time": "13:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper holds a naked ATM straddle to the 16:00 close; the short side is approximated by an iron fly with far (3 sigma) wings. Their returns are for the buyer, scaled to a 6-hour equivalent.",
+    "unexpressed_conditions": [
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "dev_short_straddle_1430",
+    "name": "Short ATM 0DTE straddle at 14:30 (Dim-Eraker-Vilkov)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096"
+    ],
+    "claimed_result": "Long straddle at 14:30: mean -21.0% (6h-scaled; ~-5.2% raw), annualized SR -1.09.",
+    "rule": {
+      "entry_time": "14:30",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper holds a naked ATM straddle to the 16:00 close; the short side is approximated by an iron fly with far (3 sigma) wings. Their returns are for the buyer, scaled to a 6-hour equivalent.",
+    "unexpressed_conditions": [
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "dev_short_straddle_1500",
+    "name": "Short ATM 0DTE straddle at 15:00 (Dim-Eraker-Vilkov)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096",
+      "https://optionalpha.com/blog/0dte-options-time-decay"
+    ],
+    "claimed_result": "Long straddle at 15:00: mean -38.4% (6h-scaled; ~-6.4% raw), annualized SR -1.35, the most negative of all entry times.",
+    "rule": {
+      "entry_time": "15:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper holds a naked ATM straddle to the 16:00 close; the short side is approximated by an iron fly with far (3 sigma) wings. Their returns are for the buyer, scaled to a 6-hour equivalent. Option Alpha's decay study likewise finds decay accelerating after 15:30.",
+    "unexpressed_conditions": [
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "dev_short_straddle_1530",
+    "name": "Short ATM 0DTE straddle at 15:30 (Dim-Eraker-Vilkov)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096",
+      "https://optionalpha.com/blog/0dte-options-time-decay"
+    ],
+    "claimed_result": "Long straddle at 15:30: mean -40.8% (6h-scaled; ~-3.4% raw), annualized SR -0.73.",
+    "rule": {
+      "entry_time": "15:30",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper holds a naked ATM straddle to the 16:00 close; the short side is approximated by an iron fly with far (3 sigma) wings. Their returns are for the buyer, scaled to a 6-hour equivalent.",
+    "unexpressed_conditions": [
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "dev_long_straddle_1030",
+    "name": "Long ATM 0DTE straddle at 10:30 (Dim-Eraker-Vilkov; the one non-negative bar)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://westernfinance-portal.org/viewpaper?n=950096"
+    ],
+    "claimed_result": "Long straddle at 10:30: mean +0.3% (6h-scaled), annualized SR +0.05, i.e. no premium either way.",
+    "rule": {
+      "entry_time": "10:30",
+      "structure": "long_straddle",
+      "short_k": 0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "exact",
+    "notes": "Exactly the paper's object (ATM straddle bought at the 10:30 bar, held to the close). Expected null."
+  },
+  {
+    "id": "afh_short_straddle_lowvol_1000",
+    "name": "Sell 0DTE variance only in low-volatility states (Almeida-Freire-Hizmeri)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://www.fma.org/assets/docs/Derivatives2025/Almeida.pdf",
+      "https://firmtape.com/research/what-the-0dte-literature-claims"
+    ],
+    "claimed_result": "Per the FirmTape summary: after-cost Sharpe 0.40-0.47 in low realized-vol states vs 0.00-0.08 in high; edge reported to vanish after 2022-05-11.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "filters": {
+        "vix_max": 15
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper conditions on realized-vol state; prior-day VIX <= 15 is a proxy. Entry time not pinned down in the summary (10:00 chosen). Numbers come from a secondary summary; the full PDF could not be text-extracted.",
+    "unexpressed_conditions": [
+      "low realized-volatility state (not VIX)",
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "ls_fomc_short_straddle_1330",
+    "name": "Sell 0DTE straddle before the 14:00 FOMC release (Londono-Samadi event premium)",
+    "family": "intraday_vrp_short_straddle",
+    "sources": [
+      "https://www.federalreserve.gov/econres/ifdp/the-price-of-macroeconomic-uncertainty-evidence-from-daily-options.htm"
+    ],
+    "claimed_result": "Variance risk premia of daily-expiry SPX options spanning FOMC releases are 44% larger than for control options.",
+    "rule": {
+      "entry_time": "13:30",
+      "structure": "iron_fly",
+      "short_k": 0,
+      "wing": 3.0,
+      "filters": {
+        "only_event_days": true
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Only FOMC falls inside the 0DTE session (CPI/NFP print at 08:30), but the engine's event flag also includes CPI/NFP days, diluting the test. Contrast: OptionsPilot found condors did better skipping FOMC days.",
+    "unexpressed_conditions": [
+      "FOMC days only (event-type selector)",
+      "naked short straddle"
+    ]
+  },
+  {
+    "id": "vilkov_short_strangle_1000",
+    "name": "Short +/-0.5% strangle at 10:00, held to close (Vilkov '0DTE Trading Rules')",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "09/2016-01/2026: short strangles positive on >=75% of days, but the unconditional net Sharpe of straddle/strangle selling is about -0.5 (FirmTape reading).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_condor",
+      "short_k": 0.7,
+      "wing": 3.0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Strikes fixed in moneyness (all configurations within +/-0.5% of spot); 0.5% converted with sigma-to-close ~0.72% at 10:00. Naked strangle capped with far wings.",
+    "unexpressed_conditions": [
+      "strikes fixed in % moneyness",
+      "naked short strangle"
+    ]
+  },
+  {
+    "id": "vilkov_iron_condor_1000",
+    "name": "Iron condor 0.3%/0.5% OTM at 10:00 (Vilkov)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "Unconditional iron fly/condor net Sharpe about -0.96 (FirmTape); logistic-timed version gross SR 0.77, net -0.20.",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_condor",
+      "short_k": 0.4,
+      "wing": 0.3,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Paper's example configuration 0.995/0.997/1.003/1.005 converted at sigma ~0.72% of spot.",
+    "unexpressed_conditions": [
+      "strikes fixed in % moneyness"
+    ]
+  },
+  {
+    "id": "vilkov_iron_condor_1300",
+    "name": "Iron condor 0.3%/0.5% OTM at 13:00 (Vilkov appendix entry time)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "Appendix entry time; the paper says the qualitative findings are unchanged.",
+    "rule": {
+      "entry_time": "13:00",
+      "structure": "iron_condor",
+      "short_k": 0.6,
+      "wing": 0.4,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Same moneyness, converted at sigma-to-close ~0.51% at 13:00.",
+    "unexpressed_conditions": [
+      "strikes fixed in % moneyness"
+    ]
+  },
+  {
+    "id": "vilkov_iron_condor_1500",
+    "name": "Iron condor 0.3%/0.5% OTM at 15:00 (Vilkov appendix entry time)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "Appendix entry time; the paper says the qualitative findings are unchanged.",
+    "rule": {
+      "entry_time": "15:00",
+      "structure": "iron_condor",
+      "short_k": 1.0,
+      "wing": 0.7,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Same moneyness, converted at sigma-to-close ~0.29% at 15:00.",
+    "unexpressed_conditions": [
+      "strikes fixed in % moneyness"
+    ]
+  },
+  {
+    "id": "vilkov_bear_put_spread_highvix",
+    "name": "ATM bear put spread at 10:00 in high-VIX regimes (Vilkov)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "Bear put (and put ratio) spreads earn substantially higher mean PnL in the high implied-variance tercile (ex-post cutoffs, statistically weak).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "put_debit_spread",
+      "short_k": 0,
+      "wing": 0.7,
+      "filters": {
+        "vix_min": 20
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Buy the ~ATM put, sell 0.5% lower. Tercile cutoffs were ex-post on 10:00 implied variance; prior-day VIX >= 20 is a proxy.",
+    "unexpressed_conditions": [
+      "regime from 10:00 0DTE implied variance terciles"
+    ]
+  },
+  {
+    "id": "vilkov_bull_call_spread_lowvix",
+    "name": "ATM bull call spread at 10:00 in low-VIX regimes (Vilkov)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "Call spreads perform better in the low implied-variance tercile (ex-post cutoffs, statistically weak).",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "call_debit_spread",
+      "short_k": 0,
+      "wing": 0.7,
+      "filters": {
+        "vix_max": 14
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Buy the ~ATM call, sell 0.5% higher. Prior-day VIX <= 14 as the low-tercile proxy.",
+    "unexpressed_conditions": [
+      "regime from 10:00 0DTE implied variance terciles"
+    ]
+  },
+  {
+    "id": "vilkov_risk_reversal_1000",
+    "name": "Risk reversal at 10:00 (Vilkov)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "The only structure with consistently positive mean, median and 25th-percentile PnL (~0.01% of spot per day).",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Structure (naked short OTM option against a long opposite OTM option) is not in the engine vocabulary; data are available."
+  },
+  {
+    "id": "vilkov_put_ratio_timed",
+    "name": "Logistic-timed put 1x2 ratio spread (Vilkov out-of-sample timing)",
+    "family": "vilkov_moneyness_grid",
+    "sources": [
+      "https://github.com/vilkovgr/0dte-strategies/blob/main/docs/paper/paper-annotated.md",
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4641356",
+      "https://firmtape.com/research/what-the-0dte-literature-claims",
+      "https://www.cxoadvisory.com/equity-options/0dte-strategy-outcomes"
+    ],
+    "claimed_result": "OOS 2019-2026: put ratio spread gross SR 1.18, net 0.93; top-3 strategy basket net SR 0.82.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Needs a 1x2 ratio structure and a per-strategy logistic model on 10:00 implied state and lagged PnL; neither is in the vocabulary."
+  },
+  {
+    "id": "mom_last30_debit_spread",
+    "name": "Last-30-minute momentum via ATM debit spread at 15:30 (Gao et al.; Baltussen et al.)",
+    "family": "intraday_momentum_close",
+    "sources": [
+      "https://econpapers.repec.org/RePEc:eee:jfinec:v:129:y:2018:i:2:p:394-414",
+      "https://pure.eur.nl/en/publications/hedging-demand-and-market-intraday-momentum/"
+    ],
+    "claimed_result": "Gao-Han-Li-Zhou: SPY first-half-hour return predicts the last half hour (R^2 1.6%, 1993-2013); Baltussen et al.: last 30 min follows the rest-of-day return, strongest on dealer negative-gamma days.",
+    "rule": {
+      "entry_time": "15:30",
+      "structure": "call_debit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0,
+      "wing": 0.5,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Up since 09:31 -> buy ATM call spread, down -> ATM put spread, hold to the close. Signal is the 09:31-15:30 move (Baltussen's rest-of-day minus the overnight gap); Gao's first-half-hour signal is not expressible.",
+    "unexpressed_conditions": [
+      "signal from prior close to 10:00 (Gao) or prior close to 15:30 (Baltussen)",
+      "dealer net-gamma conditioning"
+    ]
+  },
+  {
+    "id": "mom_last30_debit_spread_bigday",
+    "name": "Last-30-minute momentum, large-move days only",
+    "family": "intraday_momentum_close",
+    "sources": [
+      "https://econpapers.repec.org/RePEc:eee:jfinec:v:129:y:2018:i:2:p:394-414",
+      "https://pure.eur.nl/en/publications/hedging-demand-and-market-intraday-momentum/"
+    ],
+    "claimed_result": "Baltussen et al.: momentum is much stronger on negative net-gamma days; no significant momentum on positive-gamma days.",
+    "rule": {
+      "entry_time": "15:30",
+      "structure": "call_debit_spread",
+      "direction": "with_morning_move",
+      "short_k": 0,
+      "wing": 0.5,
+      "filters": {
+        "min_morning_move_sigma": 3.0
+      },
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Large intraday moves are used as a proxy for dealer short gamma. The filter is in units of the 15:30 sigma (~0.2% of spot), so 3.0 is a ~0.6% day.",
+    "unexpressed_conditions": [
+      "dealer net-gamma exposure < 0"
+    ]
+  },
+  {
+    "id": "pin_atm_call_fly_1530",
+    "name": "Late-day ATM butterfly betting on a pin (Golez-Jackwerth pinning)",
+    "family": "late_day_butterfly",
+    "sources": [
+      "https://econpapers.repec.org/RePEc:eee:jfinec:v:106:y:2012:i:3:p:566-585",
+      "https://harbourfrontquant.substack.com/p/from-pinning-to-amplification-evidence"
+    ],
+    "claimed_result": "Golez-Jackwerth: on serial-expiry days S&P futures settle within $0.25 of a strike 13.56% of the time vs 10% expected (1992-2009); Elms (2026): no pinning in 2016-2025 SPY data, ranges ~16% wider on high-OI days.",
+    "rule": {
+      "entry_time": "15:30",
+      "structure": "long_call_butterfly",
+      "center_k": 0,
+      "wing": 0.75,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Pinning was documented for monthly futures-option expiries and may have disappeared; the newer evidence points to amplification. Expected null or negative.",
+    "unexpressed_conditions": [
+      "center on the highest-open-interest strike rather than ATM"
+    ]
+  },
+  {
+    "id": "tp_atm_fly_1415",
+    "name": "Theta Profits 0DTE butterfly at 14:15, 10-pt wings",
+    "family": "late_day_butterfly",
+    "sources": [
+      "https://www.thetaprofits.com/this-0dte-butterfly-strategy-targets-1200-average-wins/"
+    ],
+    "claimed_result": "About 50% win rate; the headline 'targets 1200% average wins' is not substantiated.",
+    "rule": {
+      "entry_time": "14:15",
+      "structure": "long_call_butterfly",
+      "center_k": 0,
+      "wing_points": 10,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Center is chosen discretionarily at the expected closing level (trend lines, RSI, dealer gamma); ATM is a neutral proxy. The trader scales out of most of the position before the close.",
+    "unexpressed_conditions": [
+      "discretionary center strike",
+      "scale-out exits"
+    ]
+  },
+  {
+    "id": "retail_lotto_strangle_1500",
+    "name": "Retail-style lottery: buy 10-delta strangle at 15:00, hold (Beckmeyer-Branger-Gayda)",
+    "family": "long_premium_lottery",
+    "sources": [
+      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4404704",
+      "https://www.bnnbloomberg.ca/day-traders-lose-358-000-per-day-gambling-on-zero-day-options-1.1910634"
+    ],
+    "claimed_result": "Retail 0DTE traders lose in aggregate (press estimate ~$358k/day) and show a strong preference for lottery-like payoffs.",
+    "rule": {
+      "entry_time": "15:00",
+      "structure": "long_strangle",
+      "short_k": 1.28,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Stylized version of the behavior the paper documents, not a rule it tests (short_k here is the long strikes' distance). Expected negative."
+  },
+  {
+    "id": "tl_last_hour_long_straddle_1500",
+    "name": "Buy an ATM straddle for the last hour (tastylive last-hour guide)",
+    "family": "long_premium_lottery",
+    "sources": [
+      "https://tastylive.com/news-insights/essential-guide-trading-zero-dte-options-during-the-last-hour"
+    ],
+    "claimed_result": "Illustrative: a $1 SPY move in the last hour turns into ~156% on a long 0DTE option; a $1 move happens on ~50% of days.",
+    "rule": {
+      "entry_time": "15:00",
+      "structure": "long_straddle",
+      "short_k": 0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "The article argues for buying after noon or in the last hour but gives no backtest. Dim-Eraker-Vilkov's 15:00 straddle data predicts a negative result."
+  },
+  {
+    "id": "zh_lottery_straddle_open",
+    "name": "Expiry-day 'doomsday lottery' straddle bought at the open (SSE investor education)",
+    "family": "long_premium_lottery",
+    "sources": [
+      "https://finance.sina.cn/2019-08-09/detail-ihytcitm7893400.d.html",
+      "https://finance.sina.com.cn/option/2021-03-17/doc-ikknscsi7136343.shtml"
+    ],
+    "claimed_result": "50ETF 2015-2019 (52 months): buying the straddle on expiry day won 5 times; annualized return negative for every entry day tested.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "long_straddle",
+      "short_k": 0,
+      "exit": {
+        "hold_to_expiry": true
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "Source says the contract was bought at its closing price, which is ambiguous on expiry day; the open is assumed. Monthly 50ETF expiries."
+  },
+  {
+    "id": "zh_buy_otm1_call_exit_1155",
+    "name": "Buy OTM-1 call at the expiry-day open, sell at 11:00 Beijing (余力 / 力的期权工作室)",
+    "family": "long_premium_early_exit",
+    "sources": [
+      "https://caifuhao.eastmoney.com/news/20210526203335841416840",
+      "https://finance.sina.com.cn/money/future/2021-05-25/doc-ikmyaawc7431007.shtml"
+    ],
+    "claimed_result": "50ETF, 36 expiries 2018-2020: bought at the open and sold at 11:00 Beijing, 30.6% win with P/L ratio 2.99; held to the close, 0% win.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "call_debit_spread",
+      "short_k": 1.5,
+      "wing": 1.0,
+      "exit": {
+        "time_exit": "11:55"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "OTM-1 at the open ~1.5 sigma. 11:00 Beijing mapped by fraction of the session to ~11:56 ET. Naked long call approximated by a call spread long 1.5 sigma / short 2.5 sigma. n=36, monthly expiries.",
+    "unexpressed_conditions": [
+      "naked long call",
+      "scale-out exits (sell half on a double)"
+    ]
+  },
+  {
+    "id": "zh_buy_otm1_put_exit_1020",
+    "name": "Buy OTM-1 put at the expiry-day open, sell at 10:00 Beijing (余力)",
+    "family": "long_premium_early_exit",
+    "sources": [
+      "https://caifuhao.eastmoney.com/news/20210526203335841416840",
+      "https://finance.sina.com.cn/money/future/2021-05-25/doc-ikmyaawc7431007.shtml"
+    ],
+    "claimed_result": "50ETF, 36 expiries 2018-2020: sold at 10:00 Beijing, 33.3% win with P/L ratio 2.12; held to the close, 2.8% win.",
+    "rule": {
+      "entry_time": "09:35",
+      "structure": "put_debit_spread",
+      "short_k": 1.5,
+      "wing": 1.0,
+      "exit": {
+        "time_exit": "10:20"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "10:00 Beijing mapped to ~10:19 ET. Long put approximated by a put spread long 1.5 / short 2.5 sigma.",
+    "unexpressed_conditions": [
+      "naked long put"
+    ]
+  },
+  {
+    "id": "zh_double_buy_split_entry",
+    "name": "Expiry double-buy, split entries 10:00/14:30 Beijing, laddered profit-taking (期权酱)",
+    "family": "long_premium_early_exit",
+    "sources": [
+      "https://c.m.163.com/news/a/JVESRUAO0539UEQJ.html"
+    ],
+    "claimed_result": "none stated.",
+    "rule": {
+      "entry_time": [
+        "10:20",
+        "15:10"
+      ],
+      "structure": "long_strangle",
+      "short_k": 1.5,
+      "exit": {
+        "take_profit": 0.75,
+        "time_exit": "15:45"
+      }
+    },
+    "fidelity": "approximate",
+    "notes": "OTM-1 strangle, half bought at 10:00 and half at 14:30 Beijing (fraction-mapped to ~10:19 and ~15:11 ET); half sold at +50%, rest at +100% (single target 0.75 used); flat by 14:50 Beijing (~15:44 ET). The trade day is ambiguous in the source.",
+    "unexpressed_conditions": [
+      "laddered take-profit (+50% / +100%)",
+      "stop trading for a month after 3 straight losses"
+    ]
+  },
+  {
+    "id": "spotgamma_gex_levels",
+    "name": "Dealer-gamma levels (Call Wall / Put Wall / zero gamma) as 0DTE pins and barriers",
+    "family": "dealer_positioning_oi",
+    "sources": [
+      "https://spotgamma.com/?p=20540"
+    ],
+    "claimed_result": "none stated (educational post; no rule or backtest).",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Needs dealer gamma exposure by strike (open interest plus a dealer-side assumption, or proprietary levels); not in our data."
+  },
+  {
+    "id": "zh_maxpain_directional",
+    "name": "Expiry-week max-pain directional buy and near-strike straddle (ETF期权通)",
+    "family": "dealer_positioning_oi",
+    "sources": [
+      "https://finance.sina.com.cn/option/yw/2019-03-25/doc-ihtxyzsm0217749.shtml"
+    ],
+    "claimed_result": "none stated.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Needs open interest by strike (max pain); exits are discretionary. Rule: if spot is below max pain buy calls between spot and max pain, if above buy puts."
+  },
+  {
+    "id": "zerodte_com_structural_fly",
+    "name": "0-dte.com OTM / broken-wing butterflies at 'structural' levels",
+    "family": "dealer_positioning_oi",
+    "sources": [
+      "https://0-dte.com/about/0-dte-options-strategy-guide/",
+      "https://0-dte.com/wp-content/uploads/2021/08/Tipsy-Squiffy-Broken-Fly.pdf"
+    ],
+    "claimed_result": "Self-reported, unaudited: 45-65% win rate, average return >180% of risk.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Strikes chosen discretionarily from GEX, volume profile and a proprietary heatmap; no entry time or numeric placement rule."
+  },
+  {
+    "id": "oa_gex_level_call_spread",
+    "name": "Option Alpha GEX-level long call spread",
+    "family": "dealer_positioning_oi",
+    "sources": [
+      "https://optionalpha.com/blog/how-i-day-trade-0dte-options-with-an-edge-using-option-alpha"
+    ],
+    "claimed_result": "none stated (one anecdotal winning trade).",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Trigger is a manually identified gamma level (e.g. SPX 6,800); discretionary."
+  },
+  {
+    "id": "jwplatta_1dte_ic_1550",
+    "name": "1DTE iron condor entered ~15:50 the day before, managed on expiry day",
+    "family": "overnight_1dte",
+    "sources": [
+      "https://jwplatta.github.io/posts/distribution-and-regime-effects-in-a-1dte-options-strategy"
+    ],
+    "claimed_result": "Apr 2022-Dec 2025: 717 trades, 82.6% win, expectancy -0.078/trade (fees exceeded gross); profitable only when the next day's range was < ~52 pts.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Holds overnight (entry on D-1). Rule: 20-pt wings, total credit 1.05-1.45, short deltas 2-10 (puts) / 2-8 (calls), skip if the next day has FOMC/CPI/NFP; on D exit at 60% profit or 3x credit before 12:00, any profit after 12:00, anything at 13:00."
+  },
+  {
+    "id": "om_1dte_putwrite_monday",
+    "name": "1DTE ATM put-write at 15:45, Monday-expiry premium (OptionMetrics)",
+    "family": "overnight_1dte",
+    "sources": [
+      "https://optionmetrics.com/?p=2992"
+    ],
+    "claimed_result": "Since May 2022: Monday-expiry puts mean 11.3 bp, Sharpe 1.35; dropping Mondays cut Sharpe from 0.725 to 0.331.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Entry at 15:45 on D-1 (weekend for Monday expiries); outside a same-day engine."
+  },
+  {
+    "id": "muravyev_ni_overnight_short_vol",
+    "name": "Short index-option variance overnight, not intraday (Muravyev-Ni)",
+    "family": "overnight_1dte",
+    "sources": [
+      "https://firmtape.com/research/what-the-0dte-literature-claims"
+    ],
+    "claimed_result": "Delta-hedged index option returns -0.7%/day overall: -1.0% close-to-open, +0.3% open-to-close (pre-2020).",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Needs overnight holding and delta hedging; the implication for same-day trades is that the short-vol premium mostly sits overnight."
+  },
+  {
+    "id": "zh_otm2_strangle_t1_1dte",
+    "name": "Sell OTM-2 strangle at the close the day before expiry (广发期货 / 期货日报)",
+    "family": "overnight_1dte",
+    "sources": [
+      "https://finance.sina.com.cn/roll/2020-05-12/doc-iircuyvi2757216.shtml"
+    ],
+    "claimed_result": "50ETF 2015-2020 (59 expiries): win rate 100% at T-1, 94.9% T-3, 88.1% T-5, 91.5% T-7, 88.1% T-10 (largest total at T-10); no costs or margin.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Entry at the prior close (~2.2-3 sigma 1DTE strangle in SPX terms); needs overnight holding. Same-day analog: zh_otm2_strangle_open_analog."
+  },
+  {
+    "id": "zh_atm_straddle_t1_1dte",
+    "name": "Buy ATM straddle at the close before expiry (一德期货; 广发期货 IV<40% variant)",
+    "family": "overnight_1dte",
+    "sources": [
+      "https://finance.sina.com.cn/option/knowledge/2020-12-16/doc-iiznezxs7234598.shtml",
+      "https://finance.sina.com.cn/roll/2020-05-12/doc-iircuyvi2757216.shtml"
+    ],
+    "claimed_result": "一德期货: selling at the expiry-day high gave >50% win and P/L >1 on six commodity options (hindsight exit); 广发: T-7 ATM straddle with IV<40% averaged +116.68/set, 41% win.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Overnight entry, and the 'sell at the day's high' exit uses look-ahead. The close-exit version is testable only with 1DTE chains."
+  },
+  {
+    "id": "roundhill_xdte_daily_call",
+    "name": "Roundhill XDTE: sell 0DTE S&P 500 calls every day against the index",
+    "family": "discretionary_or_vague",
+    "sources": [
+      "https://roundhillinvestments.com/assets/pdfs/xdte_prospectus.pdf",
+      "https://blog.roundhillinvestments.com/0dte-to-buy-back-or-not-to-buy-back"
+    ],
+    "claimed_result": "none comparable (fund reports distributions; 30-day SEC yield -0.54% on 2/28/25).",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Strike chosen actively from volatility, macro events and yield targets; the prospectus says no particular strike is targeted. The rule-based analogs are om_short_call_*."
+  },
+  {
+    "id": "zh_xueqiu_cigarette_butt",
+    "name": "Sell deep-OTM options within 3 days of expiry with MA/bias timing (Xueqiu '捡烟蒂')",
+    "family": "discretionary_or_vague",
+    "sources": [
+      "https://xueqiu.com/4238614849/125482036"
+    ],
+    "claimed_result": "Per a search summary: the 3-day 50ETF move stayed within +/-5% 93.9% of the time and within +/-3% 83.7%.",
+    "rule": {},
+    "fidelity": "untestable",
+    "notes": "Source blocked (WAF); filter parameters unknown; multi-day holding."
+  },
+  {
+    "id": "house_event_ifly_1000",
+    "name": "Event-day iron fly 10:00 (event seller on SPX)",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "wing": 1.5,
+      "filters": {
+        "only_event_days": true
+      }
+    },
+    "notes": "Edge: event-day premium (passed on NDX/RUT)"
+  },
+  {
+    "id": "house_late_theta_ic_1500",
+    "name": "Late-day condor 15:00, 0.5 sigma shorts",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "15:00",
+      "structure": "iron_condor",
+      "short_k": 0.5,
+      "wing": 0.5
+    },
+    "notes": "Theta is fastest in the last hour"
+  },
+  {
+    "id": "house_with_move_pcs_1200",
+    "name": "Credit spread with the morning move at 12:00",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "12:00",
+      "structure": "put_credit_spread",
+      "short_k": 0.8,
+      "wing": 0.5,
+      "direction": "with_morning_move"
+    },
+    "notes": "Intraday momentum (with)"
+  },
+  {
+    "id": "house_against_move_pcs_1200",
+    "name": "Credit spread against the morning move at 12:00",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "12:00",
+      "structure": "put_credit_spread",
+      "short_k": 0.8,
+      "wing": 0.5,
+      "direction": "against_morning_move"
+    },
+    "notes": "Intraday mean reversion (against)"
+  },
+  {
+    "id": "house_quiet_morning_ifly_1100",
+    "name": "Iron fly at 11:00 only after a quiet morning",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "11:00",
+      "structure": "iron_fly",
+      "wing": 1.5,
+      "filters": {
+        "max_morning_move_sigma": 0.3
+      }
+    },
+    "notes": "Calm-seller idea (edge #15) at day level"
+  },
+  {
+    "id": "house_busy_morning_ic_1100",
+    "name": "Wide condor at 11:00 only after a big morning move",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "11:00",
+      "structure": "iron_condor",
+      "short_k": 1.28,
+      "wing": 0.5,
+      "filters": {
+        "min_morning_move_sigma": 1.0
+      }
+    },
+    "notes": "Vol clustering: is fear overpriced after a move?"
+  },
+  {
+    "id": "house_low_vix_ifly_1000",
+    "name": "Iron fly at 10:00 when VIX <= 15",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_fly",
+      "wing": 1.5,
+      "filters": {
+        "vix_max": 15
+      }
+    },
+    "notes": "Calm regimes"
+  },
+  {
+    "id": "house_high_vix_ic_1000",
+    "name": "Wide condor at 10:00 when VIX >= 25",
+    "family": "house",
+    "fidelity": "exact",
+    "sources": [
+      "docs/expiry_edge_plan.md (this project's own findings)"
+    ],
+    "claimed_result": "none (new idea, untested)",
+    "rule": {
+      "entry_time": "10:00",
+      "structure": "iron_condor",
+      "short_k": 1.28,
+      "wing": 0.5,
+      "filters": {
+        "vix_min": 25
+      }
+    },
+    "notes": "Fear premium is largest when VIX is high"
+  }
+]

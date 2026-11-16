@@ -1,0 +1,522 @@
+"""Live bot: features equal the backtest's, ladder and sizing behave, live is gated."""
+import numpy as np
+import pandas as pd
+import pytest
+
+from odte.live import fly
+from odte.live.config import Config
+
+
+def test_ladder_starts_at_mid_and_stops_at_the_concession():
+    lad = fly.ladder(mid=1.62, touch=1.40, steps=5, max_concession=0.5, tick=0.05)
+    assert lad[0] == 1.60 and lad[-1] >= 1.51 - 1e-9 and lad == sorted(lad, reverse=True)
+
+
+def test_sizing_respects_the_dollar_limit():
+    row = {"K": 5165.0, "W": 30.0, "fly_credit_mid": 16.10, "fly_credit": 15.20}
+    o = fly.build(row, "XSP", max_loss=300.0, steps=5, max_concession=0.5, tick=0.05)
+    assert o.K == 516.5 and o.W == 3.0 and o.qty >= 1 and o.worst_case <= 300.0
+    assert fly.build(row, "SPX", 300.0, 5, 0.5, 0.05) is None        # one SPX fly risks > $300
+
+
+def test_settlement_pnl():
+    assert fly.settle_pnl(1.60, 2, 516.5, 3.0, 516.5) == pytest.approx((1.60 * 100 - 4.8) * 2)
+    assert fly.settle_pnl(1.60, 1, 516.5, 3.0, 530.0) == pytest.approx((1.60 - 3.0) * 100 - 4.8)
+
+
+def test_live_mode_is_refused_without_explicit_permission():
+    with pytest.raises(SystemExit, match="REFUSED"):
+        Config(mode="live").check()
+
+
+def test_live_features_equal_the_backtest_rows():
+    """Same day through the bot's feature path and the stored backtest rows."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    dec_p = root / "reports/expiry_edge/decisions-dev-gex-es.parquet"
+    if not dec_p.exists():
+        pytest.skip("local backtest output not present")
+    from odte.live.features import day_context, feature_row
+    from odte.live.model import feature_list
+    day = "2024-03-13"
+    chain = pd.read_parquet(root / f"data/odte_0dte/{day}.parquet")
+    dec = pd.read_parquet(dec_p)
+    dec = dec[(dec.day == pd.Timestamp(day)) & dec.on6 & (dec.trigger == "grid")].set_index("hhmm")
+    st = pd.read_csv(root / "data/odte_0dte/settlements.csv", parse_dates=["date"]).set_index("date")["spx_close"]
+    dctx = day_context(day)
+    cols = feature_list() + ["K", "W", "fly_credit", "fly_credit_mid"]
+    for hhmm in dec.index:
+        r = feature_row(chain, hhmm, dctx, float(st[st.index < day].iloc[-1]), float(dec.loc[hhmm, "prev_ratio"]))
+        a = np.array([float(r.get(c, np.nan)) for c in cols])
+        b = dec.loc[hhmm, cols].to_numpy(float)
+        assert np.allclose(a, b, rtol=1e-6, equal_nan=True), hhmm
+
+
+def test_replay_day_order_fill_and_settlement(tmp_path):
+    """Full day through the runner with a broker that fills on the 2nd rung."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class SecondRung(ReplayBroker):
+        def modify(self, h, price):
+            super().modify(h, price)
+            o = self.orders[h]
+            o.update(filled=o["order"].qty, avg=price, live=False)
+
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=(), max_trades_per_day=1)
+    s = run_day(cfg, SecondRung("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["fills"] == 1 and s["decisions"] == 6
+    log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
+    assert '"kind": "fill"' in log and '"kind": "settle"' in log and "max filled trades today" in log
+    # default policy (E2): mid, then the current touch -> at most the whole gap
+    assert '"kind": "cross"' in log and 0 <= s["share_of_gap_paid"][0] <= 1.0 + 1e-9
+
+
+def test_ladder_policy_still_available(tmp_path):
+    """order_policy='ladder' keeps the old walk: never more than half the gap."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class SecondRung(ReplayBroker):
+        def modify(self, h, price):
+            super().modify(h, price)
+            o = self.orders[h]
+            o.update(filled=o["order"].qty, avg=price, live=False)
+
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP",
+                 shadow_times=(), max_trades_per_day=1, order_policy="ladder")
+    s = run_day(cfg, SecondRung("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["fills"] == 1 and 0 <= s["share_of_gap_paid"][0] <= 0.5 + 1e-9
+
+
+def test_current_touch_and_rung_waits():
+    from types import SimpleNamespace
+    from odte.live.runner import _current_touch, _rung_wait
+    q = pd.DataFrame({"option_type": ["C", "P", "C", "P"], "strike": [700.0, 700.0, 703.0, 697.0],
+                      "bid": [1.0, 1.1, 0.10, 0.12], "ask": [1.1, 1.2, 0.15, 0.17]})
+    br = SimpleNamespace(snapshot_xsp=lambda: q, snapshot=lambda: q)
+    o = SimpleNamespace(symbol="XSP", K=700.0, W=3.0)
+    assert abs(_current_touch(br, o) - (1.0 + 1.1 - 0.15 - 0.17)) < 1e-12
+    bad = SimpleNamespace(snapshot_xsp=lambda: q.iloc[:2], snapshot=lambda: q.iloc[:2])
+    assert np.isnan(_current_touch(bad, o))
+    cfg = Config()
+    assert _rung_wait(cfg, 0) == 300 and _rung_wait(cfg, 1) == 60
+    assert _rung_wait(Config(order_policy="ladder"), 3) == Config().walk_wait_s
+
+
+def test_shadow_strategies_and_pricing():
+    from odte.live.strategies import STRATEGIES, shadow_pnl
+    assert STRATEGIES["sell_only"](1, False)[0] == 1
+    assert STRATEGIES["sell_only"](1, True)[0] == 0              # no short right after news
+    assert STRATEGIES["full_model"](-1, True)[0] == -1           # buying is allowed then
+    assert STRATEGIES["always_sell"](-1, False)[0] == 1
+    row = {"K": 7740.0, "W": 35.0, "fly_credit_mid": 17.9, "fly_credit": 17.7, "fly_debit": 18.1}
+    calm = shadow_pnl(1, row, 7740.0)
+    assert calm["mid"] > calm["half"] > calm["touch"] > 0        # paying more of the gap earns less
+    crash = shadow_pnl(1, row, 7600.0)
+    assert crash["touch"] == pytest.approx(-300.0)               # the loss stops at the budget
+    assert shadow_pnl(-1, row, 7600.0)["mid"] > 0                # the bought fly gains on the big move
+
+
+def test_event_seller_rule():
+    from odte.live.strategies import event_seller
+    cpi = {"ev_cpi": 1.0, "vix_over_vix3m": 0.9}
+    assert event_seller(-1, False, cpi)[0] == 1                           # no model needed
+    assert event_seller(0, True, cpi)[0] == 0                             # inside the post-release hour
+    assert event_seller(0, False, {"ev_cpi": 1.0, "vix_over_vix3m": 1.05})[0] == 0     # stress
+    assert event_seller(1, False, {"ev_cpi": 0.0, "vix_over_vix3m": 0.9})[0] == 0      # ordinary day
+
+
+def test_model_signal_rules():
+    from odte.live.model import signal
+    assert signal({"kind": "ratio"}, 0.80) == 1 and signal({"kind": "ratio"}, 1.20) == -1
+    assert signal({"kind": "ratio"}, 1.0) == 0
+    assert signal({"kind": "profit"}, 0.05) == 1 and signal({"kind": "profit"}, -0.01) == 0
+
+
+def test_previous_day_carries_settle_and_ratio(tmp_path):
+    import json as _j
+    from odte.live.runner import previous_day
+    cfg = Config(journal_dir=tmp_path)
+    (tmp_path / "2026-11-10.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6800.5, "ratio": 0.71}) + "\n")
+    (tmp_path / "2026-11-12.jsonl").write_text(_j.dumps({"kind": "day_summary", "settle": 6900.0, "ratio": 1.2}) + "\n")
+    assert previous_day(cfg, "2026-11-11") == (6800.5, 0.71)        # never a later day
+
+
+def test_fly_from_xsp_quotes_and_line_budget():
+    q = pd.DataFrame([(k, r, b, b + 0.05) for k, r, b in [
+        (676.0, "C", 1.60), (676.0, "P", 1.40), (679.0, "C", 0.30), (673.0, "P", 0.35),
+        (680.0, "C", 0.20), (672.0, "P", 0.25), (677.0, "C", 1.05), (675.0, "P", 0.95),
+        (681.0, "C", 0.10), (671.0, "P", 0.15)]],
+        columns=["strike", "option_type", "bid", "ask"])
+    f = fly.fly_from_quotes(q, F=676.1)
+    assert f["K"] == 676.0 and f["W"] == 5.0                    # smallest distance >= 1.5 x 3.05 = 4.6
+    assert f["fly_credit"] == pytest.approx(1.60 + 1.40 - 0.15 - 0.20)
+    assert f["fly_credit"] < f["fly_credit_mid"] < f["fly_debit"]
+    o = fly.build(f, "XSP", 300.0, 5, 0.5, 0.01, native=True)
+    assert o.K == 676.0 and o.ladder[0] == pytest.approx(round(f["fly_credit_mid"], 2))
+    assert Config(symbol="XSP").spx_lines() == 95 - 34 and Config(symbol="SPX").spx_lines() == 95
+
+
+def test_vertical_quotes_and_payoff():
+    from odte.live.strategies import vertical_pnl
+    q = pd.DataFrame([("P", 100.0, 2.0, 2.2), ("P", 95.0, 0.5, 0.6), ("C", 100.0, 2.1, 2.3), ("C", 105.0, 0.6, 0.7)],
+                     columns=["option_type", "strike", "bid", "ask"])
+    v = fly.vertical_from_quotes(q, 100.0, 5.0)
+    assert v["put_mid"] == pytest.approx(2.1 - 0.55) and v["put_touch"] == pytest.approx(2.0 - 0.6)
+    up = vertical_pnl("put", v, settle=103.0)        # close above K: the put spread keeps its credit
+    down = vertical_pnl("put", v, settle=90.0)       # close below K - W: max loss, = -budget at the touch
+    assert up["mid"] > up["touch"] > 0 and down["touch"] == pytest.approx(-300.0)
+
+
+def test_trading_day_calendar():
+    from odte.live.runner import is_trading_day
+    assert not is_trading_day("2026-11-26")          # Thanksgiving
+    assert is_trading_day("2026-11-27")              # half day, still a session
+    assert not is_trading_day("2026-11-28")          # Saturday
+    assert not is_trading_day("2026-12-25")
+    assert not is_trading_day("2027-03-26")          # Good Friday
+    assert is_trading_day("2026-11-10")
+
+
+def test_crash_cancels_the_working_order_and_saves_quotes(tmp_path):
+    """A failure mid-day leaves no order working, keeps the quotes, and alerts."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+
+    class Disconnect(ReplayBroker):
+        cancelled = []
+
+        def filled(self, h):
+            raise ConnectionError("gateway lost")
+
+        def cancel(self, h):
+            self.cancelled.append(h)
+            super().cancel(h)
+
+    alerts = []
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=())
+    b = Disconnect("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6)
+    with pytest.raises(ConnectionError) as ei:
+        run_day(cfg, b, "2026-09-04", prev_settle=7700.0, alert=lambda t, x: alerts.append((t, x)))
+    assert getattr(ei.value, "_alerted", False)
+    assert len(b.cancelled) == 1
+    log = (tmp_path / "j" / "2026-09-04.jsonl").read_text()
+    assert '"kind": "crash"' in log and '"cancelled": true' in log
+    assert (tmp_path / "c" / "2026-09-04.parquet").exists()
+    assert alerts and alerts[0][0] == "bot stopped" and "Working order cancelled" in alerts[0][1]
+
+
+def test_notify_passes_text_as_arguments_not_script(tmp_path, monkeypatch):
+    import sys
+    from odte.live import notify as nt
+    calls = []
+    monkeypatch.setattr(nt.subprocess, "run", lambda args, **kw: calls.append(args))
+    monkeypatch.setattr(sys, "platform", "darwin")
+    text = 'he said "x" & do shell script "rm"'
+    nt.notify("bot FAILED", text, log=tmp_path / "alerts.log")
+    args = calls[0]
+    assert args[-2:] == ["bot FAILED", text]                  # data, not code
+    assert all(text not in a for a in args[:-2])
+    assert "bot FAILED" in (tmp_path / "alerts.log").read_text()
+
+
+def test_day_text():
+    from odte.live.notify import day_text
+    s = {"day": "2026-09-04", "orders": 6, "fills": 1, "pnl": -12.5,
+         "shadow": {"event_seller": {"half": 602.3}, "always_sell": {"half": 1.0}}}
+    t = day_text(s)
+    assert "6 orders, 1 filled, P&L $-12.50" in t and "event_seller $+602" in t and "always_sell" not in t
+
+
+def test_reconcile_flags_every_kind_of_mismatch():
+    from odte.live.runner import reconcile_problems
+    ok = {"open_orders": 0, "orders_with_fills": 1, "later_expiry_positions": 0}
+    assert reconcile_problems(ok, 1) == []
+    assert "still open" in reconcile_problems({**ok, "open_orders": 1}, 1)[0]
+    assert "journal has 0" in reconcile_problems(ok, 0)[0]
+    assert "expiring after today" in reconcile_problems({**ok, "later_expiry_positions": 2}, 1)[0]
+
+
+def test_replay_day_reconciles_and_logs_the_code_version(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=())
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    assert s["reconcile_ok"] is True
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    assert recs[0]["kind"] == "start" and recs[0]["code"] not in ("", None)
+    rec = [r for r in recs if r["kind"] == "reconcile"][0]
+    assert rec["ok"] and rec["orders_with_fills"] == rec["journal_fills"] == s["fills"]
+
+
+def test_watch_finished_and_backup(tmp_path):
+    import json
+    import subprocess
+    from odte.live import watch
+    cfg = Config(mode="paper", journal_dir=tmp_path / "live/journal", chain_dir=tmp_path / "live/chains")
+    cfg.journal_dir.mkdir(parents=True)
+    assert not watch.finished(cfg, "2026-11-11")
+    p = cfg.journal_dir / "2026-11-11.jsonl"
+    p.write_text(json.dumps({"kind": "start"}) + "\n")
+    assert not watch.finished(cfg, "2026-11-11")
+    p.write_text(p.read_text() + json.dumps({"kind": "day_summary", "pnl": 0}) + "\n")
+    assert watch.finished(cfg, "2026-11-11")
+    (cfg.journal_dir / "2026-11-11-replay.jsonl").write_text("{}\n")      # tests are not backed up
+    dest = tmp_path / "records"
+    subprocess.run(["git", "init", "-q", str(dest)], check=True)
+    subprocess.run(["git", "-C", str(dest), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(dest), "config", "user.name", "t"], check=True)
+    assert "1 file(s)" in watch.backup(cfg, dest, push=False)
+    assert (dest / "live/journal/2026-11-11.jsonl").exists()
+    assert not (dest / "live/journal/2026-11-11-replay.jsonl").exists()
+    assert watch.backup(cfg, dest, push=False) == "backup: nothing new"
+
+
+def test_xindex_rule():
+    from odte.live.xshadow import xindex_side
+    assert xindex_side(0.7, {"NDX": 0.8, "RUT": 0.9}, False)[0] == 1
+    assert xindex_side(0.85, {"NDX": 0.8, "RUT": 0.9}, False)[0] == 0
+    assert xindex_side(0.7, {"NDX": 0.8}, False)[0] == 0                 # an index missing: no trade
+    assert xindex_side(0.7, {"NDX": 0.8, "RUT": 0.9}, True)[0] == 0       # after a release
+
+
+def test_replay_day_with_ndx_rut_shadows(tmp_path):
+    """NDX/RUT are recorded and shadow-traded on their own quotes; SPX decisions are unchanged."""
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    need = [root / f"data/{d}/2026-09-04.parquet" for d in ("odte_0dte", "odte_0dte_ndxp", "odte_0dte_rutw")]
+    if not all(p.exists() for p in need) or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live import xshadow
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    mdir = tmp_path / "m"
+    for sym in ("NDX", "RUT"):
+        xshadow.train(sym, path=mdir / f"model_{sym.lower()}.pkl")
+    (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())
+    base = dict(mode="replay", chain_dir=tmp_path / "c", kill_switch=tmp_path / "STOP", shadow_times=(), model_path=mdir / "model.pkl")
+    a = run_day(Config(**base, journal_dir=tmp_path / "ja", shadow_indexes=()),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    b = run_day(Config(**base, journal_dir=tmp_path / "jb"),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    assert (a["orders"], a["fills"], a["pnl"]) == (b["orders"], b["fills"], b["pnl"])   # SPX path untouched
+    recs = [json.loads(l) for l in (tmp_path / "jb" / "2026-09-04.jsonl").read_text().splitlines()]
+    kinds = {r["kind"] for r in recs}
+    assert {"shadow_index", "settle_index"} <= kinds
+    names = {r.get("strategy") for r in recs if r["kind"] == "shadow_settle"}
+    assert {"event_seller:NDX", "event_seller:RUT", "always_sell:RUT"} <= names      # Sep 4: jobs report
+    assert any(r.get("strategy") == "xindex_spx" for r in recs if r["kind"] == "shadow")
+    assert (tmp_path / "c" / "ndx" / "2026-09-04.parquet").exists()
+
+
+def test_index_shadows_fail_safe_without_models(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    mdir = tmp_path / "m"
+    mdir.mkdir()
+    (mdir / "model.pkl").write_bytes(Config().model_path.read_bytes())    # no NDX/RUT models here
+    s = run_day(Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                       kill_switch=tmp_path / "STOP", shadow_times=(), model_path=mdir / "model.pkl"),
+                ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6), "2026-09-04",
+                prev_settle=7700.0)
+    assert s["decisions"] == 6
+    notes = [json.loads(l)["text"] for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()
+             if json.loads(l)["kind"] == "note"]
+    assert any("NDX shadow off today" in t for t in notes)
+
+
+def test_calm_seller_burst_rule():
+    import pandas as pd
+    from odte.live import flowshadow as fs
+    t0 = pd.Timestamp("2026-09-04 10:00:02")
+
+    def snap(t, body_bid):
+        rows = [("C", 100.0, body_bid, body_bid + 0.2), ("P", 100.0, body_bid, body_bid + 0.2),
+                ("C", 110.0, 0.5, 0.6), ("P", 90.0, 0.5, 0.6)]
+        return pd.DataFrame([{"quote_datetime": t, "option_type": r, "strike": k, "bid": b, "ask": a}
+                             for r, k, b, a in rows])
+    pf = {"t0": t0, "t5": t0 + pd.Timedelta(minutes=5), "K": 100.0, "W": 10.0, "mid0": 3.0, "recent": False}
+    calm = [snap(t0 + pd.Timedelta(minutes=m, seconds=56), 2.0) for m in range(5)]   # touch credit 2.8
+    side, row, why = fs.decide(pf, calm)
+    assert side == 1 and why == "calm" and abs(row["fly_credit"] - 2.8) < 1e-9
+    burst = calm[:2] + [snap(t0 + pd.Timedelta(minutes=2, seconds=56), 2.2)] + calm[3:]  # touch 3.2 >= 3.05
+    assert fs.decide(pf, burst)[0] == 0
+    assert fs.decide({**pf, "recent": True}, calm)[0] == 0
+    early = [snap(t0 - pd.Timedelta(minutes=1), 2.0)]                                  # before t0: ignored
+    assert fs.decide(pf, early)[2] == "no quotes in the 5 minutes"
+
+
+def test_replay_day_logs_calm_seller(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
+    run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+            "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    calm = [r for r in recs if r["kind"] == "shadow" and r.get("strategy") == "calm_seller"]
+    assert len(calm) == 6 and {r["hhmm"] for r in calm} == {"10:00", "11:00", "12:00", "13:00", "14:00", "15:00"}
+
+
+def test_shock_watch_rules():
+    import pandas as pd
+    from odte.live import guards
+    day = pd.Timestamp("2026-09-04")
+    w = guards.ShockWatch(0.002, day)
+    t = day + pd.Timedelta(hours=10)
+    for m in range(6):
+        assert w.update(t + pd.Timedelta(minutes=m), 7000.0) is None
+    hit = w.update(t + pd.Timedelta(minutes=10), 7000.0)              # no 5-min-ago price yet
+    assert hit is None
+    for m in range(11, 15):
+        w.update(t + pd.Timedelta(minutes=m), 7000.0)
+    assert w.update(t + pd.Timedelta(minutes=15), 7000.0 * 1.0025) is not None    # +0.25% in 5 min
+    assert w.update(t + pd.Timedelta(minutes=20), 7000.0 * 1.006) is None        # within 30 min of the last
+    early = guards.ShockWatch(0.002, day)
+    for m in range(10):                                                          # 09:25 .. 09:34
+        early.update(day + pd.Timedelta(hours=9, minutes=25 + m), 7000.0 * (1.01 if m == 9 else 1))
+    assert early.marks == []                                                     # 09:34 jump: before 09:35, ignored
+
+
+def test_big_day_wide_spread_and_parity_price():
+    import pandas as pd
+    from odte.live import guards
+    assert guards.big_day(7280.0, 7000.0) and not guards.big_day(7200.0, 7000.0)
+    assert guards.too_wide({"fly_credit_mid": 10.0, "fly_credit": 9.4}) and not guards.too_wide(
+        {"fly_credit_mid": 10.0, "fly_credit": 9.9})
+    snap = pd.DataFrame([{"option_type": r, "strike": k, "bid": b, "ask": b + 0.2}
+                         for r, k, b in (("C", 7000.0, 12.0), ("P", 7000.0, 10.0), ("C", 7005.0, 9.4), ("P", 7005.0, 12.4))])
+    assert abs(guards.parity_price(snap) - 7002.0) < 1e-9
+
+
+def test_replay_shock_blocks_orders(tmp_path):
+    """With a tiny threshold the guard fires and orders after it are skipped; shadows are untouched."""
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    alerts = []
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
+    run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+            "2026-09-04", prev_settle=7700.0, shock_thr=0.0002, alert=lambda t, x: alerts.append(t))
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    assert any(r["kind"] == "shock" for r in recs) and "surprise move" in alerts
+    reasons = [r.get("reason") for r in recs if r["kind"] == "decision"]
+    assert "within 60 min after a surprise move" in reasons
+
+
+def test_news_record_alerts_only_on_fresh_hot_headlines(tmp_path):
+    from types import SimpleNamespace as NS
+    from odte.live.news import NewsRecorder, is_hot
+    assert is_hot("Trading halted in S&P futures") and not is_hot("Apple shares rise 1%")
+    rec = NewsRecorder.__new__(NewsRecorder)
+    alerts = []
+    rec.path, rec.alert, rec.seen, rec.alerts, rec.seeded = tmp_path / "n.jsonl", lambda t, x: alerts.append(x), set(), 0, set()
+    old = [NS(articleId="a1", time="t", providerCode="DJ-RT", headline="Missile attack reported")]
+    assert rec.record(old, "SPY") == 1 and alerts == []                 # first answer: recorded, no alert
+    new = [NS(articleId="a2", time="t", providerCode="DJ-RT", headline="{A:800015:L:en}Exchange declares trading halt")]
+    assert rec.record(new + old, "SPY") == 1 and len(alerts) == 1        # fresh + hot -> one alert, no duplicate
+    assert alerts[0] == "Exchange declares trading halt"                # metadata prefix stripped
+
+
+def test_replay_logs_rows_unfilled_outcomes_and_report(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.report import day_report
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_times=(), shadow_indexes=())
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    rows = [r for r in recs if r["kind"] == "row"]
+    assert len(rows) == 6 and "implied_move" in rows[0] and "skew" in rows[0]
+    uns = [r for r in recs if r["kind"] == "unfilled_settle"]
+    assert len(uns) == s["unfilled"] == s["orders"] - s["fills"] and len(uns) > 0
+    rep = day_report(recs)
+    assert rep["orders"] == s["orders"] and rep["unfilled_would_have_pnl"] == s["unfilled_would_have_pnl"]
+    assert "always_sell" in rep["shadow"] and rep["spx_fly_gap_median"] > 0
+
+
+def test_shadow_only_half_hours_place_no_orders(tmp_path):
+    import json
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    if not (root / "data/odte_0dte/2026-09-04.parquet").exists() or not Config().model_path.exists():
+        pytest.skip("local data / model not present")
+    from odte.live.broker import ReplayBroker
+    from odte.live.runner import run_day
+    cfg = Config(mode="replay", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c",
+                 kill_switch=tmp_path / "STOP", shadow_indexes=())
+    s = run_day(cfg, ReplayBroker("2026-09-04", data_dir=str(root / "data/odte_0dte"), settle=7718.6),
+                "2026-09-04", prev_settle=7700.0)
+    recs = [json.loads(l) for l in (tmp_path / "j" / "2026-09-04.jsonl").read_text().splitlines()]
+    dec = [r for r in recs if r["kind"] == "decision"]
+    assert s["decisions"] == 12 and len(dec) == 12
+    half = [d for d in dec if d["hhmm"].endswith(":30")]
+    assert len(half) == 6 and all(d["reason"] == "shadow-only time (every 30 min, evidence only)" for d in half)
+    assert all(r["hhmm"].endswith(":00") for r in recs if r["kind"] == "order")
+    assert any(r["kind"] == "shadow" and r.get("hhmm") == "13:30" for r in recs)
+
+
+def test_journal_and_quotes_survive_a_restart(tmp_path):
+    import pandas as pd
+    from odte.live.runner import Journal, merge_save
+    cfg = Config(mode="paper", journal_dir=tmp_path / "j", chain_dir=tmp_path / "c")
+    j1 = Journal(cfg, "2026-11-12")
+    j1.log(pd.Timestamp("2026-11-12 10:00"), "start")
+    j2 = Journal(cfg, "2026-11-12")                       # restart the same day
+    j2.log(pd.Timestamp("2026-11-12 11:00"), "start")
+    assert j2.restarted and len(j2.path.read_text().splitlines()) == 2
+    q = lambda t: pd.DataFrame([{"quote_datetime": pd.Timestamp(t), "option_type": "C", "strike": 7000.0,
+                                 "bid": 1.0, "ask": 1.1}])
+    f = tmp_path / "c" / "2026-11-12.parquet"
+    merge_save([q("2026-11-12 10:01")], f)
+    merge_save([q("2026-11-12 11:01")], f)
+    assert len(pd.read_parquet(f)) == 2
+    assert not Journal(cfg, "2026-11-12", tag="-replay").restarted   # replays still start fresh

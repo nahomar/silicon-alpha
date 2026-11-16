@@ -77,3 +77,32 @@ def test_rows_drop_future_counts_and_hash_users():
     r = stw._row(_msg(3), "SPY", 0)
     assert set(r) == set(stw.COLUMNS) and "likes" not in r
     assert r["sentiment"] == "Bullish" and r["user_hash"] != "u3"
+
+
+def test_rate_limit_stops_the_run_and_resumes_without_a_gap(fake, tmp_path, monkeypatch):
+    stw.sync_symbol("SPY", start="2026-09-30")
+    fake["top"] = 400                                   # 200 new messages arrive
+    calls = {"n": 0}
+    real = stw._get
+
+    def limited(symbol, max_id=None, attempts=6):
+        calls["n"] += 1
+        if calls["n"] == 4:
+            raise stw.RateLimited(symbol)
+        return real(symbol, max_id)
+    monkeypatch.setattr(stw, "_get", limited)
+    out = stw.sync(symbols=("SPY", "VIX"))
+    assert out == {} and calls["n"] == 4                # stopped at once, VIX not tried
+    monkeypatch.setattr(stw, "_get", real)
+    stw.sync_symbol("SPY", start="2026-09-30")
+    assert set(range(1, 401)) <= set(_saved_ids(tmp_path))
+
+
+def test_get_raises_on_429_without_sleeping(monkeypatch):
+    import urllib.error
+    def boom(*a, **k):
+        raise urllib.error.HTTPError("u", 429, "Too Many", {}, None)
+    monkeypatch.setattr(stw.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(stw.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError("slept")))
+    with pytest.raises(stw.RateLimited):
+        stw._get("SPY")
